@@ -102,7 +102,7 @@ public class UniversalItemGeneration extends UtilityUpgradeItem {
         }
         NBTTagCompound nbt = upgradeStack.getTagCompound();
 
-        TimerUtil.updateAndExecute(nbt, 1, () -> generatItem(tile));
+        TimerUtil.updateAndExecute(nbt, Configurations.GENERATION.UNIVERSAL_ITEMS_GENERATION_TICK, () -> generatItem(tile));
     }
 
     private boolean generatItem(ControllableDrawerTile tile) {
