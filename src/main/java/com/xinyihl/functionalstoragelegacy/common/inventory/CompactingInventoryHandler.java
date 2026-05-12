@@ -79,10 +79,10 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler, ILo
         if (amount <= 0 || slot < 0 || slot >= slots) return ItemStack.EMPTY;
         Result result = results.get(slot);
         if (result.getStack().isEmpty()) return ItemStack.EMPTY;
+        ItemStack out = result.getStack().copy();
         int maxExtract = Math.min(amount, result.getStack().getMaxStackSize());
         long extracted = extractItemLong(slot, maxExtract, simulate);
         if (extracted <= 0) return ItemStack.EMPTY;
-        ItemStack out = result.getStack().copy();
         out.setCount((int) Math.min(extracted, Integer.MAX_VALUE));
         return out;
     }
