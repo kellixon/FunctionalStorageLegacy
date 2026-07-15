@@ -1,7 +1,11 @@
 package com.xinyihl.functionalstoragelegacy.common.tile.controller;
 
 import com.xinyihl.functionalstoragelegacy.FunctionalStorageLegacy;
-import com.xinyihl.functionalstoragelegacy.api.ILockable;
+import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigFluidHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
+import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
 import com.xinyihl.functionalstoragelegacy.client.render.DrawerOptions;
 import com.xinyihl.functionalstoragelegacy.common.inventory.controller.ControllerFluidHandler;
 import com.xinyihl.functionalstoragelegacy.common.inventory.controller.ControllerItemHandler;
@@ -24,13 +28,13 @@ import net.minecraft.world.World;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.items.CapabilityItemHandler;
-import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.ItemStackHandler;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.UUID;
 
 /**
@@ -103,34 +107,53 @@ public class DrawerControllerTile extends ControllableDrawerTile {
         fluidHandler.setHandlers(connectedDrawers.getFluidHandlers());
     }
 
+    /** Refreshes flattened mappings after a stable child facade changes target. */
+    public void refreshHandlerMappings() {
+        refreshHandlers();
+    }
+
     @Override
     public void update() {
         super.update();
         if (world != null && !world.isRemote) {
             if (world.getTotalWorldTime() % 10 == 0) {
-                int expectedSize = connectedDrawers.getConnectedDrawers().size();
-                int actualSize = connectedDrawers.getItemHandlers().size() + connectedDrawers.getFluidHandlers().size();
-                if (expectedSize != actualSize || needRebuild) {
-                    rebuild();
-                    needRebuild = false;
-                }
+                rebuild();
+                needRebuild = false;
             }
         }
     }
 
-    private void rebuild() {
+    private boolean rebuild() {
         AxisAlignedBB area = new AxisAlignedBB(pos).grow(getControllerRange());
-        connectedDrawers.getConnectedDrawers().removeIf(
-                pos -> {
-                    BlockPos pos1 = BlockPos.fromLong(pos);
-                    TileEntity tile = world.getTileEntity(pos1);
-                    return !(area.contains(new Vec3d(pos1.getX() + 0.5, pos1.getY() + 0.5, pos1.getZ() + 0.5)) && tile instanceof ControllableDrawerTile);
-                }
-        );
-        connectedDrawers.rebuild();
+        boolean topologyChanged = false;
+        Iterator<Long> iterator = connectedDrawers.getConnectedDrawers().iterator();
+        while (iterator.hasNext()) {
+            BlockPos drawerPos = BlockPos.fromLong(iterator.next());
+            boolean inRange = area.contains(new Vec3d(
+                    drawerPos.getX() + 0.5,
+                    drawerPos.getY() + 0.5,
+                    drawerPos.getZ() + 0.5));
+            if (!inRange) {
+                iterator.remove();
+                topologyChanged = true;
+                continue;
+            }
+            if (!world.isBlockLoaded(drawerPos)) {
+                continue;
+            }
+            TileEntity tile = world.getTileEntity(drawerPos);
+            if (!(tile instanceof ControllableDrawerTile)) {
+                iterator.remove();
+                topologyChanged = true;
+            }
+        }
+        topologyChanged |= connectedDrawers.rebuild();
         refreshHandlers();
-        markDirty();
-        sendUpdatePacket();
+        if (topologyChanged) {
+            markDirty();
+            sendUpdatePacket();
+        }
+        return topologyChanged;
     }
 
     @Override
@@ -159,41 +182,32 @@ public class DrawerControllerTile extends ControllableDrawerTile {
                 player.openGui(FunctionalStorageLegacy.INSTANCE, 0, world, pos.getX(), pos.getY(), pos.getZ());
             }
 
-            // Insert into locked drawers first
-            for (IItemHandler handler : connectedDrawers.getItemHandlers()) {
-                if (handler instanceof ILockable && ((ILockable) handler).isLocked()) {
-                    for (int s = 0; s < handler.getSlots(); s++) {
-                        if (!heldStack.isEmpty() && handler.insertItem(s, heldStack, true).getCount() != heldStack.getCount()) {
-                            player.setHeldItem(hand, handler.insertItem(s, heldStack, false));
-                            return true;
-                        }
-                        // Double-click fast insert
-                        if (System.currentTimeMillis() - INTERACTION_LOGGER.getOrDefault(player.getUniqueID(), System.currentTimeMillis()) < 300) {
-                            for (ItemStack itemStack : player.inventory.mainInventory) {
-                                if (!itemStack.isEmpty() && handler.insertItem(s, itemStack, true).getCount() != itemStack.getCount()) {
-                                    itemStack.setCount(handler.insertItem(s, itemStack.copy(), false).getCount());
-                                }
-                            }
-                        }
-                    }
+            if (!heldStack.isEmpty()) {
+                BigItemStack request = new BigItemStack(heldStack, heldStack.getCount());
+                TransferResult<BigItemStack> simulated = inventoryHandler.insertRouted(
+                        request, StorageAction.SIMULATE);
+                if (simulated.getProcessedAmount() > 0L) {
+                    TransferResult<BigItemStack> inserted = inventoryHandler.insertRouted(
+                            request, StorageAction.EXECUTE);
+                    player.setHeldItem(hand, remainderOf(heldStack, inserted.getRemainingAmount()));
+                    INTERACTION_LOGGER.put(player.getUniqueID(), System.currentTimeMillis());
+                    return true;
                 }
+            }
 
-                if (handler instanceof ILockable && !((ILockable) handler).isLocked()) {
-                    for (int s = 0; s < handler.getSlots(); s++) {
-                        if (!heldStack.isEmpty() && !handler.getStackInSlot(s).isEmpty()
-                                && handler.insertItem(s, heldStack, true).getCount() != heldStack.getCount()) {
-                            player.setHeldItem(hand, handler.insertItem(s, heldStack, false));
-                            return true;
-                        }
-                        if (System.currentTimeMillis() - INTERACTION_LOGGER.getOrDefault(player.getUniqueID(), System.currentTimeMillis()) < 300) {
-                            for (ItemStack itemStack : player.inventory.mainInventory) {
-                                if (!itemStack.isEmpty() && !handler.getStackInSlot(s).isEmpty()
-                                        && handler.insertItem(s, itemStack, true).getCount() != itemStack.getCount()) {
-                                    itemStack.setCount(handler.insertItem(s, itemStack.copy(), false).getCount());
-                                }
-                            }
-                        }
+            boolean doubleClick = System.currentTimeMillis()
+                    - INTERACTION_LOGGER.getOrDefault(
+                            player.getUniqueID(), System.currentTimeMillis()) < 300L;
+            if (doubleClick) {
+                for (ItemStack inventoryStack : player.inventory.mainInventory) {
+                    if (inventoryStack.isEmpty()) {
+                        continue;
                     }
+                    BigItemStack request = new BigItemStack(
+                            inventoryStack, inventoryStack.getCount());
+                    TransferResult<BigItemStack> inserted = inventoryHandler.insertRouted(
+                            request, StorageAction.EXECUTE);
+                    inventoryStack.setCount((int) inserted.getRemainingAmount());
                 }
             }
 
@@ -203,16 +217,22 @@ public class DrawerControllerTile extends ControllableDrawerTile {
         return true;
     }
 
+    private static ItemStack remainderOf(ItemStack original, long remaining) {
+        if (remaining <= 0L) {
+            return ItemStack.EMPTY;
+        }
+        ItemStack remainder = original.copy();
+        remainder.setCount((int) Math.min(remaining, original.getCount()));
+        return remainder;
+    }
+
     @Override
-    public IItemHandler getItemHandler() {
+    public IBigItemHandler getItemHandler() {
         return inventoryHandler;
     }
 
-    public ControllerItemHandler getControllerItemHandler() {
-        return inventoryHandler;
-    }
-
-    public ControllerFluidHandler getControllerFluidHandler() {
+    @Override
+    public IBigFluidHandler getFluidHandler() {
         return fluidHandler;
     }
 
@@ -341,7 +361,7 @@ public class DrawerControllerTile extends ControllableDrawerTile {
         if (nbt.hasKey("ConnectedDrawers")) {
             connectedDrawers.deserializeNBT(nbt.getCompoundTag("ConnectedDrawers"));
         } else {
-            connectedDrawers.deserializeNBT(nbt);
+            connectedDrawers.deserializeNBT(new NBTTagCompound());
         }
     }
 
@@ -359,7 +379,7 @@ public class DrawerControllerTile extends ControllableDrawerTile {
         if (compound.hasKey("ConnectedDrawers")) {
             connectedDrawers.deserializeNBT(compound.getCompoundTag("ConnectedDrawers"));
         } else {
-            connectedDrawers.deserializeNBT(compound);
+            connectedDrawers.deserializeNBT(new NBTTagCompound());
         }
     }
 

@@ -1,6 +1,6 @@
 package com.xinyihl.functionalstoragelegacy.common.block.compact;
 
-import com.xinyihl.functionalstoragelegacy.api.HitBoxLayout;
+import com.xinyihl.functionalstoragelegacy.common.block.DrawerFaceLayout;
 import com.xinyihl.functionalstoragelegacy.common.block.base.DrawerBlock;
 import com.xinyihl.functionalstoragelegacy.common.tile.compact.CompactingDrawerTile;
 import net.minecraft.block.material.Material;
@@ -29,7 +29,7 @@ public class CompactingDrawerBlock extends DrawerBlock {
     }
 
     @Override
-    protected HitBoxLayout getHitBoxLayout() {
-        return HitBoxLayout.X_3;
+    protected DrawerFaceLayout getFaceLayout() {
+        return DrawerFaceLayout.X_3;
     }
 }

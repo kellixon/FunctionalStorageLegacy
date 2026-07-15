@@ -1,7 +1,6 @@
 package com.xinyihl.functionalstoragelegacy.common.block;
 
-import com.xinyihl.functionalstoragelegacy.api.DrawerType;
-import com.xinyihl.functionalstoragelegacy.api.HitBoxLayout;
+import com.xinyihl.functionalstoragelegacy.common.storage.DrawerLayout;
 import com.xinyihl.functionalstoragelegacy.common.block.base.DrawerBlock;
 import com.xinyihl.functionalstoragelegacy.common.item.LinkingToolItem;
 import com.xinyihl.functionalstoragelegacy.common.tile.EnderDrawerTile;
@@ -41,13 +40,13 @@ public class EnderDrawerBlock extends DrawerBlock {
     }
 
     @Override
-    protected HitBoxLayout getHitBoxLayout() {
-        return HitBoxLayout.X_1;
+    protected DrawerFaceLayout getFaceLayout() {
+        return DrawerFaceLayout.X_1;
     }
 
     @Override
-    public DrawerType getDrawerType() {
-        return DrawerType.X_1;
+    public DrawerLayout getDrawerLayout() {
+        return DrawerLayout.X_1;
     }
 
     @Override

@@ -1,5 +1,7 @@
 package com.xinyihl.functionalstoragelegacy.common.item.upgrade;
 
+import com.xinyihl.functionalstoragelegacy.api.upgrade.StorageFeature;
+import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeState;
 import com.xinyihl.functionalstoragelegacy.common.tile.FluidDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
 import com.xinyihl.functionalstoragelegacy.misc.Configurations;
@@ -51,7 +53,7 @@ public class UtilityUpgradeItem extends UpgradeItem {
     private final Set<Class<? extends ControllableDrawerTile>> insertableDrawerTypes = new LinkedHashSet<>();
 
     public UtilityUpgradeItem(UtilityAction utilityAction) {
-        super(Type.UTILITY);
+        super(SlotType.UTILITY);
         this.utilityAction = utilityAction;
     }
 
@@ -132,6 +134,14 @@ public class UtilityUpgradeItem extends UpgradeItem {
         return utilityAction;
     }
 
+    @Override
+    public void applyUpgrade(@Nonnull ItemStack stack, @Nonnull UpgradeState.Builder builder) {
+        super.applyUpgrade(stack, builder);
+        if (utilityAction == UtilityAction.VOID) {
+            builder.addFeature(StorageFeature.VOID_OVERFLOW);
+        }
+    }
+
     @SafeVarargs
     public final void insertableInto(Class<? extends ControllableDrawerTile>... drawerTypes) {
         for (Class<? extends ControllableDrawerTile> drawerType : drawerTypes) {
@@ -153,6 +163,16 @@ public class UtilityUpgradeItem extends UpgradeItem {
         }
 
         return false;
+    }
+
+    @Override
+    public boolean canInstallInto(ControllableDrawerTile tile, @Nonnull ItemStack stack) {
+        return canInsertInto(tile);
+    }
+
+    @Override
+    public boolean providesRedstoneSignal(@Nonnull ItemStack stack) {
+        return utilityAction == UtilityAction.REDSTONE;
     }
 
     public boolean isWirelessUtility() {
@@ -299,6 +319,11 @@ public class UtilityUpgradeItem extends UpgradeItem {
             default:
                 break;
         }
+    }
+
+    @Override
+    public void onInstalledTick(ControllableDrawerTile tile, @Nonnull ItemStack stack, int slot) {
+        onTick(tile, stack, slot);
     }
 
     private void handlePulling(ControllableDrawerTile tile, ItemStack upgradeStack) {

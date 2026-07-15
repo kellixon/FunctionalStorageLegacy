@@ -1,8 +1,7 @@
 package com.xinyihl.functionalstoragelegacy.common.block;
 
-import com.xinyihl.functionalstoragelegacy.api.DrawerType;
-import com.xinyihl.functionalstoragelegacy.api.HitBoxLayout;
 import com.xinyihl.functionalstoragelegacy.common.block.base.DrawerBlock;
+import com.xinyihl.functionalstoragelegacy.common.storage.DrawerLayout;
 import com.xinyihl.functionalstoragelegacy.common.tile.FluidDrawerTile;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -20,37 +19,37 @@ import javax.annotation.Nullable;
  */
 public class FluidDrawerBlock extends DrawerBlock {
 
-    private final DrawerType drawerType;
+    private final DrawerLayout drawerLayout;
 
-    public FluidDrawerBlock(DrawerType drawerType) {
+    public FluidDrawerBlock(DrawerLayout drawerLayout) {
         super(Material.ROCK);
-        this.drawerType = drawerType;
-        this.setRegistryName("fluid_" + drawerType.getSlots());
-        this.setTranslationKey("functionalstoragelegacy.fluid_" + drawerType.getSlots());
+        this.drawerLayout = drawerLayout;
+        this.setRegistryName("fluid_" + drawerLayout.getSlotCount());
+        this.setTranslationKey("functionalstoragelegacy.fluid_" + drawerLayout.getSlotCount());
     }
 
     @Nullable
     @Override
     public TileEntity createTileEntity(@Nonnull World world, @Nonnull IBlockState state) {
-        return new FluidDrawerTile(drawerType);
+        return new FluidDrawerTile(drawerLayout);
     }
 
     @Override
-    protected HitBoxLayout getHitBoxLayout() {
-        switch (drawerType) {
+    protected DrawerFaceLayout getFaceLayout() {
+        switch (drawerLayout) {
             case X_1:
-                return HitBoxLayout.X_1;
+                return DrawerFaceLayout.X_1;
             case X_2:
-                return HitBoxLayout.X_2;
+                return DrawerFaceLayout.X_2;
             case X_4:
-                return HitBoxLayout.X_4;
+                return DrawerFaceLayout.X_4;
             default:
                 return null;
         }
     }
 
-    public DrawerType getDrawerType() {
-        return drawerType;
+    public DrawerLayout getDrawerLayout() {
+        return drawerLayout;
     }
 
     @Nonnull

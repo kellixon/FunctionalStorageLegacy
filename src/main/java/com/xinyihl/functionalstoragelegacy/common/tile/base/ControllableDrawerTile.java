@@ -1,20 +1,20 @@
 package com.xinyihl.functionalstoragelegacy.common.tile.base;
 
 import com.xinyihl.functionalstoragelegacy.FunctionalStorageLegacy;
-import com.xinyihl.functionalstoragelegacy.api.UpgradeState;
-import com.xinyihl.functionalstoragelegacy.api.upgrade.ModifierType;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigFluidHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.api.upgrade.IStorageUpgrade;
+import com.xinyihl.functionalstoragelegacy.api.upgrade.StorageFeature;
+import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeAttribute;
+import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeState;
 import com.xinyihl.functionalstoragelegacy.client.render.DrawerOptions;
 import com.xinyihl.functionalstoragelegacy.common.item.ConfigurationToolItem;
-import com.xinyihl.functionalstoragelegacy.common.item.upgrade.StorageUpgradeItem;
-import com.xinyihl.functionalstoragelegacy.common.item.upgrade.UpgradeItem;
-import com.xinyihl.functionalstoragelegacy.common.item.upgrade.UtilityUpgradeItem;
+import com.xinyihl.functionalstoragelegacy.common.item.upgrade.DrawerUpgradeBehavior;
 import com.xinyihl.functionalstoragelegacy.common.integration.ae2.AE2Compat;
-import com.xinyihl.functionalstoragelegacy.misc.Configurations;
 import com.xinyihl.functionalstoragelegacy.misc.RegistrationHandler;
 import com.xinyihl.functionalstoragelegacy.util.ItemUtil;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.NetworkManager;
@@ -26,13 +26,10 @@ import net.minecraft.util.ITickable;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.ItemStackHandler;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.Collections;
-import java.util.Set;
 
 /**
  * Abstract base TileEntity for all controllable drawer blocks.
@@ -44,13 +41,9 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
     protected ItemStackHandler storageUpgrades;
     protected ItemStackHandler utilityUpgrades;
     protected DrawerOptions drawerOptions;
-    protected boolean isCreative = false;
-    protected boolean isVoid = false;
     protected boolean isLocked = false;
     protected boolean needsUpgradeCache = true;
-    private UpgradeState cachedUpgradeState = new UpgradeState();
-    private boolean hasMaxStorageUpgrade = false;
-    private boolean hasOreDictionaryUpgrade = false;
+    private UpgradeState cachedUpgradeState = UpgradeState.empty();
 
     public ControllableDrawerTile() {
         this.drawerOptions = new DrawerOptions();
@@ -106,8 +99,8 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
         // Process utility upgrades
         for (int i = 0; i < utilityUpgrades.getSlots(); i++) {
             ItemStack stack = utilityUpgrades.getStackInSlot(i);
-            if (!stack.isEmpty() && stack.getItem() instanceof UtilityUpgradeItem) {
-                ((UtilityUpgradeItem) stack.getItem()).onTick(this, stack, i);
+            if (!stack.isEmpty() && stack.getItem() instanceof DrawerUpgradeBehavior) {
+                ((DrawerUpgradeBehavior) stack.getItem()).onInstalledTick(this, stack, i);
             }
         }
     }
@@ -119,8 +112,6 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
         compound.setTag("StorageUpgrades", storageUpgrades.serializeNBT());
         compound.setTag("UtilityUpgrades", utilityUpgrades.serializeNBT());
         compound.setTag("DrawerOptions", drawerOptions.serializeNBT());
-        compound.setBoolean("IsCreative", isCreative);
-        compound.setBoolean("IsVoid", isVoid);
         compound.setBoolean("Locked", isLocked);
         if (controllerPos != null) {
             compound.setLong("ControllerPos", controllerPos.toLong());
@@ -140,8 +131,6 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
         if (compound.hasKey("DrawerOptions")) {
             drawerOptions.deserializeNBT(compound.getCompoundTag("DrawerOptions"));
         }
-        isCreative = compound.getBoolean("IsCreative");
-        isVoid = compound.getBoolean("IsVoid");
         isLocked = compound.getBoolean("Locked");
         if (compound.hasKey("ControllerPos")) {
             controllerPos = BlockPos.fromLong(compound.getLong("ControllerPos"));
@@ -157,8 +146,6 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
         nbt.setTag("StorageUpgrades", storageUpgrades.serializeNBT());
         nbt.setTag("UtilityUpgrades", utilityUpgrades.serializeNBT());
         nbt.setTag("DrawerOptions", drawerOptions.serializeNBT());
-        nbt.setBoolean("IsCreative", isCreative);
-        nbt.setBoolean("IsVoid", isVoid);
         nbt.setBoolean("Locked", isLocked);
         writeCustomData(nbt);
         return nbt;
@@ -177,8 +164,6 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
         if (nbt.hasKey("DrawerOptions")) {
             drawerOptions.deserializeNBT(nbt.getCompoundTag("DrawerOptions"));
         }
-        isCreative = nbt.getBoolean("IsCreative");
-        isVoid = nbt.getBoolean("IsVoid");
         isLocked = nbt.getBoolean("Locked");
         readCustomData(nbt);
         needsUpgradeCache = true;
@@ -217,13 +202,15 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
                 }
             }
             // Try upgrading existing
-            if (heldStack.getItem() instanceof StorageUpgradeItem) {
-                StorageUpgradeItem newUpgrade = (StorageUpgradeItem) heldStack.getItem();
+            if (heldStack.getItem() instanceof DrawerUpgradeBehavior) {
+                DrawerUpgradeBehavior newUpgrade = (DrawerUpgradeBehavior) heldStack.getItem();
+                int newPriority = newUpgrade.getReplacementPriority(heldStack);
                 for (int i = 0; i < storageUpgrades.getSlots(); i++) {
                     ItemStack existing = storageUpgrades.getStackInSlot(i);
-                    if (existing.getItem() instanceof StorageUpgradeItem) {
-                        StorageUpgradeItem existingUpgrade = (StorageUpgradeItem) existing.getItem();
-                        if (newUpgrade.getTier().isHigherThan(existingUpgrade.getTier())
+                    if (newPriority != Integer.MIN_VALUE
+                            && existing.getItem() instanceof DrawerUpgradeBehavior) {
+                        DrawerUpgradeBehavior existingUpgrade = (DrawerUpgradeBehavior) existing.getItem();
+                        if (newPriority > existingUpgrade.getReplacementPriority(existing)
                                 && canReplaceStorageUpgrade(i, heldStack)) {
                             // Give back old upgrade
                             if (!player.inventory.addItemStackToInventory(existing.copy())) {
@@ -239,7 +226,7 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
         }
 
         // Try to insert utility upgrade
-        if (heldStack.getItem() instanceof UtilityUpgradeItem) {
+        if (ItemUtil.isUtilityUpgradeItem(heldStack)) {
             for (int i = 0; i < utilityUpgrades.getSlots(); i++) {
                 if (utilityUpgrades.getStackInSlot(i).isEmpty() && canInsertUtilityUpgrade(i, heldStack)) {
                     ItemStack toInsert = heldStack.splitStack(1);
@@ -269,13 +256,7 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
      * Recalculate storage multiplier and special states from upgrades.
      */
     public void recalculateUpgrades() {
-        UpgradeState state = calculateUpgradeState(null, ItemStack.EMPTY);
-        this.cachedUpgradeState = state;
-        isCreative = state.creative;
-        isVoid = state.voidUpgrade;
-        this.hasMaxStorageUpgrade = state.maxStorage;
-        this.hasOreDictionaryUpgrade = state.oreDictionary;
-
+        cachedUpgradeState = calculateUpgradeState(null, ItemStack.EMPTY);
         needsUpgradeCache = false;
     }
 
@@ -290,8 +271,8 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
         if (!ItemUtil.isUtilityUpgradeItem(stack) || slot < 0 || slot >= utilityUpgrades.getSlots()) {
             return false;
         }
-        UtilityUpgradeItem utilityUpgrade = (UtilityUpgradeItem) stack.getItem();
-        return utilityUpgrade.canInsertInto(this) && !hasIncompatibleUpgrade(stack, null);
+        DrawerUpgradeBehavior utilityUpgrade = (DrawerUpgradeBehavior) stack.getItem();
+        return utilityUpgrade.canInstallInto(this, stack) && !hasIncompatibleUpgrade(stack, null);
     }
 
     public boolean canRemoveStorageUpgrade(int slot) {
@@ -320,116 +301,95 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
     }
 
     protected UpgradeState calculateUpgradeState(@Nullable Integer replacedStorageSlot, @Nonnull ItemStack replacementStack) {
-        UpgradeState state = new UpgradeState();
+        UpgradeState.Builder builder = UpgradeState.builder();
 
         for (int i = 0; i < storageUpgrades.getSlots(); i++) {
             ItemStack stack = storageUpgrades.getStackInSlot(i);
             if (replacedStorageSlot != null && replacedStorageSlot == i) {
                 stack = replacementStack;
             }
-            applyStorageUpgradeState(state, stack);
+            applyUpgrade(builder, stack);
         }
 
         for (int i = 0; i < utilityUpgrades.getSlots(); i++) {
-            ItemStack stack = utilityUpgrades.getStackInSlot(i);
-            if (stack.getItem() == RegistrationHandler.VOID_UPGRADE) {
-                state.voidUpgrade = true;
-            } else if (stack.getItem() == RegistrationHandler.ORE_DICTIONARY_UPGRADE) {
-                state.oreDictionary = true;
-            }
+            applyUpgrade(builder, utilityUpgrades.getStackInSlot(i));
         }
 
-        return state;
+        return builder.build();
     }
 
-    protected void applyStorageUpgradeState(UpgradeState state, @Nonnull ItemStack stack) {
-        if (stack.isEmpty()) {
-            return;
-        }
-        if (stack.getItem() instanceof StorageUpgradeItem) {
-            StorageUpgradeItem upgrade = (StorageUpgradeItem) stack.getItem();
-            if (upgrade.isMaxStorageUpgrade()) {
-                state.maxStorage = true;
-            } else {
-                state.addModifiers(upgrade.getModifiers());
-            }
-        }
-        if (stack.getItem() == RegistrationHandler.CREATIVE_VENDING_UPGRADE) {
-            state.creative = true;
+    private void applyUpgrade(UpgradeState.Builder builder, @Nonnull ItemStack stack) {
+        if (!stack.isEmpty() && stack.getItem() instanceof IStorageUpgrade) {
+            ((IStorageUpgrade) stack.getItem()).applyUpgrade(stack, builder);
         }
     }
 
     protected boolean hasIncompatibleUpgrade(@Nonnull ItemStack candidate, @Nullable Integer ignoredStorageSlot) {
-        Item candidateItem = candidate.getItem();
-        Set<Item> candidateConflicts = getIncompatibleUpgrades(candidate);
         for (int i = 0; i < storageUpgrades.getSlots(); i++) {
             if (ignoredStorageSlot != null && ignoredStorageSlot == i) {
                 continue;
             }
             ItemStack existing = storageUpgrades.getStackInSlot(i);
-            if (isConflictingUpgrade(candidateItem, candidateConflicts, existing)) {
+            if (isConflictingUpgrade(candidate, existing)) {
                 return true;
             }
         }
         for (int i = 0; i < utilityUpgrades.getSlots(); i++) {
             ItemStack existing = utilityUpgrades.getStackInSlot(i);
-            if (isConflictingUpgrade(candidateItem, candidateConflicts, existing)) {
+            if (isConflictingUpgrade(candidate, existing)) {
                 return true;
             }
         }
         return false;
     }
 
-    protected boolean isConflictingUpgrade(Item candidateItem, Set<Item> candidateConflicts, ItemStack existing) {
-        if (existing.isEmpty()) {
+    protected boolean isConflictingUpgrade(ItemStack candidate, ItemStack existing) {
+        if (candidate.isEmpty() || existing.isEmpty()
+                || !(candidate.getItem() instanceof IStorageUpgrade)
+                || !(existing.getItem() instanceof IStorageUpgrade)) {
             return false;
         }
-        Item existingItem = existing.getItem();
-        return candidateConflicts.contains(existingItem) || getIncompatibleUpgrades(existing).contains(candidateItem);
+        IStorageUpgrade candidateUpgrade = (IStorageUpgrade) candidate.getItem();
+        IStorageUpgrade existingUpgrade = (IStorageUpgrade) existing.getItem();
+        return candidateUpgrade.conflictsWith(candidate, existing)
+                || existingUpgrade.conflictsWith(existing, candidate);
     }
 
-    protected Set<Item> getIncompatibleUpgrades(@Nonnull ItemStack stack) {
-        if (stack.getItem() instanceof UpgradeItem) {
-            return ((UpgradeItem) stack.getItem()).getIncompatibleUpgrades(stack);
-        }
-        return Collections.emptySet();
-    }
-
-    public float calculateModifier(ModifierType type, float defaultBase) {
+    public double calculateModifier(UpgradeAttribute attribute, double defaultBase) {
         if (needsUpgradeCache) recalculateUpgrades();
-        return cachedUpgradeState.calculate(type, defaultBase);
+        return cachedUpgradeState.calculate(attribute, defaultBase);
     }
 
-    public float getStorageMultiplier(float defaultBase) {
-        return calculateModifier(ModifierType.ITEM_STORAGE, defaultBase);
+    public double getStorageMultiplier(double defaultBase) {
+        return calculateModifier(UpgradeAttribute.ITEM_CAPACITY, defaultBase);
     }
 
-    public float getFluidMultiplier(float defaultBase) {
-        return calculateModifier(ModifierType.FLUID_STORAGE, defaultBase);
+    public double getFluidMultiplier(double defaultBase) {
+        return calculateModifier(UpgradeAttribute.FLUID_CAPACITY, defaultBase);
     }
 
-    public float getRangeBonus() {
-        return calculateModifier(ModifierType.CONTROLLER_RANGE, 0);
+    public double getRangeBonus() {
+        return calculateModifier(UpgradeAttribute.CONTROLLER_RANGE, 0);
     }
 
     public boolean hasMaxStorageUpgrade() {
         if (needsUpgradeCache) recalculateUpgrades();
-        return hasMaxStorageUpgrade;
+        return cachedUpgradeState.hasFeature(StorageFeature.MAX_CAPACITY);
     }
 
     public boolean hasOreDictionaryUpgrade() {
         if (needsUpgradeCache) recalculateUpgrades();
-        return hasOreDictionaryUpgrade;
+        return cachedUpgradeState.hasFeature(StorageFeature.EQUIVALENT_ITEMS);
     }
 
     public boolean isCreative() {
         if (needsUpgradeCache) recalculateUpgrades();
-        return isCreative;
+        return cachedUpgradeState.hasFeature(StorageFeature.CREATIVE);
     }
 
-    public boolean isVoid() {
+    public boolean voidsOverflow() {
         if (needsUpgradeCache) recalculateUpgrades();
-        return isVoid;
+        return cachedUpgradeState.hasFeature(StorageFeature.VOID_OVERFLOW);
     }
 
     public boolean isLocked() {
@@ -440,9 +400,18 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
     public void setLocked(boolean locked) {
         if (this.isLocked == locked) return;
         this.isLocked = locked;
+        onLockStateChanged(locked);
         this.needsUpgradeCache = true;
         markDirty();
         sendUpdatePacket();
+    }
+
+    /**
+     * Called after the runtime lock flag changes, before persistence and update
+     * notifications. Storage-specific subclasses use this to retain or clear
+     * filters without duplicating the public lock lifecycle.
+     */
+    protected void onLockStateChanged(boolean locked) {
     }
 
     @Override
@@ -511,7 +480,8 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
     public int getRedstoneSignal(EnumFacing side) {
         for (int i = 0; i < utilityUpgrades.getSlots(); i++) {
             ItemStack stack = utilityUpgrades.getStackInSlot(i);
-            if (stack.getItem() == RegistrationHandler.REDSTONE_UPGRADE) {
+            if (stack.getItem() instanceof DrawerUpgradeBehavior
+                    && ((DrawerUpgradeBehavior) stack.getItem()).providesRedstoneSignal(stack)) {
                 return calculateRedstoneSignal();
             }
         }
@@ -574,6 +544,16 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
     /**
      * Get the item handler for this drawer (for capability).
      */
-    public abstract IItemHandler getItemHandler();
+    @Nullable
+    public abstract IBigItemHandler getItemHandler();
+
+    /**
+     * Returns the internal large fluid handler without degrading it to Forge's
+     * int-only interface. Non-fluid drawers return {@code null}.
+     */
+    @Nullable
+    public IBigFluidHandler getFluidHandler() {
+        return null;
+    }
 
 }

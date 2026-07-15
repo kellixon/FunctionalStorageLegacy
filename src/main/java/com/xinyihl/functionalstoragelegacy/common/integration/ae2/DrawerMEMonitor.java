@@ -39,31 +39,9 @@ public class DrawerMEMonitor<T extends IAEStack<T>> implements IMEMonitor<T>, IT
 
     @Override
     public TickRateModulation onTick() {
-        IItemList<T> currentList = channel.createList();
-        handler.getAvailableItems(currentList);
-
-        // Compute diff: negate cached, add current, collect non-zero
-        for (T cached : cachedList) {
-            cached.setStackSize(-cached.getStackSize());
-        }
-        for (T current : currentList) {
-            cachedList.add(current);
-        }
-
-        List<T> changes = new ArrayList<>();
-        for (T entry : cachedList) {
-            if (entry.getStackSize() != 0) {
-                changes.add(entry);
-            }
-        }
-
-        cachedList = currentList;
-
-        if (!changes.isEmpty()) {
-            postDifference(changes);
-            return TickRateModulation.URGENT;
-        }
-        return TickRateModulation.SLOWER;
+        return refreshCacheAndPostDifference()
+                ? TickRateModulation.URGENT
+                : TickRateModulation.SLOWER;
     }
 
     @Override
@@ -77,13 +55,7 @@ public class DrawerMEMonitor<T extends IAEStack<T>> implements IMEMonitor<T>, IT
     public T injectItems(T input, Actionable type, IActionSource src) {
         T result = handler.injectItems(input, type, src);
         if (type == Actionable.MODULATE) {
-            long injected = input.getStackSize() - (result != null ? result.getStackSize() : 0);
-            if (injected > 0) {
-                T diff = input.copy();
-                diff.setStackSize(injected);
-                cachedList.add(diff);
-                postDifference(Collections.singletonList(diff));
-            }
+            refreshCacheAndPostDifference();
         }
         return result;
     }
@@ -91,11 +63,8 @@ public class DrawerMEMonitor<T extends IAEStack<T>> implements IMEMonitor<T>, IT
     @Override
     public T extractItems(T request, Actionable mode, IActionSource src) {
         T result = handler.extractItems(request, mode, src);
-        if (mode == Actionable.MODULATE && result != null) {
-            T diff = result.copy();
-            diff.setStackSize(-result.getStackSize());
-            cachedList.add(diff);
-            postDifference(Collections.singletonList(diff));
+        if (mode == Actionable.MODULATE) {
+            refreshCacheAndPostDifference();
         }
         return result;
     }
@@ -161,6 +130,45 @@ public class DrawerMEMonitor<T extends IAEStack<T>> implements IMEMonitor<T>, IT
     }
 
     // ---- Internal ----
+
+    private boolean refreshCacheAndPostDifference() {
+        IItemList<T> currentList = channel.createList();
+        handler.getAvailableItems(currentList);
+        List<T> changes = new ArrayList<>();
+
+        for (T cached : cachedList) {
+            T current = currentList.findPrecise(cached);
+            long before = nonNegativeSize(cached);
+            long after = nonNegativeSize(current);
+            addDifference(changes, current == null ? cached : current, after - before);
+        }
+        for (T current : currentList) {
+            if (cachedList.findPrecise(current) == null) {
+                addDifference(changes, current, nonNegativeSize(current));
+            }
+        }
+
+        cachedList = currentList;
+        if (changes.isEmpty()) {
+            return false;
+        }
+        postDifference(changes);
+        return true;
+    }
+
+    private static <T extends IAEStack<T>> long nonNegativeSize(T stack) {
+        return stack == null ? 0L : Math.max(0L, stack.getStackSize());
+    }
+
+    private static <T extends IAEStack<T>> void addDifference(
+            List<T> changes, T template, long amount) {
+        if (template == null || amount == 0L) {
+            return;
+        }
+        T difference = template.copy();
+        difference.setStackSize(amount);
+        changes.add(difference);
+    }
 
     private void postDifference(Iterable<T> changes) {
         Iterator<Map.Entry<IMEMonitorHandlerReceiver<T>, Object>> it = listeners.entrySet().iterator();

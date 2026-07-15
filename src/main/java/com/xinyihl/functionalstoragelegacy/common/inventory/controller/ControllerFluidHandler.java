@@ -1,216 +1,280 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory.controller;
 
-import com.xinyihl.functionalstoragelegacy.api.IBigFluidHandler;
-import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fluids.capability.IFluidTankProperties;
+import com.xinyihl.functionalstoragelegacy.api.storage.BigFluidStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigFluidHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
+import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
 
-import javax.annotation.Nullable;
+import javax.annotation.Nonnull;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 /**
- * Controller fluid handler that aggregates multiple drawer IBigFluidHandlers into a single interface.
+ * Flat aggregate of connected fluid handlers. Tank-addressed operations do one
+ * bounds check and delegate to exactly one child tank; global scans occur only
+ * in the explicit routed methods. Rebuilding atomically replaces both the
+ * immutable child list and its O(1) flattened index.
  */
-public class ControllerFluidHandler implements IBigFluidHandler {
+public final class ControllerFluidHandler implements IBigFluidHandler {
 
-    private final List<IBigFluidHandler> handlers;
-    private final List<TankSlotMapping> tankMappings;
-    private int totalTanks;
-    private IFluidTankProperties[] cachedProperties;
+    private List<IBigFluidHandler> handlers = Collections.emptyList();
+    private List<HandlerTankMapping> tankMappings = Collections.emptyList();
 
-    public ControllerFluidHandler() {
-        this.handlers = new ArrayList<>();
-        this.tankMappings = new ArrayList<>();
-        this.totalTanks = 0;
-        this.cachedProperties = new IFluidTankProperties[0];
+    @Override
+    public int getTankCount() {
+        return tankMappings.size();
+    }
+
+    @Nonnull
+    @Override
+    public BigFluidStack getTankSnapshot(int tank) {
+        HandlerTankMapping mapping = mappingAt(tank);
+        return mapping == null
+                ? BigFluidStack.empty()
+                : mapping.handler.getTankSnapshot(mapping.localTank);
     }
 
     @Override
-    public IFluidTankProperties[] getTankProperties() {
-        return cachedProperties;
+    public long getTankCapacity(int tank) {
+        HandlerTankMapping mapping = mappingAt(tank);
+        return mapping == null ? 0L : mapping.handler.getTankCapacity(mapping.localTank);
     }
 
     @Override
-    public int fill(FluidStack resource, boolean doFill) {
-        if (resource == null || resource.amount <= 0) return 0;
-        long filled = fillLong(0, resource, resource.amount, !doFill);
-        return (int) Math.min(filled, Integer.MAX_VALUE);
+    public boolean supportsFill(int tank) {
+        HandlerTankMapping mapping = mappingAt(tank);
+        return mapping != null && mapping.handler.supportsFill(mapping.localTank);
     }
 
-    @Nullable
     @Override
-    public FluidStack drain(FluidStack resource, boolean doDrain) {
-        if (resource == null || resource.amount <= 0) return null;
+    public boolean supportsDrain(int tank) {
+        HandlerTankMapping mapping = mappingAt(tank);
+        return mapping != null && mapping.handler.supportsDrain(mapping.localTank);
+    }
 
-        long remaining = resource.amount;
+    @Override
+    public boolean supportsFluid(int tank, @Nonnull BigFluidStack fluid) {
+        HandlerTankMapping mapping = mappingAt(tank);
+        return mapping != null
+                && fluid != null
+                && mapping.handler.supportsFluid(mapping.localTank, fluid);
+    }
 
-        for (IBigFluidHandler handler : handlers) {
-            for (int t = 0; t < handler.getTanksCount(); t++) {
-                FluidStack stored = handler.getStoredFluid(t);
-                if (stored != null && stored.isFluidEqual(resource)) {
-                    long drained = handler.drainLong(t, remaining, !doDrain);
-                    remaining -= drained;
-                    if (remaining <= 0) break;
-                }
-            }
-            if (remaining <= 0) break;
+    @Nonnull
+    @Override
+    public TransferResult<BigFluidStack> fillTank(
+            int tank, @Nonnull BigFluidStack request, @Nonnull StorageAction action) {
+        Objects.requireNonNull(action, "action");
+        long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
+        if (requested == 0L) {
+            return emptyResult(0L, action);
+        }
+        HandlerTankMapping mapping = mappingAt(tank);
+        return mapping == null
+                ? emptyResult(requested, action)
+                : mapping.handler.fillTank(mapping.localTank, request, action);
+    }
+
+    @Nonnull
+    @Override
+    public TransferResult<BigFluidStack> drainTank(
+            int tank, long amount, @Nonnull StorageAction action) {
+        Objects.requireNonNull(action, "action");
+        long requested = Math.max(0L, amount);
+        if (requested == 0L) {
+            return emptyResult(0L, action);
+        }
+        HandlerTankMapping mapping = mappingAt(tank);
+        return mapping == null
+                ? emptyResult(requested, action)
+                : mapping.handler.drainTank(mapping.localTank, requested, action);
+    }
+
+    /**
+     * Performs one classification scan, then fills matching configured tanks
+     * before unconfigured empty tanks. Mismatched retained filters are skipped.
+     */
+    @Nonnull
+    @Override
+    public TransferResult<BigFluidStack> fillRouted(
+            @Nonnull BigFluidStack request, @Nonnull StorageAction action) {
+        Objects.requireNonNull(action, "action");
+        long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
+        if (requested == 0L) {
+            return emptyResult(0L, action);
         }
 
-        long totalDrained = resource.amount - remaining;
-        if (totalDrained <= 0) return null;
-        FluidStack result = resource.copy();
-        result.amount = (int) Math.min(totalDrained, Integer.MAX_VALUE);
-        return result;
-    }
-
-    @Nullable
-    @Override
-    public FluidStack drain(int maxDrain, boolean doDrain) {
-        if (maxDrain <= 0) return null;
-
-        long remaining = maxDrain;
-        FluidStack resultFluid = null;
-
-        for (IBigFluidHandler handler : handlers) {
-            for (int t = 0; t < handler.getTanksCount(); t++) {
-                FluidStack stored = handler.getStoredFluid(t);
-                if (stored != null && stored.amount > 0) {
-                    if (resultFluid != null && !stored.isFluidEqual(resultFluid)) continue;
-                    long drained = handler.drainLong(t, remaining, !doDrain);
-                    if (drained > 0) {
-                        if (resultFluid == null) resultFluid = stored.copy();
-                        remaining -= drained;
-                        if (remaining <= 0) break;
-                    }
-                }
+        List<HandlerTankMapping> matching = new ArrayList<>();
+        List<HandlerTankMapping> empty = new ArrayList<>();
+        for (HandlerTankMapping mapping : tankMappings) {
+            if (!mapping.handler.supportsFill(mapping.localTank)
+                    || !mapping.handler.supportsFluid(mapping.localTank, request)) {
+                continue;
             }
-            if (remaining <= 0) break;
+            BigFluidStack current = mapping.handler.getTankSnapshot(mapping.localTank);
+            if (current != null && current.hasTemplate()) {
+                if (current.isSameType(request)) {
+                    matching.add(mapping);
+                }
+            } else {
+                empty.add(mapping);
+            }
         }
 
-        if (resultFluid == null) return null;
-        long totalDrained = maxDrain - remaining;
-        if (totalDrained <= 0) return null;
-        resultFluid.amount = (int) Math.min(totalDrained, Integer.MAX_VALUE);
-        return resultFluid;
+        long processed = fillCandidates(matching, request, action, 0L);
+        processed = fillCandidates(empty, request, action, processed);
+        return aggregateResult(request, processed, action);
     }
 
+    /** Routes type-sensitive draining across matching child tanks in flat order. */
+    @Nonnull
+    @Override
+    public TransferResult<BigFluidStack> drainRouted(
+            @Nonnull BigFluidStack request, @Nonnull StorageAction action) {
+        Objects.requireNonNull(action, "action");
+        long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
+        if (requested == 0L) {
+            return emptyResult(0L, action);
+        }
+
+        long processed = 0L;
+        for (HandlerTankMapping mapping : tankMappings) {
+            if (processed >= requested
+                    || !mapping.handler.supportsDrain(mapping.localTank)
+                    || !mapping.handler.supportsFluid(mapping.localTank, request)) {
+                continue;
+            }
+            BigFluidStack current = mapping.handler.getTankSnapshot(mapping.localTank);
+            if (current == null || current.isEmpty() || !current.isSameType(request)) {
+                continue;
+            }
+            long remaining = requested - processed;
+            TransferResult<BigFluidStack> result = mapping.handler.drainTank(
+                    mapping.localTank, remaining, action);
+            long drained = result == null ? 0L
+                    : Math.min(remaining, Math.max(0L, result.getProcessedAmount()));
+            processed = saturatedAdd(processed, drained);
+        }
+        return aggregateResult(request, processed, action);
+    }
+
+    /**
+     * Selects the first drainable non-empty fluid in flat tank order, then
+     * aggregates only that fluid type across the controller.
+     */
+    @Nonnull
+    @Override
+    public TransferResult<BigFluidStack> drainRouted(
+            long amount, @Nonnull StorageAction action) {
+        Objects.requireNonNull(action, "action");
+        long requested = Math.max(0L, amount);
+        if (requested == 0L) {
+            return emptyResult(0L, action);
+        }
+        for (HandlerTankMapping mapping : tankMappings) {
+            BigFluidStack current = mapping.handler.getTankSnapshot(mapping.localTank);
+            if (current != null && !current.isEmpty()
+                    && mapping.handler.supportsDrain(mapping.localTank)
+                    && mapping.handler.supportsFluid(mapping.localTank, current)) {
+                return drainRouted(current.withAmount(requested), action);
+            }
+        }
+        return emptyResult(requested, action);
+    }
+
+    /**
+     * Atomically replaces children and the flattened index. Later mutations of
+     * the caller's list cannot produce stale tank mappings.
+     *
+     * @param newHandlers desired handlers in routing order
+     */
+    public void setHandlers(@Nonnull List<? extends IBigFluidHandler> newHandlers) {
+        Objects.requireNonNull(newHandlers, "newHandlers");
+        List<IBigFluidHandler> handlerCopy = new ArrayList<>(newHandlers.size());
+        List<HandlerTankMapping> mappings = new ArrayList<>();
+        Set<Object> seen = Collections.newSetFromMap(
+                new IdentityHashMap<Object, Boolean>());
+        for (IBigFluidHandler handler : newHandlers) {
+            if (handler == null || !seen.add(identityOf(handler))) {
+                continue;
+            }
+            handlerCopy.add(handler);
+            int tanks = Math.max(0, handler.getTankCount());
+            for (int tank = 0; tank < tanks; tank++) {
+                mappings.add(new HandlerTankMapping(handler, tank));
+            }
+        }
+        handlers = Collections.unmodifiableList(handlerCopy);
+        tankMappings = Collections.unmodifiableList(mappings);
+    }
+
+    /** @return immutable snapshot of current child handler order */
+    @Nonnull
     public List<IBigFluidHandler> getHandlers() {
         return handlers;
     }
 
-    public void setHandlers(List<IBigFluidHandler> newHandlers) {
-        this.handlers.clear();
-        this.handlers.addAll(newHandlers);
-        rebuildTankMappings();
-    }
-
-    private void rebuildTankMappings() {
-        tankMappings.clear();
-        totalTanks = 0;
-        for (int h = 0; h < handlers.size(); h++) {
-            IBigFluidHandler handler = handlers.get(h);
-            for (int t = 0; t < handler.getTanksCount(); t++) {
-                tankMappings.add(new TankSlotMapping(h, t));
-                totalTanks++;
+    private static Object identityOf(IBigFluidHandler handler) {
+        if (handler instanceof StorageIdentityProvider) {
+            Object identity = ((StorageIdentityProvider) handler).getStorageIdentity();
+            if (identity != null) {
+                return identity;
             }
         }
-        List<IFluidTankProperties> props = new ArrayList<>();
-        for (IBigFluidHandler handler : handlers) {
-            for (IFluidTankProperties prop : handler.getTankProperties()) {
-                props.add(prop);
+        return handler;
+    }
+
+    private long fillCandidates(
+            List<HandlerTankMapping> candidates,
+            BigFluidStack request,
+            StorageAction action,
+            long alreadyProcessed) {
+        long processed = alreadyProcessed;
+        for (HandlerTankMapping mapping : candidates) {
+            if (processed >= request.getAmount()) {
+                break;
             }
+            long remaining = request.getAmount() - processed;
+            TransferResult<BigFluidStack> result = mapping.handler.fillTank(
+                    mapping.localTank, request.withAmount(remaining), action);
+            long filled = result == null ? 0L
+                    : Math.min(remaining, Math.max(0L, result.getProcessedAmount()));
+            processed = saturatedAdd(processed, filled);
         }
-        cachedProperties = props.toArray(new IFluidTankProperties[0]);
+        return processed;
     }
 
-    @Override
-    public int getTanksCount() {
-        return totalTanks;
+    private HandlerTankMapping mappingAt(int tank) {
+        return tank < 0 || tank >= tankMappings.size() ? null : tankMappings.get(tank);
     }
 
-    @Override
-    public long getLongCapacity(int tank) {
-        if (tank < 0 || tank >= totalTanks) return 0;
-        TankSlotMapping mapping = tankMappings.get(tank);
-        return handlers.get(mapping.handlerIndex).getLongCapacity(mapping.localTank);
+    private static TransferResult<BigFluidStack> emptyResult(
+            long requested, StorageAction action) {
+        return new TransferResult<>(requested, BigFluidStack.empty(), action);
     }
 
-    @Override
-    public long fillLong(int tank, FluidStack resource, long amount, boolean simulate) {
-        if (resource == null || amount <= 0) return 0;
-
-        long remaining = amount;
-
-        // Priority 1: Matching tanks
-        for (IBigFluidHandler handler : handlers) {
-            for (int t = 0; t < handler.getTanksCount(); t++) {
-                FluidStack stored = handler.getStoredFluid(t);
-                if (stored != null && stored.amount > 0 && stored.isFluidEqual(resource)) {
-                    long filled = handler.fillLong(t, resource, remaining, simulate);
-                    remaining -= filled;
-                    if (remaining <= 0) return amount;
-                }
-            }
-        }
-
-        // Priority 2: Empty tanks
-        for (IBigFluidHandler handler : handlers) {
-            for (int t = 0; t < handler.getTanksCount(); t++) {
-                FluidStack stored = handler.getStoredFluid(t);
-                if (stored == null || stored.amount <= 0) {
-                    long filled = handler.fillLong(t, resource, remaining, simulate);
-                    remaining -= filled;
-                    if (remaining <= 0) return amount;
-                }
-            }
-        }
-
-        return amount - remaining;
+    private static TransferResult<BigFluidStack> aggregateResult(
+            BigFluidStack request, long processed, StorageAction action) {
+        return new TransferResult<>(
+                request.getAmount(),
+                processed == 0L ? BigFluidStack.empty() : request.withAmount(processed),
+                action);
     }
 
-    @Override
-    public long drainLong(int tank, long amount, boolean simulate) {
-        if (tank < 0 || tank >= totalTanks) return 0;
-        TankSlotMapping mapping = tankMappings.get(tank);
-        return handlers.get(mapping.handlerIndex).drainLong(mapping.localTank, amount, simulate);
+    private static long saturatedAdd(long left, long right) {
+        return left >= Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
     }
 
-    @Nullable
-    @Override
-    public FluidStack getStoredFluid(int tank) {
-        if (tank < 0 || tank >= totalTanks) return null;
-        TankSlotMapping mapping = tankMappings.get(tank);
-        return handlers.get(mapping.handlerIndex).getStoredFluid(mapping.localTank);
-    }
+    private static final class HandlerTankMapping {
+        private final IBigFluidHandler handler;
+        private final int localTank;
 
-    @Override
-    public long getStoredFluidAmount(int tank) {
-        if (tank < 0 || tank >= totalTanks) return 0;
-        TankSlotMapping mapping = tankMappings.get(tank);
-        return handlers.get(mapping.handlerIndex).getStoredFluidAmount(mapping.localTank);
-    }
-
-    @Override
-    public boolean isVoid() {
-        return false;
-    }
-
-    @Override
-    public boolean isLocked() {
-        return false;
-    }
-
-    @Override
-    public boolean isCreative() {
-        return false;
-    }
-
-    private static class TankSlotMapping {
-        final int handlerIndex;
-        final int localTank;
-
-        TankSlotMapping(int handlerIndex, int localTank) {
-            this.handlerIndex = handlerIndex;
+        private HandlerTankMapping(IBigFluidHandler handler, int localTank) {
+            this.handler = handler;
             this.localTank = localTank;
         }
     }

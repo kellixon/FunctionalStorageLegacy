@@ -2,6 +2,9 @@ package com.xinyihl.functionalstoragelegacy.common.item.upgrade;
 
 import com.xinyihl.functionalstoragelegacy.common.tile.FluidDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
+import com.xinyihl.functionalstoragelegacy.api.storage.BigFluidStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigFluidHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
 import com.xinyihl.functionalstoragelegacy.misc.Configurations;
 import com.xinyihl.functionalstoragelegacy.misc.RegistrationHandler;
 import net.minecraft.client.resources.I18n;
@@ -12,7 +15,6 @@ import net.minecraft.world.World;
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
@@ -52,7 +54,7 @@ public class WaterGenerationUpgradeItem extends UtilityUpgradeItem {
         }
 
         FluidDrawerTile fluidTile = (FluidDrawerTile) tile;
-        IFluidHandler fluidHandler = fluidTile.getFluidHandler();
+        IBigFluidHandler fluidHandler = fluidTile.getFluidHandler();
         if (fluidHandler == null) {
             return;
         }
@@ -63,19 +65,9 @@ public class WaterGenerationUpgradeItem extends UtilityUpgradeItem {
         }
 
         int amountPerTick = tier.getGenerationRate();
-        FluidStack waterStack = new FluidStack(water, amountPerTick);
-
-        int filled = fluidHandler.fill(waterStack, true);
-
-        if (filled > 0) {
-            tile.markDirty();
-            tile.sendUpdatePacket();
-        }
-
-        else if (fluidTile.isVoid()) {
-            tile.markDirty();
-            tile.sendUpdatePacket();
-        }
+        fluidHandler.fillRouted(
+                new BigFluidStack(new FluidStack(water, 1), amountPerTick),
+                StorageAction.EXECUTE);
     }
 
     public enum WaterGenerationTire {

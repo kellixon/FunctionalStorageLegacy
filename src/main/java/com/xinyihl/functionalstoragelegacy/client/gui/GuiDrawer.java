@@ -1,19 +1,18 @@
 package com.xinyihl.functionalstoragelegacy.client.gui;
 
 import com.xinyihl.functionalstoragelegacy.Tags;
-import com.xinyihl.functionalstoragelegacy.api.DrawerType;
+import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigFluidHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
 import com.xinyihl.functionalstoragelegacy.common.container.ContainerDrawer;
-import com.xinyihl.functionalstoragelegacy.common.inventory.CompactingInventoryHandler;
-import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigFluidHandler;
-import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigInventoryHandler;
-import com.xinyihl.functionalstoragelegacy.common.item.upgrade.StorageUpgradeItem;
-import com.xinyihl.functionalstoragelegacy.common.item.upgrade.UtilityUpgradeItem;
+import com.xinyihl.functionalstoragelegacy.common.storage.DrawerLayout;
 import com.xinyihl.functionalstoragelegacy.common.tile.EnderDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.FluidDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.WoodDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.compact.CompactingDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.compact.SimpleCompactingDrawerTile;
+import com.xinyihl.functionalstoragelegacy.util.ItemUtil;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.resources.I18n;
@@ -52,42 +51,22 @@ public class GuiDrawer extends GuiContainer {
 
         if (tile instanceof WoodDrawerTile) {
             WoodDrawerTile woodDrawerTile = (WoodDrawerTile) tile;
-            DrawerType type = woodDrawerTile.getDrawerType();
-            BigInventoryHandler handler = woodDrawerTile.getHandler();
+            DrawerLayout layout = woodDrawerTile.getDrawerLayout();
+            IBigItemHandler handler = woodDrawerTile.getItemHandler();
             ResourceLocation frontTexture = new ResourceLocation(Tags.MOD_ID,
-                    "textures/blocks/" + woodDrawerTile.getWoodType().getName() + "_front_" + type.getSlots() + ".png");
+                    "textures/blocks/" + woodDrawerTile.getWoodType().getId() + "_front_" + layout.getSlotCount() + ".png");
             itemInfoAddon = new DrawerInfoGuiAddon(
                     INFO_PANEL_X, INFO_PANEL_Y,
                     frontTexture,
-                    type.getSlots(),
-                    type.getSlotPosition(),
-                    i -> {
-                        BigInventoryHandler.BigStack bs = handler.getBigStack(i);
-                        if (bs.getAmount() > 0) {
-                            ItemStack display = bs.getStack().copy();
-                            display.setCount((int) Math.min(bs.getAmount(), Integer.MAX_VALUE));
-                            return display;
-                        }
-                        return ItemStack.EMPTY;
-                    },
-                    i -> handler.getLongSlotLimit(i),
-                    i -> {
-                        if (woodDrawerTile.isLocked()) {
-                            BigInventoryHandler.BigStack bs = handler.getBigStack(i);
-                            if (!bs.getStack().isEmpty()) {
-                                ItemStack locked = bs.getStack().copy();
-                                locked.setCount(1);
-                                return locked;
-                            }
-                        }
-                        return ItemStack.EMPTY;
-                    }
+                    layout.getSlotCount(),
+                    DrawerGuiLayout.slotPositions(layout),
+                    handler::getSlotSnapshot,
+                    handler::getSlotCapacity
             );
         } else if (tile instanceof CompactingDrawerTile) {
             CompactingDrawerTile compactingTile = (CompactingDrawerTile) tile;
-            CompactingInventoryHandler handler = compactingTile.getCompactingHandler();
-            int slots = handler.getSlots();
-            if (handler.isVoid()) slots--; // exclude void slot
+            IBigItemHandler handler = compactingTile.getItemHandler();
+            int slots = handler.getSlotCount();
             final int slotCount = slots;
             Function<Integer, Pair<Integer, Integer>> positions = getCompactingPositions(slotCount);
             ResourceLocation frontTexture;
@@ -101,34 +80,23 @@ public class GuiDrawer extends GuiContainer {
                     frontTexture,
                     slotCount,
                     positions,
-                    i -> handler.getStackInSlot(i),
-                    i -> handler.getLongSlotLimit(i),
-                    i -> {
-                        if (compactingTile.isLocked() && handler.isSetup()) {
-                            java.util.List<CompactingInventoryHandler.Result> results = handler.getResults();
-                            if (i < results.size() && !results.get(i).getStack().isEmpty()) {
-                                ItemStack locked = results.get(i).getStack().copy();
-                                locked.setCount(1);
-                                return locked;
-                            }
-                        }
-                        return ItemStack.EMPTY;
-                    }
+                    handler::getSlotSnapshot,
+                    handler::getSlotCapacity
             );
         } else if (tile instanceof FluidDrawerTile) {
             FluidDrawerTile fluidTile = (FluidDrawerTile) tile;
-            DrawerType type = fluidTile.getDrawerType();
-            BigFluidHandler handler = fluidTile.getFluidHandler();
-            String suffix = type.getSlots() == 1 ? "" : "_" + type.getSlots();
+            DrawerLayout layout = fluidTile.getDrawerLayout();
+            IBigFluidHandler handler = fluidTile.getFluidHandler();
+            String suffix = layout.getSlotCount() == 1 ? "" : "_" + layout.getSlotCount();
             ResourceLocation frontTexture = new ResourceLocation(Tags.MOD_ID,
                     "textures/blocks/fluid_front" + suffix + ".png");
             fluidInfoAddon = new FluidDrawerInfoGuiAddon(
                     INFO_PANEL_X, INFO_PANEL_Y,
                     frontTexture,
-                    type.getSlots(),
-                    type.getSlotPosition(),
+                    layout.getSlotCount(),
+                    DrawerGuiLayout.slotPositions(layout),
                     () -> handler,
-                    i -> handler.getLongCapacityPerTank()
+                    handler::getTankCapacity
             );
         } else if (tile instanceof EnderDrawerTile) {
             EnderDrawerTile enderTile = (EnderDrawerTile) tile;
@@ -137,29 +105,15 @@ public class GuiDrawer extends GuiContainer {
                     INFO_PANEL_X, INFO_PANEL_Y,
                     frontTexture,
                     1,
-                    DrawerType.X_1.getSlotPosition(),
+                    DrawerGuiLayout.slotPositions(DrawerLayout.X_1),
+                    i -> enderTile.getItemHandler() == null
+                            ? BigItemStack.empty()
+                            : enderTile.getItemHandler().getSlotSnapshot(0),
                     i -> {
                         if (enderTile.getItemHandler() != null) {
-                            return enderTile.getItemHandler().getStackInSlot(0);
-                        }
-                        return ItemStack.EMPTY;
-                    },
-                    i -> {
-                        if (enderTile.getItemHandler() != null) {
-                            return (long) enderTile.getItemHandler().getSlotLimit(0);
+                            return enderTile.getItemHandler().getSlotCapacity(0);
                         }
                         return 0L;
-                    },
-                    i -> {
-                        if (enderTile.isLocked() && enderTile.getItemHandler() != null) {
-                            ItemStack stack = enderTile.getItemHandler().getStackInSlot(0);
-                            if (!stack.isEmpty()) {
-                                ItemStack locked = stack.copy();
-                                locked.setCount(1);
-                                return locked;
-                            }
-                        }
-                        return ItemStack.EMPTY;
                     }
             );
         }
@@ -167,7 +121,7 @@ public class GuiDrawer extends GuiContainer {
 
     private Function<Integer, Pair<Integer, Integer>> getCompactingPositions(int slotCount) {
         if (slotCount == 2) {
-            return DrawerType.X_2.getSlotPosition();
+            return DrawerGuiLayout.slotPositions(DrawerLayout.X_2);
         }
         // 3 slots: top-center (slot 0) + bottom-left (slot 1) + bottom-right (slot 2)
         return i -> {
@@ -242,10 +196,8 @@ public class GuiDrawer extends GuiContainer {
         int storageSlots = container.getTile().getStorageUpgrades().getSlots();
         int utilitySlots = container.getTile().getUtilityUpgrades().getSlots();
         ItemStack previewUpgradeStack = getUpgradePreviewStack();
-        StorageUpgradeItem carriedUpgrade = previewUpgradeStack.getItem() instanceof StorageUpgradeItem
-                ? (StorageUpgradeItem) previewUpgradeStack.getItem()
-                : null;
-        boolean utilityUpgrade = previewUpgradeStack.getItem() instanceof UtilityUpgradeItem;
+        boolean storageUpgrade = ItemUtil.isStorageUpgradeItem(previewUpgradeStack);
+        boolean utilityUpgrade = ItemUtil.isUtilityUpgradeItem(previewUpgradeStack);
 
         GlStateManager.disableLighting();
         GlStateManager.disableDepth();
@@ -253,17 +205,14 @@ public class GuiDrawer extends GuiContainer {
             int sx = 7 + i * 18;
             int sy = 19;
 
-            if (carriedUpgrade != null) {
+            if (storageUpgrade) {
                 ItemStack existing = container.getTile().getStorageUpgrades().getStackInSlot(i);
-                if (existing.getItem() instanceof StorageUpgradeItem) {
-                    StorageUpgradeItem existingUpgrade = (StorageUpgradeItem) existing.getItem();
-                    if (carriedUpgrade.getTier().isHigherThan(existingUpgrade.getTier())) {
-                        int color = container.getTile().canReplaceStorageUpgrade(i, previewUpgradeStack)
-                                ? 0x5500AA00
-                                : 0x55AA0000;
-                        drawGradientRect(sx, sy, sx + 18, sy + 18, color, color);
-                        continue;
-                    }
+                if (ItemUtil.hasHigherUpgradeReplacementPriority(previewUpgradeStack, existing)) {
+                    int color = container.getTile().canReplaceStorageUpgrade(i, previewUpgradeStack)
+                            ? 0x5500AA00
+                            : 0x55AA0000;
+                    drawGradientRect(sx, sy, sx + 18, sy + 18, color, color);
+                    continue;
                 }
             }
 

@@ -1,11 +1,15 @@
 package com.xinyihl.functionalstoragelegacy.client.render;
 
-import com.xinyihl.functionalstoragelegacy.api.Attachment;
-import com.xinyihl.functionalstoragelegacy.api.DrawerType;
+import com.xinyihl.functionalstoragelegacy.api.storage.BigFluidStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigFluidHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.api.upgrade.IStorageUpgrade;
+import com.xinyihl.functionalstoragelegacy.api.upgrade.StorageFeature;
+import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeState;
+import com.xinyihl.functionalstoragelegacy.common.block.DrawerAttachment;
+import com.xinyihl.functionalstoragelegacy.common.storage.DrawerLayout;
 import com.xinyihl.functionalstoragelegacy.common.block.base.DrawerBlock;
-import com.xinyihl.functionalstoragelegacy.common.inventory.CompactingInventoryHandler;
-import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigFluidHandler;
-import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigInventoryHandler;
 import com.xinyihl.functionalstoragelegacy.common.item.ConfigurationToolItem;
 import com.xinyihl.functionalstoragelegacy.common.tile.EnderDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.FluidDrawerTile;
@@ -13,7 +17,6 @@ import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTi
 import com.xinyihl.functionalstoragelegacy.common.tile.compact.CompactingDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.compact.SimpleCompactingDrawerTile;
 import com.xinyihl.functionalstoragelegacy.misc.Configurations;
-import com.xinyihl.functionalstoragelegacy.misc.RegistrationHandler;
 import com.xinyihl.functionalstoragelegacy.util.NumberUtils;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
@@ -27,7 +30,6 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.items.IItemHandler;
 
 import javax.annotation.Nonnull;
 
@@ -64,7 +66,7 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
         if (!(state.getBlock() instanceof DrawerBlock)) return;
 
         DrawerBlock block = (DrawerBlock) state.getBlock();
-        Attachment attachment = DrawerBlock.getAttachment(state);
+        DrawerAttachment attachment = DrawerBlock.getAttachment(state);
         EnumFacing horizontalFacing = DrawerBlock.getHorizontalFacing(state);
         EnumFacing frontFacing = DrawerBlock.getFrontFacing(state);
         DrawerOptions options = te.getDrawerOptions();
@@ -80,7 +82,7 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
         setupFaceTransform(attachment, horizontalFacing);
 
         if (te instanceof FluidDrawerTile) {
-            renderFluidSlots((FluidDrawerTile) te, block.getDrawerType(), options);
+            renderFluidSlots((FluidDrawerTile) te, block.getDrawerLayout(), options);
         } else if (te instanceof SimpleCompactingDrawerTile) {
             renderSimpleCompactingSlots((SimpleCompactingDrawerTile) te, options);
         } else if (te instanceof CompactingDrawerTile) {
@@ -88,7 +90,7 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
         } else if (te instanceof EnderDrawerTile) {
             renderEnderSlot((EnderDrawerTile) te, options);
         } else {
-            renderItemSlots(te, block.getDrawerType(), options);
+            renderItemSlots(te, block.getDrawerLayout(), options);
         }
 
         // Render upgrade icons on the face
@@ -111,41 +113,40 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
     // ============================================================
     // Item  drawers
     // ============================================================
-    private void renderItemSlots(ControllableDrawerTile te, DrawerType drawerType, DrawerOptions options) {
-        if (drawerType == null) return;
-        IItemHandler handler = te.getItemHandler();
-        if (!(handler instanceof BigInventoryHandler)) return;
-        BigInventoryHandler bigHandler = (BigInventoryHandler) handler;
+    private void renderItemSlots(ControllableDrawerTile te, DrawerLayout drawerLayout, DrawerOptions options) {
+        if (drawerLayout == null) return;
+        IBigItemHandler handler = te.getItemHandler();
+        if (handler == null) return;
 
         boolean showRender = options == null || options.isShowItemRender();
         boolean showCount = options == null || options.isShowItemCount();
 
-        switch (drawerType) {
+        switch (drawerLayout) {
             case X_1:
-                renderItemSlot(bigHandler, 0, 0.5F, 0.5F, 1.0F, showRender, showCount, 0.3F, options);
+                renderItemSlot(handler, 0, 0.5F, 0.5F, 1.0F, showRender, showCount, 0.3F, options);
                 break;
             case X_2:
-                renderItemSlot(bigHandler, 0, 0.5F, 0.77F, 0.5F, showRender, showCount, 0.2F, options);
-                renderItemSlot(bigHandler, 1, 0.5F, 0.27F, 0.5F, showRender, showCount, 0.2F, options);
+                renderItemSlot(handler, 0, 0.5F, 0.77F, 0.5F, showRender, showCount, 0.2F, options);
+                renderItemSlot(handler, 1, 0.5F, 0.27F, 0.5F, showRender, showCount, 0.2F, options);
                 break;
             case X_4:
-                renderItemSlot(bigHandler, 0, 0.25F, 0.77F, 0.5F, showRender, showCount, 0.2F, options);
-                renderItemSlot(bigHandler, 1, 0.75F, 0.77F, 0.5F, showRender, showCount, 0.2F, options);
-                renderItemSlot(bigHandler, 2, 0.25F, 0.27F, 0.5F, showRender, showCount, 0.2F, options);
-                renderItemSlot(bigHandler, 3, 0.75F, 0.27F, 0.5F, showRender, showCount, 0.2F, options);
+                renderItemSlot(handler, 0, 0.25F, 0.77F, 0.5F, showRender, showCount, 0.2F, options);
+                renderItemSlot(handler, 1, 0.75F, 0.77F, 0.5F, showRender, showCount, 0.2F, options);
+                renderItemSlot(handler, 2, 0.25F, 0.27F, 0.5F, showRender, showCount, 0.2F, options);
+                renderItemSlot(handler, 3, 0.75F, 0.27F, 0.5F, showRender, showCount, 0.2F, options);
                 break;
         }
     }
 
-    private void renderItemSlot(BigInventoryHandler handler, int slot, float posX, float posY, float slotScale, boolean showRender, boolean showCount, float textScale, DrawerOptions options) {
-        if (slot >= handler.getStoredStacks().size()) return;
-        BigInventoryHandler.BigStack bigStack = handler.getBigStack(slot);
-        ItemStack stack = bigStack.getStack();
-        if (stack.isEmpty()) return;
+    private void renderItemSlot(IBigItemHandler handler, int slot, float posX, float posY, float slotScale, boolean showRender, boolean showCount, float textScale, DrawerOptions options) {
+        if (slot < 0 || slot >= handler.getSlotCount()) return;
+        BigItemStack snapshot = handler.getSlotSnapshot(slot);
+        if (snapshot == null || !snapshot.hasTemplate()) return;
+        ItemStack stack = snapshot.getTemplate();
 
-        long count = bigStack.getAmount();
-        long maxAmount = handler.getLongSlotLimit(slot);
-        float progress = maxAmount > 0 ? Math.min(1.0f, count / (float) maxAmount) : 0;
+        long count = snapshot.getAmount();
+        long maxAmount = handler.getSlotCapacity(slot);
+        float progress = ratio(count, maxAmount);
         renderIndicatorOnFace(posX, posY, slotScale, progress, options, Z_OFFSET_INDICATOR);
         if (showRender) {
             renderStackOnFace(stack, posX, posY, slotScale, Z_OFFSET_STACK);
@@ -159,7 +160,7 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
     // Compacting drawers
     // ============================================================
     private void renderSimpleCompactingSlots(SimpleCompactingDrawerTile te, DrawerOptions options) {
-        CompactingInventoryHandler handler = te.getHandler();
+        IBigItemHandler handler = te.getItemHandler();
         if (handler == null) return;
 
         boolean showRender = options == null || options.isShowItemRender();
@@ -170,7 +171,7 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
     }
 
     private void renderCompactingSlots(CompactingDrawerTile te, DrawerOptions options) {
-        CompactingInventoryHandler handler = te.getHandler();
+        IBigItemHandler handler = te.getItemHandler();
         if (handler == null) return;
 
         boolean showRender = options == null || options.isShowItemRender();
@@ -182,15 +183,15 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
         renderCompactSlot(handler, 2, 0.75F, 0.27F, showRender, showCount, options);
     }
 
-    private void renderCompactSlot(CompactingInventoryHandler handler, int slot, float posX, float posY, boolean showRender, boolean showCount, DrawerOptions options) {
-        if (slot >= handler.getResults().size()) return;
-        CompactingInventoryHandler.Result result = handler.getResults().get(slot);
-        ItemStack stack = result.getStack();
-        if (stack.isEmpty()) return;
+    private void renderCompactSlot(IBigItemHandler handler, int slot, float posX, float posY, boolean showRender, boolean showCount, DrawerOptions options) {
+        if (slot < 0 || slot >= handler.getSlotCount()) return;
+        BigItemStack snapshot = handler.getSlotSnapshot(slot);
+        if (snapshot == null || !snapshot.hasTemplate()) return;
+        ItemStack stack = snapshot.getTemplate();
 
-        long count = handler.getStackInSlot(slot).getCount();
-        long maxAmount = handler.getLongSlotLimit(slot);
-        float progress = maxAmount > 0 ? Math.min(1.0f, count / (float) maxAmount) : 0;
+        long count = snapshot.getAmount();
+        long maxAmount = handler.getSlotCapacity(slot);
+        float progress = ratio(count, maxAmount);
         renderIndicatorOnFace(posX, posY, 0.5F, progress, options, Z_OFFSET_INDICATOR);
         if (showRender) {
             renderStackOnFace(stack, posX, posY, 0.5F, 1.001F);
@@ -205,16 +206,17 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
     // Ender drawers
     // ============================================================
     private void renderEnderSlot(EnderDrawerTile te, DrawerOptions options) {
-        IItemHandler handler = te.getItemHandler();
-        if (handler == null || handler.getSlots() < 1) return;
+        IBigItemHandler handler = te.getItemHandler();
+        if (handler == null || handler.getSlotCount() < 1) return;
 
         boolean showRender = options == null || options.isShowItemRender();
         boolean showCount = options == null || options.isShowItemCount();
 
-        ItemStack stack = handler.getStackInSlot(0);
-        if (stack.isEmpty()) return;
+        BigItemStack snapshot = handler.getSlotSnapshot(0);
+        if (snapshot == null || !snapshot.hasTemplate()) return;
+        ItemStack stack = snapshot.getTemplate();
 
-        int count = stack.getCount();
+        long count = snapshot.getAmount();
         if (showRender) {
             renderStackOnFace(stack, 0.5F, 0.5F, 1.0F, 1.001F);
         }
@@ -226,14 +228,14 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
     // ============================================================
     // Fluid drawers
     // ============================================================
-    private void renderFluidSlots(FluidDrawerTile te, DrawerType drawerType, DrawerOptions options) {
-        BigFluidHandler handler = te.getFluidHandler();
-        if (handler == null || drawerType == null) return;
+    private void renderFluidSlots(FluidDrawerTile te, DrawerLayout drawerLayout, DrawerOptions options) {
+        IBigFluidHandler handler = te.getFluidHandler();
+        if (handler == null || drawerLayout == null) return;
 
         boolean showRender = options == null || options.isShowItemRender();
         boolean showCount = options == null || options.isShowItemCount();
 
-        switch (drawerType) {
+        switch (drawerLayout) {
             case X_1:
                 renderSingleFluidSlot(handler, 0, 0.5F, 0.5F, 1.0F, 0.35F, 0.35F, showRender, showCount, 0.3F, options);
                 break;
@@ -250,29 +252,35 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
         }
     }
 
-    private void renderSingleFluidSlot(BigFluidHandler handler, int slot, float posX, float posY, float slotScale,
+    private void renderSingleFluidSlot(IBigFluidHandler handler, int slot, float posX, float posY, float slotScale,
                                        float fluidHalfWidth, float fluidHalfHeight,
                                        boolean showRender, boolean showCount, float textScale,
                                        DrawerOptions options) {
-        if (slot >= handler.getTanksCount()) return;
-        FluidStack fluid = handler.getTankFluid(slot);
-        if (fluid == null || fluid.amount <= 0) return;
+        if (slot < 0 || slot >= handler.getTankCount()) return;
+        BigFluidStack snapshot = handler.getTankSnapshot(slot);
+        if (snapshot == null || !snapshot.hasTemplate()) return;
+        FluidStack fluid = snapshot.getTemplate();
 
-        long maxAmount = handler.getLongCapacityPerTank();
-        float progress = maxAmount > 0 ? Math.min(1.0f, fluid.amount / (float) maxAmount) : 0;
+        long count = snapshot.getAmount();
+        long maxAmount = handler.getTankCapacity(slot);
+        float progress = ratio(count, maxAmount);
         renderIndicatorOnFace(posX, posY, slotScale, progress, options, Z_OFFSET_INDICATOR);
         if (showRender) {
             renderFluidOnFace(fluid, posX, posY, slotScale, Z_OFFSET_FLUID, fluidHalfWidth, fluidHalfHeight);
         }
         if (showCount) {
-            renderCountOnFace(fluid.amount, posX, posY, slotScale, textScale, Z_OFFSET_COUNT);
+            renderCountOnFace(count, posX, posY, slotScale, textScale, Z_OFFSET_COUNT);
         }
+    }
+
+    private static float ratio(long amount, long capacity) {
+        return capacity <= 0L ? 0.0F : (float) Math.min(1.0D, amount / (double) capacity);
     }
 
     // ============================================================
     // Face transformation
     // ============================================================
-    private void setupFaceTransform(Attachment attachment, EnumFacing horizontalFacing) {
+    private void setupFaceTransform(DrawerAttachment attachment, EnumFacing horizontalFacing) {
         GlStateManager.translate(0.5F, 0.5F, 0.5F);
 
         int rotY;
@@ -576,8 +584,9 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
             }
         }
 
-        // Void upgrade icon at bottom-right
-        if (te.isVoid()) {
+        // Render the actual installed upgrade that contributes void overflow.
+        ItemStack voidUpgrade = findUpgradeProvidingFeature(te, StorageFeature.VOID_OVERFLOW);
+        if (!voidUpgrade.isEmpty()) {
             GlStateManager.pushMatrix();
             GlStateManager.translate(1.0f - baseX - iconScale * 16, baseY + iconScale * 16, zOffset);
             GlStateManager.scale(iconScale, -iconScale, 0.00001f);
@@ -585,8 +594,7 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
             RenderHelper.enableStandardItemLighting();
             GlStateManager.enableRescaleNormal();
             try {
-                Minecraft.getMinecraft().getRenderItem().renderItemIntoGUI(
-                        new ItemStack(RegistrationHandler.VOID_UPGRADE), 0, 0);
+                Minecraft.getMinecraft().getRenderItem().renderItemIntoGUI(voidUpgrade, 0, 0);
             } catch (Exception ignored) {
             }
             GlStateManager.disableRescaleNormal();
@@ -595,5 +603,31 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
         }
 
         GlStateManager.popMatrix();
+    }
+
+    private ItemStack findUpgradeProvidingFeature(
+            ControllableDrawerTile tile, StorageFeature feature) {
+        for (int i = 0; i < tile.getStorageUpgrades().getSlots(); i++) {
+            ItemStack stack = tile.getStorageUpgrades().getStackInSlot(i);
+            if (providesFeature(stack, feature)) {
+                return stack;
+            }
+        }
+        for (int i = 0; i < tile.getUtilityUpgrades().getSlots(); i++) {
+            ItemStack stack = tile.getUtilityUpgrades().getStackInSlot(i);
+            if (providesFeature(stack, feature)) {
+                return stack;
+            }
+        }
+        return ItemStack.EMPTY;
+    }
+
+    private boolean providesFeature(ItemStack stack, StorageFeature feature) {
+        if (stack.isEmpty() || !(stack.getItem() instanceof IStorageUpgrade)) {
+            return false;
+        }
+        UpgradeState.Builder builder = UpgradeState.builder();
+        ((IStorageUpgrade) stack.getItem()).applyUpgrade(stack, builder);
+        return builder.build().hasFeature(feature);
     }
 }

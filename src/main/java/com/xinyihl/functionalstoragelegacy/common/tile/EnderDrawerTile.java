@@ -1,23 +1,30 @@
 package com.xinyihl.functionalstoragelegacy.common.tile;
 
+import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
+import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
 import com.xinyihl.functionalstoragelegacy.common.inventory.EnderInventoryHandler;
+import com.xinyihl.functionalstoragelegacy.common.inventory.controller.StorageIdentityProvider;
 import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
+import com.xinyihl.functionalstoragelegacy.common.tile.controller.DrawerControllerTile;
 import com.xinyihl.functionalstoragelegacy.common.world.EnderSavedData;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.play.server.SPacketUpdateTileEntity;
+import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.items.CapabilityItemHandler;
-import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.ItemHandlerHelper;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.HashMap;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -31,6 +38,7 @@ public class EnderDrawerTile extends ControllableDrawerTile {
 
     private String frequency;
     private EnderInventoryHandler storage;
+    private final IBigItemHandler itemHandlerFacade = new ForwardingItemHandler();
     private int removeTicks = 0;
 
     public EnderDrawerTile() {
@@ -61,7 +69,7 @@ public class EnderDrawerTile extends ControllableDrawerTile {
     public void onLoad() {
         super.onLoad();
         if (!world.isRemote && storage == null) {
-            this.storage = EnderSavedData.getInstance(world).getFrequency(this.frequency);
+            replaceStorage(EnderSavedData.getInstance(world).getFrequency(this.frequency));
         }
     }
 
@@ -142,7 +150,7 @@ public class EnderDrawerTile extends ControllableDrawerTile {
             String oldFreq = this.frequency;
             this.frequency = nbt.getString("Frequency");
             if (world != null && !world.isRemote && !this.frequency.equals(oldFreq)) {
-                this.storage = EnderSavedData.getInstance(world).getFrequency(this.frequency);
+                replaceStorage(EnderSavedData.getInstance(world).getFrequency(this.frequency));
             }
         }
     }
@@ -159,10 +167,14 @@ public class EnderDrawerTile extends ControllableDrawerTile {
     @Override
     public NBTTagCompound getUpdateTag() {
         NBTTagCompound tag = super.getUpdateTag();
-        if (storage != null) {
-            tag.setTag("EnderInventory", storage.serializeNBT());
-        }
+        writeSyncedInventory(tag);
         return tag;
+    }
+
+    void writeSyncedInventory(NBTTagCompound tag) {
+        if (storage != null) {
+            tag.setTag("EnderInventory", storage.serializeNBTFull());
+        }
     }
 
     @Override
@@ -185,32 +197,32 @@ public class EnderDrawerTile extends ControllableDrawerTile {
         super.readFromNBT(compound);
     }
 
-    private void readSyncedInventory(NBTTagCompound nbt) {
+    void readSyncedInventory(NBTTagCompound nbt) {
         if (nbt.hasKey("EnderInventory")) {
             if (this.storage == null) {
-                this.storage = new EnderInventoryHandler() {
-                };
+                replaceStorage(new EnderInventoryHandler() {
+                });
             }
-            this.storage.deserializeNBT(nbt.getCompoundTag("EnderInventory"));
+            this.storage.deserializeNBTFull(nbt.getCompoundTag("EnderInventory"));
         }
     }
 
     @Override
-    public IItemHandler getItemHandler() {
-        return storage;
+    public IBigItemHandler getItemHandler() {
+        return itemHandlerFacade;
     }
 
     @Override
     public boolean hasCapability(@Nonnull Capability<?> capability, @Nullable EnumFacing facing) {
-        if (capability == CapabilityItemHandler.ITEM_HANDLER_CAPABILITY && storage != null) return true;
+        if (capability == CapabilityItemHandler.ITEM_HANDLER_CAPABILITY) return true;
         return super.hasCapability(capability, facing);
     }
 
     @Nullable
     @Override
     public <T> T getCapability(@Nonnull Capability<T> capability, @Nullable EnumFacing facing) {
-        if (capability == CapabilityItemHandler.ITEM_HANDLER_CAPABILITY && storage != null) {
-            return CapabilityItemHandler.ITEM_HANDLER_CAPABILITY.cast(storage);
+        if (capability == CapabilityItemHandler.ITEM_HANDLER_CAPABILITY) {
+            return CapabilityItemHandler.ITEM_HANDLER_CAPABILITY.cast(itemHandlerFacade);
         }
         return super.getCapability(capability, facing);
     }
@@ -239,9 +251,104 @@ public class EnderDrawerTile extends ControllableDrawerTile {
         if (frequency == null) return;
         this.frequency = frequency;
         if (world != null && !world.isRemote) {
-            this.storage = EnderSavedData.getInstance(world).getFrequency(this.frequency);
+            replaceStorage(EnderSavedData.getInstance(world).getFrequency(this.frequency));
             markDirty();
             sendUpdatePacket();
+        }
+    }
+
+    void replaceStorage(@Nullable EnderInventoryHandler replacement) {
+        if (storage == replacement) {
+            return;
+        }
+        storage = replacement;
+        invalidateAE2Accessor();
+        requestControllerHandlerRefresh();
+    }
+
+    protected void requestControllerHandlerRefresh() {
+        if (world == null || world.isRemote || controllerPos == null) {
+            return;
+        }
+        TileEntity controller = world.getTileEntity(controllerPos);
+        if (controller instanceof DrawerControllerTile) {
+            ((DrawerControllerTile) controller).refreshHandlerMappings();
+        }
+    }
+
+    private final class ForwardingItemHandler
+            implements IBigItemHandler, StorageIdentityProvider {
+
+        @Override
+        public int getSlotCount() {
+            EnderInventoryHandler target = storage;
+            return target == null ? 1 : target.getSlotCount();
+        }
+
+        @Nonnull
+        @Override
+        public BigItemStack getSlotSnapshot(int slot) {
+            EnderInventoryHandler target = storage;
+            return target == null
+                    ? BigItemStack.empty() : target.getSlotSnapshot(slot);
+        }
+
+        @Override
+        public long getSlotCapacity(int slot) {
+            EnderInventoryHandler target = storage;
+            return target == null ? 0L : target.getSlotCapacity(slot);
+        }
+
+        @Nonnull
+        @Override
+        public TransferResult<BigItemStack> insertIntoSlot(
+                int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action) {
+            Objects.requireNonNull(action, "action");
+            EnderInventoryHandler target = storage;
+            if (target != null) {
+                return target.insertIntoSlot(slot, request, action);
+            }
+            long requested = request == null || request.isEmpty()
+                    ? 0L : request.getAmount();
+            return new TransferResult<>(requested, BigItemStack.empty(), action);
+        }
+
+        @Nonnull
+        @Override
+        public TransferResult<BigItemStack> extractFromSlot(
+                int slot, long amount, @Nonnull StorageAction action) {
+            Objects.requireNonNull(action, "action");
+            EnderInventoryHandler target = storage;
+            if (target != null) {
+                return target.extractFromSlot(slot, amount, action);
+            }
+            long requested = Math.max(0L, amount);
+            return new TransferResult<>(requested, BigItemStack.empty(), action);
+        }
+
+        @Override
+        public boolean isLocked() {
+            EnderInventoryHandler target = storage;
+            return target != null && target.isLocked();
+        }
+
+        @Override
+        public boolean voidsOverflow() {
+            EnderInventoryHandler target = storage;
+            return target != null && target.voidsOverflow();
+        }
+
+        @Override
+        public boolean isCreative() {
+            EnderInventoryHandler target = storage;
+            return target != null && target.isCreative();
+        }
+
+        @Nonnull
+        @Override
+        public Object getStorageIdentity() {
+            EnderInventoryHandler target = storage;
+            return target == null ? this : target;
         }
     }
 }

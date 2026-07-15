@@ -10,9 +10,9 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
 
     private String frequency = "";
     private boolean locked = false;
-    private boolean isVoid = false;
+    private boolean voidsOverflow = false;
     private boolean isCreative = false;
-    private float multiplier = 64 * 4;
+    private double multiplier = 64D * 4D;
     public boolean needUpdate = true;
 
     public EnderInventoryHandler() {
@@ -33,21 +33,21 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
     }
 
     @Override
-    public float getMultiplier() {
+    public double getMultiplier() {
         return multiplier;
     }
 
-    public void setMultiplier(float multiplier) {
+    public void setMultiplier(double multiplier) {
         this.multiplier = multiplier;
     }
 
     @Override
-    public boolean isVoid() {
-        return isVoid;
+    public boolean voidsOverflow() {
+        return voidsOverflow;
     }
 
-    public void setVoid(boolean isVoid) {
-        this.isVoid = isVoid;
+    public void setVoidsOverflow(boolean voidsOverflow) {
+        this.voidsOverflow = voidsOverflow;
     }
 
     @Override
@@ -57,6 +57,7 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
 
     public void setLocked(boolean locked) {
         this.locked = locked;
+        setLockFilters(locked);
     }
 
     @Override
@@ -80,19 +81,19 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
         NBTTagCompound nbt = serializeNBT();
         nbt.setString("Frequency", frequency);
         nbt.setBoolean("Locked", locked);
-        nbt.setBoolean("IsVoid", isVoid);
+        nbt.setBoolean("VoidOverflow", voidsOverflow);
         nbt.setBoolean("IsCreative", isCreative);
-        nbt.setFloat("Multiplier", multiplier);
+        nbt.setDouble("Multiplier", multiplier);
         return nbt;
     }
 
     public void deserializeNBTFull(NBTTagCompound nbt) {
-        deserializeNBT(nbt);
         frequency = nbt.getString("Frequency");
-        locked = nbt.getBoolean("Locked");
-        isVoid = nbt.getBoolean("IsVoid");
+        setLocked(nbt.getBoolean("Locked"));
+        voidsOverflow = nbt.getBoolean("VoidOverflow");
         isCreative = nbt.getBoolean("IsCreative");
-        multiplier = nbt.getFloat("Multiplier");
-        if (multiplier == 0) multiplier = 1;
+        multiplier = nbt.getDouble("Multiplier");
+        if (multiplier == 0D) multiplier = 1D;
+        deserializeNBT(nbt);
     }
 }

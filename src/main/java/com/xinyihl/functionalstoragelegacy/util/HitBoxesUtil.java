@@ -1,7 +1,7 @@
 package com.xinyihl.functionalstoragelegacy.util;
 
-import com.xinyihl.functionalstoragelegacy.api.Attachment;
-import com.xinyihl.functionalstoragelegacy.api.HitBoxLayout;
+import com.xinyihl.functionalstoragelegacy.common.block.DrawerAttachment;
+import com.xinyihl.functionalstoragelegacy.common.block.DrawerFaceLayout;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.EnumFacing;
@@ -14,22 +14,22 @@ import java.util.*;
 public class HitBoxesUtil {
     private static final double DEFAULT_REACH_DISTANCE = 5.0D;
     private static final double HIT_EPSILON = 1.0E-3D;
-    private static final EnumMap<HitBoxLayout, List<AxisAlignedBB>> BASE_HIT_BOXES = new EnumMap<>(HitBoxLayout.class);
+    private static final EnumMap<DrawerFaceLayout, List<AxisAlignedBB>> BASE_HIT_BOXES = new EnumMap<>(DrawerFaceLayout.class);
 
     static {
-        BASE_HIT_BOXES.put(HitBoxLayout.X_1, Collections.singletonList(
+        BASE_HIT_BOXES.put(DrawerFaceLayout.X_1, Collections.singletonList(
                 new AxisAlignedBB(1 / 16D, 1 / 16D, 0, 15 / 16D, 15 / 16D, 1 / 16D)
         ));
-        BASE_HIT_BOXES.put(HitBoxLayout.X_2, Arrays.asList(
+        BASE_HIT_BOXES.put(DrawerFaceLayout.X_2, Arrays.asList(
                 new AxisAlignedBB(1 / 16D, 9 / 16D, 0, 15 / 16D, 15 / 16D, 1 / 16D),
                 new AxisAlignedBB(1 / 16D, 1 / 16D, 0, 15 / 16D, 7 / 16D, 1 / 16D)
         ));
-        BASE_HIT_BOXES.put(HitBoxLayout.X_3, Arrays.asList(
+        BASE_HIT_BOXES.put(DrawerFaceLayout.X_3, Arrays.asList(
                 new AxisAlignedBB(1 / 16D, 9 / 16D, 0, 15 / 16D, 15 / 16D, 1 / 16D),
                 new AxisAlignedBB(9 / 16D, 1 / 16D, 0, 15 / 16D, 7 / 16D, 1 / 16D),
                 new AxisAlignedBB(1 / 16D, 1 / 16D, 0, 7 / 16D, 7 / 16D, 1 / 16D)
         ));
-        BASE_HIT_BOXES.put(HitBoxLayout.X_4, Arrays.asList(
+        BASE_HIT_BOXES.put(DrawerFaceLayout.X_4, Arrays.asList(
                 new AxisAlignedBB(9 / 16D, 9 / 16D, 0, 15 / 16D, 15 / 16D, 1 / 16D),
                 new AxisAlignedBB(1 / 16D, 9 / 16D, 0, 7 / 16D, 15 / 16D, 1 / 16D),
                 new AxisAlignedBB(9 / 16D, 1 / 16D, 0, 15 / 16D, 7 / 16D, 1 / 16D),
@@ -59,25 +59,25 @@ public class HitBoxesUtil {
         return EnumFacing.getFacingFromVector((float) -lookVec.x, (float) -lookVec.y, (float) -lookVec.z);
     }
 
-    public static Attachment getAttachmentForPlacement(EnumFacing placementFacing) {
+    public static DrawerAttachment getAttachmentForPlacement(EnumFacing placementFacing) {
         if (placementFacing == EnumFacing.UP) {
-            return Attachment.FLOOR;
+            return DrawerAttachment.FLOOR;
         }
         if (placementFacing == EnumFacing.DOWN) {
-            return Attachment.CEILING;
+            return DrawerAttachment.CEILING;
         }
-        return Attachment.WALL;
+        return DrawerAttachment.WALL;
     }
 
-    public static EnumFacing getHorizontalFacingForPlacement(Attachment attachment, EnumFacing placementFacing, @Nullable EntityLivingBase placer) {
-        if (attachment == Attachment.WALL && placementFacing.getAxis().isHorizontal()) {
+    public static EnumFacing getHorizontalFacingForPlacement(DrawerAttachment attachment, EnumFacing placementFacing, @Nullable EntityLivingBase placer) {
+        if (attachment == DrawerAttachment.WALL && placementFacing.getAxis().isHorizontal()) {
             return placementFacing;
         }
         EnumFacing playerHorizontalFacing = placer != null ? placer.getHorizontalFacing() : EnumFacing.NORTH;
-        if (attachment == Attachment.FLOOR) {
+        if (attachment == DrawerAttachment.FLOOR) {
             return playerHorizontalFacing.getOpposite();
         }
-        if (attachment == Attachment.CEILING) {
+        if (attachment == DrawerAttachment.CEILING) {
             return playerHorizontalFacing.getOpposite();
         }
         return playerHorizontalFacing;
@@ -99,7 +99,7 @@ public class HitBoxesUtil {
                 && localHitVec.z >= hitBox.minZ - HIT_EPSILON && localHitVec.z <= hitBox.maxZ + HIT_EPSILON;
     }
 
-    public static List<AxisAlignedBB> buildHitBoxes(HitBoxLayout layout, Attachment attachment, EnumFacing horizontalFacing) {
+    public static List<AxisAlignedBB> buildHitBoxes(DrawerFaceLayout layout, DrawerAttachment attachment, EnumFacing horizontalFacing) {
         List<AxisAlignedBB> baseHitBoxes = BASE_HIT_BOXES.get(layout);
         if (baseHitBoxes == null || baseHitBoxes.isEmpty()) {
             return Collections.emptyList();
@@ -117,21 +117,21 @@ public class HitBoxesUtil {
         return Collections.unmodifiableList(transformedHitBoxes);
     }
 
-    private static EnumFacing getFrontFacingForPlacement(Attachment attachment, EnumFacing horizontalFacing) {
-        if (attachment == Attachment.FLOOR) {
+    private static EnumFacing getFrontFacingForPlacement(DrawerAttachment attachment, EnumFacing horizontalFacing) {
+        if (attachment == DrawerAttachment.FLOOR) {
             return EnumFacing.UP;
         }
-        if (attachment == Attachment.CEILING) {
+        if (attachment == DrawerAttachment.CEILING) {
             return EnumFacing.DOWN;
         }
         return horizontalFacing;
     }
 
-    private static EnumFacing getUpDirectionForFace(Attachment attachment, EnumFacing horizontalFacing) {
-        if (attachment == Attachment.FLOOR) {
+    private static EnumFacing getUpDirectionForFace(DrawerAttachment attachment, EnumFacing horizontalFacing) {
+        if (attachment == DrawerAttachment.FLOOR) {
             return horizontalFacing.getOpposite();
         }
-        if (attachment == Attachment.CEILING) {
+        if (attachment == DrawerAttachment.CEILING) {
             return horizontalFacing;
         }
         return EnumFacing.UP;

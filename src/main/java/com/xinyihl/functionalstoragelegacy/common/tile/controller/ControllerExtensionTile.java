@@ -1,5 +1,6 @@
 package com.xinyihl.functionalstoragelegacy.common.tile.controller;
 
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
 import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
@@ -7,7 +8,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.items.IItemHandler;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -54,7 +54,7 @@ public class ControllerExtensionTile extends ControllableDrawerTile {
     }
 
     @Override
-    public IItemHandler getItemHandler() {
+    public IBigItemHandler getItemHandler() {
         DrawerControllerTile controller = getLinkedController();
         if (controller != null) {
             return controller.getItemHandler();

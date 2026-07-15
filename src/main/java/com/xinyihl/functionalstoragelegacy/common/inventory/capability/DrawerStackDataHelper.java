@@ -1,16 +1,13 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory.capability;
 
-import com.xinyihl.functionalstoragelegacy.api.upgrade.ModifierType;
-import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeModifier;
-import com.xinyihl.functionalstoragelegacy.common.item.upgrade.StorageUpgradeItem;
-import com.xinyihl.functionalstoragelegacy.misc.RegistrationHandler;
+import com.xinyihl.functionalstoragelegacy.api.upgrade.IStorageUpgrade;
+import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeState;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraftforge.items.ItemStackHandler;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.*;
 
 final class DrawerStackDataHelper {
 
@@ -39,34 +36,16 @@ final class DrawerStackDataHelper {
 
     @Nonnull
     static UpgradeState readUpgradeState(@Nullable NBTTagCompound tileData, int storageUpgradeSlots, int utilityUpgradeSlots) {
-        UpgradeState state = new UpgradeState();
+        UpgradeState.Builder builder = UpgradeState.builder();
         if (tileData == null) {
-            return state;
-        }
-
-        if (tileData.hasKey("Locked")) {
-            state.locked = tileData.getBoolean("Locked");
+            return builder.build();
         }
 
         if (tileData.hasKey("StorageUpgrades")) {
             ItemStackHandler storageUpgrades = new ItemStackHandler(storageUpgradeSlots);
             storageUpgrades.deserializeNBT(tileData.getCompoundTag("StorageUpgrades"));
             for (int i = 0; i < storageUpgrades.getSlots(); i++) {
-                ItemStack upgradeStack = storageUpgrades.getStackInSlot(i);
-                if (upgradeStack.isEmpty()) {
-                    continue;
-                }
-                if (upgradeStack.getItem() instanceof StorageUpgradeItem) {
-                    StorageUpgradeItem upgrade = (StorageUpgradeItem) upgradeStack.getItem();
-                    if (upgrade.isMaxStorageUpgrade()) {
-                        state.maxStorage = true;
-                    } else {
-                        state.addModifiers(upgrade.getModifiers());
-                    }
-                }
-                if (upgradeStack.getItem() == RegistrationHandler.CREATIVE_VENDING_UPGRADE) {
-                    state.creative = true;
-                }
+                applyUpgrade(storageUpgrades.getStackInSlot(i), builder);
             }
         }
 
@@ -74,38 +53,20 @@ final class DrawerStackDataHelper {
             ItemStackHandler utilityUpgrades = new ItemStackHandler(utilityUpgradeSlots);
             utilityUpgrades.deserializeNBT(tileData.getCompoundTag("UtilityUpgrades"));
             for (int i = 0; i < utilityUpgrades.getSlots(); i++) {
-                if (utilityUpgrades.getStackInSlot(i).getItem() == RegistrationHandler.VOID_UPGRADE) {
-                    state.voidUpgrade = true;
-                }
-                if (utilityUpgrades.getStackInSlot(i).getItem() == RegistrationHandler.ORE_DICTIONARY_UPGRADE) {
-                    state.oreDictionary = true;
-                }
+                applyUpgrade(utilityUpgrades.getStackInSlot(i), builder);
             }
         }
 
-        return state;
+        return builder.build();
     }
 
-    static final class UpgradeState {
-        private final Map<ModifierType, List<UpgradeModifier>> modifiers = new EnumMap<>(ModifierType.class);
-        boolean maxStorage = false;
-        boolean creative = false;
-        boolean voidUpgrade = false;
-        boolean locked = false;
-        boolean oreDictionary = false;
+    static boolean isLocked(@Nullable NBTTagCompound tileData) {
+        return tileData != null && tileData.getBoolean("Locked");
+    }
 
-        void addModifiers(Map<ModifierType, UpgradeModifier> mods) {
-            for (Map.Entry<ModifierType, UpgradeModifier> entry : mods.entrySet()) {
-                modifiers.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).add(entry.getValue());
-            }
-        }
-
-        float calculate(ModifierType type, float defaultBase) {
-            List<UpgradeModifier> mods = modifiers.get(type);
-            if (mods == null || mods.isEmpty()) {
-                return UpgradeModifier.calculate(defaultBase);
-            }
-            return UpgradeModifier.calculate(mods, defaultBase);
+    private static void applyUpgrade(@Nonnull ItemStack stack, UpgradeState.Builder builder) {
+        if (!stack.isEmpty() && stack.getItem() instanceof IStorageUpgrade) {
+            ((IStorageUpgrade) stack.getItem()).applyUpgrade(stack, builder);
         }
     }
 }

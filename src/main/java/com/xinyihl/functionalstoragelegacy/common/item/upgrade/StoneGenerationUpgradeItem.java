@@ -53,7 +53,7 @@ public class StoneGenerationUpgradeItem extends UtilityUpgradeItem {
 
         if (handler instanceof CompactingInventoryHandler) {
             CompactingInventoryHandler compactingHandler = (CompactingInventoryHandler) handler;
-            if (!compactingHandler.isSetup()) {
+            if (!compactingHandler.isConfigured()) {
                 ItemStack stoneStack = new ItemStack(Blocks.COBBLESTONE, tier.getGenerationRate());
                 if (CompactingUtil.CompressionDrawertrEatment(tile, stoneStack, compactingHandler)) {
                     return false;

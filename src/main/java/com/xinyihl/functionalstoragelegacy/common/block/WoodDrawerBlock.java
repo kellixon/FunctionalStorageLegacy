@@ -1,9 +1,7 @@
 package com.xinyihl.functionalstoragelegacy.common.block;
 
-import com.xinyihl.functionalstoragelegacy.api.DrawerType;
-import com.xinyihl.functionalstoragelegacy.api.DrawerWoodType;
-import com.xinyihl.functionalstoragelegacy.api.HitBoxLayout;
 import com.xinyihl.functionalstoragelegacy.common.block.base.DrawerBlock;
+import com.xinyihl.functionalstoragelegacy.common.storage.DrawerLayout;
 import com.xinyihl.functionalstoragelegacy.common.tile.WoodDrawerTile;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -19,39 +17,39 @@ import javax.annotation.Nullable;
  */
 public class WoodDrawerBlock extends DrawerBlock {
 
-    private final DrawerType drawerType;
+    private final DrawerLayout drawerLayout;
     private final DrawerWoodType woodType;
 
-    public WoodDrawerBlock(DrawerWoodType woodType, DrawerType drawerType) {
+    public WoodDrawerBlock(DrawerWoodType woodType, DrawerLayout drawerLayout) {
         super(Material.WOOD);
         this.woodType = woodType;
-        this.drawerType = drawerType;
-        this.setRegistryName(woodType.getName() + "_" + drawerType.getSlots());
-        this.setTranslationKey("functionalstoragelegacy." + woodType.getName() + "_" + drawerType.getSlots());
+        this.drawerLayout = drawerLayout;
+        this.setRegistryName(woodType.getId() + "_" + drawerLayout.getSlotCount());
+        this.setTranslationKey("functionalstoragelegacy." + woodType.getId() + "_" + drawerLayout.getSlotCount());
     }
 
     @Nullable
     @Override
     public TileEntity createTileEntity(@Nonnull World world, @Nonnull IBlockState state) {
-        return new WoodDrawerTile(drawerType, woodType);
+        return new WoodDrawerTile(drawerLayout, woodType);
     }
 
     @Override
-    protected HitBoxLayout getHitBoxLayout() {
-        switch (drawerType) {
+    protected DrawerFaceLayout getFaceLayout() {
+        switch (drawerLayout) {
             case X_1:
-                return HitBoxLayout.X_1;
+                return DrawerFaceLayout.X_1;
             case X_2:
-                return HitBoxLayout.X_2;
+                return DrawerFaceLayout.X_2;
             case X_4:
-                return HitBoxLayout.X_4;
+                return DrawerFaceLayout.X_4;
             default:
                 return null;
         }
     }
 
-    public DrawerType getDrawerType() {
-        return drawerType;
+    public DrawerLayout getDrawerLayout() {
+        return drawerLayout;
     }
 
     public DrawerWoodType getWoodType() {

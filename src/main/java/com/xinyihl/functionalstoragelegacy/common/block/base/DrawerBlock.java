@@ -1,8 +1,8 @@
 package com.xinyihl.functionalstoragelegacy.common.block.base;
 
-import com.xinyihl.functionalstoragelegacy.api.Attachment;
-import com.xinyihl.functionalstoragelegacy.api.DrawerType;
-import com.xinyihl.functionalstoragelegacy.api.HitBoxLayout;
+import com.xinyihl.functionalstoragelegacy.common.block.DrawerAttachment;
+import com.xinyihl.functionalstoragelegacy.common.block.DrawerFaceLayout;
+import com.xinyihl.functionalstoragelegacy.common.storage.DrawerLayout;
 import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.controller.DrawerControllerTile;
 import com.xinyihl.functionalstoragelegacy.misc.RegistrationHandler;
@@ -41,15 +41,15 @@ import java.util.List;
  */
 public abstract class DrawerBlock extends Block {
 
-    public static final PropertyEnum<Attachment> ATTACHMENT = PropertyEnum.create("attachment", Attachment.class);
+    public static final PropertyEnum<DrawerAttachment> ATTACHMENT = PropertyEnum.create("attachment", DrawerAttachment.class);
     public static final PropertyDirection HORIZONTAL_FACING = PropertyDirection.create("horizontal_facing", EnumFacing.Plane.HORIZONTAL);
-    public static final EnumMap<HitBoxLayout, EnumMap<Attachment, EnumMap<EnumFacing, List<AxisAlignedBB>>>> CACHED_HIT_BOXES = new EnumMap<>(HitBoxLayout.class);
+    public static final EnumMap<DrawerFaceLayout, EnumMap<DrawerAttachment, EnumMap<EnumFacing, List<AxisAlignedBB>>>> CACHED_HIT_BOXES = new EnumMap<>(DrawerFaceLayout.class);
     public static final EnumFacing[] HORIZONTAL_VALUES = new EnumFacing[]{EnumFacing.NORTH, EnumFacing.EAST, EnumFacing.SOUTH, EnumFacing.WEST};
 
     public DrawerBlock(Material material) {
         super(material);
         this.setDefaultState(this.blockState.getBaseState()
-                .withProperty(ATTACHMENT, Attachment.WALL)
+                .withProperty(ATTACHMENT, DrawerAttachment.WALL)
                 .withProperty(HORIZONTAL_FACING, EnumFacing.NORTH));
         this.setHardness(2.5F);
         this.setResistance(8.0F);
@@ -60,7 +60,7 @@ public abstract class DrawerBlock extends Block {
         this.setCreativeTab(RegistrationHandler.CREATIVE_TAB);
     }
 
-    public static Attachment getAttachment(IBlockState state) {
+    public static DrawerAttachment getAttachment(IBlockState state) {
         return state.getValue(ATTACHMENT);
     }
 
@@ -69,11 +69,11 @@ public abstract class DrawerBlock extends Block {
     }
 
     public static EnumFacing getFrontFacing(IBlockState state) {
-        Attachment attachment = DrawerBlock.getAttachment(state);
-        if (attachment == Attachment.FLOOR) {
+        DrawerAttachment attachment = DrawerBlock.getAttachment(state);
+        if (attachment == DrawerAttachment.FLOOR) {
             return EnumFacing.UP;
         }
-        if (attachment == Attachment.CEILING) {
+        if (attachment == DrawerAttachment.CEILING) {
             return EnumFacing.DOWN;
         }
         return DrawerBlock.getHorizontalFacing(state);
@@ -202,7 +202,7 @@ public abstract class DrawerBlock extends Block {
     @Override
     public IBlockState getStateFromMeta(int meta) {
         int safeMeta = Math.max(0, Math.min(meta, 11));
-        Attachment attachment = Attachment.byIndex(safeMeta / 4);
+        DrawerAttachment attachment = DrawerAttachment.byIndex(safeMeta / 4);
         EnumFacing horizontalFacing = HORIZONTAL_VALUES[safeMeta % 4];
         return this.getDefaultState()
                 .withProperty(ATTACHMENT, attachment)
@@ -218,7 +218,7 @@ public abstract class DrawerBlock extends Block {
     @Override
     public IBlockState getStateForPlacement(@Nonnull World world, @Nonnull BlockPos pos, @Nonnull EnumFacing facing, float hitX, float hitY, float hitZ, int meta, @Nonnull EntityLivingBase placer, @Nonnull EnumHand hand) {
         EnumFacing placementFacing = HitBoxesUtil.getPlacementFacingFromRay(placer);
-        Attachment attachment = HitBoxesUtil.getAttachmentForPlacement(placementFacing);
+        DrawerAttachment attachment = HitBoxesUtil.getAttachmentForPlacement(placementFacing);
         EnumFacing horizontalFacing = HitBoxesUtil.getHorizontalFacingForPlacement(attachment, placementFacing, placer);
         return this.getDefaultState()
                 .withProperty(ATTACHMENT, attachment)
@@ -288,15 +288,15 @@ public abstract class DrawerBlock extends Block {
     }
 
     public Collection<AxisAlignedBB> getHitBoxes(IBlockState state) {
-        HitBoxLayout layout = getHitBoxLayout();
+        DrawerFaceLayout layout = getFaceLayout();
         if (layout == null) {
             return Collections.emptyList();
         }
-        Attachment attachment = getAttachment(state);
+        DrawerAttachment attachment = getAttachment(state);
         EnumFacing horizontalFacing = getHorizontalFacing(state);
-        EnumMap<Attachment, EnumMap<EnumFacing, List<AxisAlignedBB>>> attachmentCache = CACHED_HIT_BOXES.get(layout);
+        EnumMap<DrawerAttachment, EnumMap<EnumFacing, List<AxisAlignedBB>>> attachmentCache = CACHED_HIT_BOXES.get(layout);
         if (attachmentCache == null) {
-            attachmentCache = new EnumMap<>(Attachment.class);
+            attachmentCache = new EnumMap<>(DrawerAttachment.class);
             CACHED_HIT_BOXES.put(layout, attachmentCache);
         }
         EnumMap<EnumFacing, List<AxisAlignedBB>> facingCache = attachmentCache.get(attachment);
@@ -313,11 +313,11 @@ public abstract class DrawerBlock extends Block {
     }
 
     @Nullable
-    protected HitBoxLayout getHitBoxLayout() {
+    protected DrawerFaceLayout getFaceLayout() {
         return null;
     }
 
-    public DrawerType getDrawerType() {
+    public DrawerLayout getDrawerLayout() {
         return null;
     }
 }

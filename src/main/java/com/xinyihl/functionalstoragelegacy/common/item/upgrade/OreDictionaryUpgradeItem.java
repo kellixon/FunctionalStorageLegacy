@@ -1,5 +1,7 @@
 package com.xinyihl.functionalstoragelegacy.common.item.upgrade;
 
+import com.xinyihl.functionalstoragelegacy.api.upgrade.StorageFeature;
+import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeState;
 import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.text.TextComponentTranslation;
@@ -16,6 +18,12 @@ public class OreDictionaryUpgradeItem extends UtilityUpgradeItem {
 
     public OreDictionaryUpgradeItem() {
         super(UtilityAction.NONE);
+    }
+
+    @Override
+    public void applyUpgrade(@Nonnull ItemStack stack, @Nonnull UpgradeState.Builder builder) {
+        super.applyUpgrade(stack, builder);
+        builder.addFeature(StorageFeature.EQUIVALENT_ITEMS);
     }
 
     @SideOnly(Side.CLIENT)

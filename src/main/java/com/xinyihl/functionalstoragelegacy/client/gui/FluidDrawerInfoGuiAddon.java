@@ -1,6 +1,7 @@
 package com.xinyihl.functionalstoragelegacy.client.gui;
 
-import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigFluidHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.BigFluidStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigFluidHandler;
 import com.xinyihl.functionalstoragelegacy.util.NumberUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
@@ -33,12 +34,12 @@ public class FluidDrawerInfoGuiAddon {
     private final ResourceLocation gui;
     private final int slotAmount;
     private final Function<Integer, Pair<Integer, Integer>> slotPosition;
-    private final Supplier<BigFluidHandler> fluidHandlerSupplier;
+    private final Supplier<IBigFluidHandler> fluidHandlerSupplier;
     private final Function<Integer, Long> slotMaxAmount;
 
     public FluidDrawerInfoGuiAddon(int posX, int posY, ResourceLocation gui, int slotAmount,
                                    Function<Integer, Pair<Integer, Integer>> slotPosition,
-                                   Supplier<BigFluidHandler> fluidHandlerSupplier,
+                                   Supplier<IBigFluidHandler> fluidHandlerSupplier,
                                    Function<Integer, Long> slotMaxAmount) {
         this.posX = posX;
         this.posY = posY;
@@ -97,15 +98,9 @@ public class FluidDrawerInfoGuiAddon {
 
         // Render fluids behind the background overlay
         for (int i = 0; i < slotAmount; i++) {
-            FluidStack fluidStack = fluidHandlerSupplier.get().getTankFluid(i);
-            if (fluidStack == null && fluidHandlerSupplier.get().isLocked()) {
-                BigFluidHandler.CustomFluidTank tank = fluidHandlerSupplier.get().getTanks().get(i);
-                fluidStack = tank.getLockedFluid();
-            }
-            if (fluidStack != null && fluidStack.amount > 0) {
-                renderFluid(mc, guiX, guiY, fluidStack, i, slotAmount);
-            } else if (fluidStack != null) {
-                // Locked but empty - show locked fluid icon
+            BigFluidStack snapshot = safeSnapshot(i);
+            FluidStack fluidStack = snapshot.getTemplate();
+            if (fluidStack != null) {
                 renderFluid(mc, guiX, guiY, fluidStack, i, slotAmount);
             }
         }
@@ -119,11 +114,11 @@ public class FluidDrawerInfoGuiAddon {
 
         // Draw amount text
         for (int i = 0; i < slotAmount; i++) {
-            FluidStack fluidStack = fluidHandlerSupplier.get().getTankFluid(i);
-            if (fluidStack != null && fluidStack.amount > 0) {
+            BigFluidStack snapshot = safeSnapshot(i);
+            if (snapshot.hasTemplate()) {
                 int x = guiX + slotPosition.apply(i).getLeft() + posX;
                 int y = guiY + slotPosition.apply(i).getRight() + posY;
-                String amount = NumberUtils.formatCompactFluid(fluidStack.amount)
+                String amount = NumberUtils.formatCompactFluid(snapshot.getAmount())
                         + "/" + NumberUtils.formatCompactFluid(slotMaxAmount.apply(i));
                 float scale = 1f;
                 GlStateManager.pushMatrix();
@@ -158,20 +153,15 @@ public class FluidDrawerInfoGuiAddon {
                 GlStateManager.enableDepth();
 
                 List<String> tooltip = new ArrayList<>();
-                FluidStack over = fluidHandlerSupplier.get().getTankFluid(i);
-                if (over == null && fluidHandlerSupplier.get().isLocked()) {
-                    BigFluidHandler.CustomFluidTank tank = fluidHandlerSupplier.get().getTanks().get(i);
-                    over = tank.getLockedFluid();
-                }
-                if (over == null || over.amount <= 0) {
+                BigFluidStack snapshot = safeSnapshot(i);
+                FluidStack over = snapshot.getTemplate();
+                if (over == null) {
                     tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.fluid")
                             + "§f" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.empty"));
                 } else {
                     tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.fluid")
                             + "§f" + over.getLocalizedName());
-                    FluidStack actual = fluidHandlerSupplier.get().getTankFluid(i);
-                    int actualAmount = actual != null ? actual.amount : 0;
-                    String amountStr = NumberUtils.formatCompactFluid(actualAmount)
+                    String amountStr = NumberUtils.formatCompactFluid(snapshot.getAmount())
                             + "/" + NumberUtils.formatCompactFluid(slotMaxAmount.apply(i));
                     tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.amount")
                             + "§f" + amountStr);
@@ -219,6 +209,15 @@ public class FluidDrawerInfoGuiAddon {
 
         GlStateManager.disableBlend();
         GlStateManager.color(1, 1, 1, 1);
+    }
+
+    private BigFluidStack safeSnapshot(int tank) {
+        IBigFluidHandler handler = fluidHandlerSupplier.get();
+        if (handler == null || tank < 0 || tank >= handler.getTankCount()) {
+            return BigFluidStack.empty();
+        }
+        BigFluidStack snapshot = handler.getTankSnapshot(tank);
+        return snapshot == null ? BigFluidStack.empty() : snapshot;
     }
 
     private void drawTexturedRect(int x, int y, int width, int height, TextureAtlasSprite sprite) {

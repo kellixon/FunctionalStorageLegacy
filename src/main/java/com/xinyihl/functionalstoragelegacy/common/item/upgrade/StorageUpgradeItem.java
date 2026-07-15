@@ -1,7 +1,9 @@
 package com.xinyihl.functionalstoragelegacy.common.item.upgrade;
 
-import com.xinyihl.functionalstoragelegacy.api.upgrade.ModifierType;
+import com.xinyihl.functionalstoragelegacy.api.upgrade.StorageFeature;
+import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeAttribute;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeModifier;
+import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeState;
 import com.xinyihl.functionalstoragelegacy.misc.Configurations;
 import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.item.ItemStack;
@@ -21,14 +23,14 @@ import java.util.Map;
 /**
  * Item for storage upgrades that increase drawer capacity.
  * Has different tiers (IRON/COPPER/GOLD/DIAMOND/NETHERITE/MAX).
- * Each tier carries a set of {@link UpgradeModifier}s keyed by {@link ModifierType}.
+ * Each tier contributes modifiers keyed by {@link UpgradeAttribute}.
  */
 public class StorageUpgradeItem extends UpgradeItem {
 
     private final StorageTier tier;
 
     public StorageUpgradeItem(StorageTier tier) {
-        super(Type.STORAGE);
+        super(SlotType.STORAGE);
         this.tier = tier;
     }
 
@@ -36,16 +38,21 @@ public class StorageUpgradeItem extends UpgradeItem {
         return tier;
     }
 
+    @Override
+    public int getReplacementPriority(@Nonnull ItemStack stack) {
+        return tier.ordinal();
+    }
+
     public boolean isMaxStorageUpgrade() {
         return tier == StorageTier.MAX;
     }
 
-    public Map<ModifierType, UpgradeModifier> getModifiers() {
+    public Map<UpgradeAttribute, UpgradeModifier> getModifiers() {
         switch (tier) {
             case IRON: {
-                Map<ModifierType, UpgradeModifier> map = new EnumMap<>(ModifierType.class);
-                map.put(ModifierType.ITEM_STORAGE, new UpgradeModifier.SetBase(1));
-                map.put(ModifierType.FLUID_STORAGE, new UpgradeModifier.SetBase(1));
+                Map<UpgradeAttribute, UpgradeModifier> map = new EnumMap<>(UpgradeAttribute.class);
+                map.put(UpgradeAttribute.ITEM_CAPACITY, UpgradeModifier.setBase(1));
+                map.put(UpgradeAttribute.FLUID_CAPACITY, UpgradeModifier.setBase(1));
                 return map;
             }
             case COPPER:
@@ -53,15 +60,27 @@ public class StorageUpgradeItem extends UpgradeItem {
             case DIAMOND:
             case NETHERITE: {
                 float mult = getItemStorageMultiplier(tier);
-                Map<ModifierType, UpgradeModifier> map = new EnumMap<>(ModifierType.class);
-                map.put(ModifierType.ITEM_STORAGE, new UpgradeModifier.MultiplyFactor(mult));
-                map.put(ModifierType.FLUID_STORAGE, new UpgradeModifier.MultiplyFactor(mult / Configurations.STORAGE.fluidDivisor));
-                map.put(ModifierType.CONTROLLER_RANGE, new UpgradeModifier.AddToBase(mult / Configurations.STORAGE.rangeDivisor));
+                Map<UpgradeAttribute, UpgradeModifier> map = new EnumMap<>(UpgradeAttribute.class);
+                map.put(UpgradeAttribute.ITEM_CAPACITY, UpgradeModifier.multiply(mult));
+                map.put(UpgradeAttribute.FLUID_CAPACITY,
+                        UpgradeModifier.multiply(mult / Configurations.STORAGE.fluidDivisor));
+                map.put(UpgradeAttribute.CONTROLLER_RANGE,
+                        UpgradeModifier.addBase(mult / Configurations.STORAGE.rangeDivisor));
                 return map;
             }
             case MAX:
             default:
                 return Collections.emptyMap();
+        }
+    }
+
+    @Override
+    public void applyUpgrade(@Nonnull ItemStack stack, @Nonnull UpgradeState.Builder builder) {
+        super.applyUpgrade(stack, builder);
+        if (tier == StorageTier.MAX) {
+            builder.addFeature(StorageFeature.MAX_CAPACITY);
+        } else {
+            builder.addModifiers(getModifiers());
         }
     }
 
@@ -103,7 +122,7 @@ public class StorageUpgradeItem extends UpgradeItem {
 
     /**
      * Storage upgrade tiers with their capacity modifiers.
-     * Each tier provides a map of {@link ModifierType} -> {@link UpgradeModifier}
+     * Each tier provides a map of {@link UpgradeAttribute} to {@link UpgradeModifier}
      * describing how the tier affects different aspects of a drawer.
      */
     public enum StorageTier {

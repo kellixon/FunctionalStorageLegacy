@@ -1,8 +1,8 @@
 package com.xinyihl.functionalstoragelegacy.common.recipe;
 
 import com.xinyihl.functionalstoragelegacy.Tags;
-import com.xinyihl.functionalstoragelegacy.api.DrawerType;
-import com.xinyihl.functionalstoragelegacy.api.DrawerWoodType;
+import com.xinyihl.functionalstoragelegacy.common.block.DrawerWoodType;
+import com.xinyihl.functionalstoragelegacy.common.storage.DrawerLayout;
 import com.xinyihl.functionalstoragelegacy.common.block.WoodDrawerBlock;
 import com.xinyihl.functionalstoragelegacy.misc.RegistrationHandler;
 import net.minecraft.init.Blocks;
@@ -40,22 +40,22 @@ public final class FunctionalStorageRecipes {
     private static void registerWoodDrawerRecipes(IForgeRegistry<IRecipe> registry, Ingredient drawerlessWood) {
         for (WoodDrawerBlock block : RegistrationHandler.WOOD_DRAWER_BLOCKS) {
             Object plankIngredient = getWoodIngredient(block.getWoodType(), drawerlessWood);
-            ItemStack output = new ItemStack(block, block.getDrawerType().getSlots());
+            ItemStack output = new ItemStack(block, block.getDrawerLayout().getSlotCount());
             String name = block.getRegistryName().getPath();
 
-            if (block.getDrawerType() == DrawerType.X_1) {
+            if (block.getDrawerLayout() == DrawerLayout.X_1) {
                 registerShaped(registry, name, output,
                         "PPP", "PCP", "PPP",
                         'P', plankIngredient,
                         'C', "chestWood");
             }
-            if (block.getDrawerType() == DrawerType.X_2) {
+            if (block.getDrawerLayout() == DrawerLayout.X_2) {
                 registerShaped(registry, name, output,
                         "PCP", "PPP", "PCP",
                         'P', plankIngredient,
                         'C', "chestWood");
             }
-            if (block.getDrawerType() == DrawerType.X_4) {
+            if (block.getDrawerLayout() == DrawerLayout.X_4) {
                 registerShaped(registry, name, output,
                         "CPC", "PPP", "CPC",
                         'P', plankIngredient,

@@ -1,7 +1,7 @@
 package com.xinyihl.functionalstoragelegacy.common.container;
 
-import com.xinyihl.functionalstoragelegacy.common.item.upgrade.StorageUpgradeItem;
 import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
+import com.xinyihl.functionalstoragelegacy.util.ItemUtil;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.inventory.ClickType;
@@ -64,10 +64,9 @@ public class ContainerDrawer extends Container {
             ItemStack heldStack = player.inventory.getItemStack();
             if (slot instanceof StorageUpgradeSlot
                     && slot.getHasStack()
-                    && heldStack.getItem() instanceof StorageUpgradeItem) {
+                    && ItemUtil.isStorageUpgradeItem(heldStack)) {
                 ItemStack existing = slot.getStack();
-                if (existing.getItem() instanceof StorageUpgradeItem
-                        && isHigherTier((StorageUpgradeItem) heldStack.getItem(), (StorageUpgradeItem) existing.getItem())
+                if (ItemUtil.hasHigherUpgradeReplacementPriority(heldStack, existing)
                         && tile.canReplaceStorageUpgrade(slotId, heldStack)) {
                     ItemStack replacement = heldStack.copy();
                     replacement.setCount(1);
@@ -129,10 +128,6 @@ public class ContainerDrawer extends Container {
         return tile;
     }
 
-    private boolean isHigherTier(StorageUpgradeItem candidate, StorageUpgradeItem existing) {
-        return candidate.getTier().isHigherThan(existing.getTier());
-    }
-
     private boolean movePlayerUpgradeStack(EntityPlayer playerIn, ItemStack stackInSlot) {
         boolean movedAny = false;
 
@@ -140,12 +135,10 @@ public class ContainerDrawer extends Container {
             return false;
         }
 
-        if (stackInSlot.getItem() instanceof StorageUpgradeItem) {
-            StorageUpgradeItem candidate = (StorageUpgradeItem) stackInSlot.getItem();
+        if (ItemUtil.isStorageUpgradeItem(stackInSlot)) {
             for (int i = 0; i < tile.getStorageUpgrades().getSlots() && !stackInSlot.isEmpty(); i++) {
                 ItemStack existing = tile.getStorageUpgrades().getStackInSlot(i);
-                if (!(existing.getItem() instanceof StorageUpgradeItem)
-                        || !isHigherTier(candidate, (StorageUpgradeItem) existing.getItem())
+                if (!ItemUtil.hasHigherUpgradeReplacementPriority(stackInSlot, existing)
                         || !tile.canReplaceStorageUpgrade(i, stackInSlot)) {
                     continue;
                 }
@@ -162,8 +155,7 @@ public class ContainerDrawer extends Container {
             }
         }
 
-        if (stackInSlot.getItem() instanceof StorageUpgradeItem
-                || (tile.getStorageUpgrades().getSlots() > 0 && tile.canInsertStorageUpgrade(0, stackInSlot))) {
+        if (ItemUtil.isStorageUpgradeItem(stackInSlot)) {
             for (int i = 0; i < tile.getStorageUpgrades().getSlots() && !stackInSlot.isEmpty(); i++) {
                 if (!tile.getStorageUpgrades().getStackInSlot(i).isEmpty() || !tile.canInsertStorageUpgrade(i, stackInSlot)) {
                     continue;

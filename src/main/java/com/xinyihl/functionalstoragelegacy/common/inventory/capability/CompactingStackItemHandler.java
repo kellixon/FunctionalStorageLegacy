@@ -1,6 +1,8 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory.capability;
 
-import com.xinyihl.functionalstoragelegacy.api.upgrade.ModifierType;
+import com.xinyihl.functionalstoragelegacy.api.upgrade.StorageFeature;
+import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeAttribute;
+import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeState;
 import com.xinyihl.functionalstoragelegacy.common.inventory.CompactingInventoryHandler;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -10,60 +12,63 @@ import javax.annotation.Nonnull;
 public class CompactingStackItemHandler extends CompactingInventoryHandler {
 
     private final ItemStack drawerStack;
-    private final DrawerStackDataHelper.UpgradeState upgradeState;
+    private final UpgradeState upgradeState;
+    private final boolean locked;
 
     public CompactingStackItemHandler(@Nonnull ItemStack drawerStack, int slots) {
         super(slots);
         this.drawerStack = drawerStack;
+        NBTTagCompound tileData = DrawerStackDataHelper.getTileData(drawerStack);
         this.upgradeState = DrawerStackDataHelper.readUpgradeState(
-                DrawerStackDataHelper.getTileData(drawerStack),
+                tileData,
                 4,
                 3
         );
-        NBTTagCompound tileData = DrawerStackDataHelper.getTileData(drawerStack);
-        if (tileData != null && tileData.hasKey("CompactingInv")) {
-            deserializeNBT(tileData.getCompoundTag("CompactingInv"));
+        this.locked = DrawerStackDataHelper.isLocked(tileData);
+        if (tileData != null) {
+            deserializeNBT(tileData);
         }
     }
 
     @Override
     public void onChange() {
         NBTTagCompound tileData = DrawerStackDataHelper.getOrCreateTileData(drawerStack);
-        tileData.setTag("CompactingInv", serializeNBT());
-        tileData.setInteger("SlotCount", getConfiguredSlotCount());
+        tileData.setTag("StorageV2", serializeNBT().getCompoundTag("StorageV2"));
     }
 
     @Override
-    public float getMultiplier() {
-        return upgradeState.calculate(ModifierType.ITEM_STORAGE, 8.0f);
+    public double getMultiplier() {
+        return upgradeState.calculate(UpgradeAttribute.ITEM_CAPACITY, 8.0D);
     }
 
     @Override
     protected boolean allowsEquivalentItems() {
-        return upgradeState.oreDictionary;
+        return upgradeState.hasFeature(StorageFeature.EQUIVALENT_ITEMS);
     }
 
     @Override
     protected boolean hasMaxStorage() {
-        return upgradeState.maxStorage;
+        return upgradeState.hasFeature(StorageFeature.MAX_CAPACITY);
     }
 
     @Override
-    public boolean isVoid() {
-        return upgradeState.voidUpgrade;
+    protected boolean isOperationEnabled() {
+        return drawerStack.getCount() == 1;
+    }
+
+    @Override
+    public boolean voidsOverflow() {
+        return upgradeState.hasFeature(StorageFeature.VOID_OVERFLOW);
     }
 
     @Override
     public boolean isLocked() {
-        return upgradeState.locked;
+        return locked;
     }
 
     @Override
     public boolean isCreative() {
-        return upgradeState.creative;
+        return upgradeState.hasFeature(StorageFeature.CREATIVE);
     }
 
-    private int getConfiguredSlotCount() {
-        return getResults().size();
-    }
 }

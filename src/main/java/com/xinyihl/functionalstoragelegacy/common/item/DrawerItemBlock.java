@@ -1,6 +1,7 @@
 package com.xinyihl.functionalstoragelegacy.common.item;
 
-import com.xinyihl.functionalstoragelegacy.api.DrawerType;
+import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
 import com.xinyihl.functionalstoragelegacy.common.block.FluidDrawerBlock;
 import com.xinyihl.functionalstoragelegacy.common.block.WoodDrawerBlock;
 import com.xinyihl.functionalstoragelegacy.common.block.compact.CompactingDrawerBlock;
@@ -9,16 +10,19 @@ import com.xinyihl.functionalstoragelegacy.common.inventory.capability.Compactin
 import com.xinyihl.functionalstoragelegacy.common.inventory.capability.DrawerStackCapabilityProvider;
 import com.xinyihl.functionalstoragelegacy.common.inventory.capability.DrawerStackItemHandler;
 import com.xinyihl.functionalstoragelegacy.common.inventory.capability.FluidDrawerStackItemHandler;
+import com.xinyihl.functionalstoragelegacy.common.storage.DrawerLayout;
 import com.xinyihl.functionalstoragelegacy.util.NumberUtils;
 import net.minecraft.block.Block;
 import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
 import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.util.text.TextFormatting;
 import net.minecraft.world.World;
 import net.minecraftforge.common.capabilities.ICapabilityProvider;
+import net.minecraftforge.common.util.Constants;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.capability.IFluidHandlerItem;
 import net.minecraftforge.fml.relauncher.Side;
@@ -30,7 +34,6 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 public class DrawerItemBlock extends ItemBlock {
 
@@ -38,10 +41,19 @@ public class DrawerItemBlock extends ItemBlock {
         super(block);
     }
 
+    @Override
+    public int getItemStackLimit(@Nonnull ItemStack stack) {
+        if (stack.hasTagCompound()
+                && stack.getTagCompound().hasKey("TileData", Constants.NBT.TAG_COMPOUND)) {
+            return 1;
+        }
+        return super.getItemStackLimit(stack);
+    }
+
     @Nullable
     @Override
     public ICapabilityProvider initCapabilities(@Nonnull ItemStack stack, @Nullable NBTTagCompound nbt) {
-        IItemHandler itemHandler = createItemHandler(stack);
+        IBigItemHandler itemHandler = createItemHandler(stack);
         IFluidHandlerItem fluidHandler = createFluidItemHandler(stack);
         if (itemHandler == null && fluidHandler == null) {
             return null;
@@ -63,21 +75,13 @@ public class DrawerItemBlock extends ItemBlock {
         }
     }
 
-    private List<String> collectStoredLines(ItemStack stack) {
+    List<String> collectStoredLines(ItemStack stack) {
         List<String> lines = new ArrayList<>();
 
         if (stack.hasCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null)) {
             IItemHandler handler = stack.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
-            if (handler != null) {
-                for (int slot = 0; slot < handler.getSlots(); slot++) {
-                    ItemStack stored = handler.getStackInSlot(slot);
-                    if (!stored.isEmpty() && stored.getCount() > 0) {
-                        lines.add(stored.getDisplayName() + "x" + NumberUtils.formatCompact(stored.getCount()));
-                    }
-                }
-            }
-            if (!lines.isEmpty()) {
-                return lines;
+            if (handler instanceof IBigItemHandler) {
+                return collectStoredItemLines((IBigItemHandler) handler);
             }
         }
 
@@ -87,60 +91,46 @@ public class DrawerItemBlock extends ItemBlock {
 
         NBTTagCompound tileData = stack.getTagCompound().getCompoundTag("TileData");
 
-        if (tileData.hasKey("Inventory")) {
-            NBTTagCompound inv = tileData.getCompoundTag("Inventory");
-            if (inv.hasKey("BigItems")) {
-                NBTTagCompound bigItems = inv.getCompoundTag("BigItems");
-                for (String key : bigItems.getKeySet()) {
-                    NBTTagCompound entry = bigItems.getCompoundTag(key);
-                    NBTTagCompound stackTag = entry.getCompoundTag("Stack");
-                    if (stackTag.getKeySet().isEmpty()) continue;
-                    long amount = entry.getLong("Amount");
-                    if (amount <= 0) continue;
-                    ItemStack item = new ItemStack(stackTag);
-                    lines.add(item.getDisplayName() + "x" + NumberUtils.formatCompact(amount));
-                }
-            }
-        }
-
-        if (tileData.hasKey("CompactingInv")) {
-            NBTTagCompound compactingInv = tileData.getCompoundTag("CompactingInv");
-            long totalBase = compactingInv.getLong("TotalBase");
-            int slotCount = tileData.hasKey("SlotCount") ? tileData.getInteger("SlotCount") : 3;
-            for (int i = 0; i < slotCount; i++) {
-                String key = "Result_" + i;
-                if (!compactingInv.hasKey(key)) continue;
-                NBTTagCompound entry = compactingInv.getCompoundTag(key);
-                NBTTagCompound stackTag = entry.getCompoundTag("Stack");
-                if (stackTag.getKeySet().isEmpty()) continue;
-                int needed = Math.max(1, entry.getInteger("Needed"));
-                long amount = totalBase / needed;
-                if (amount <= 0) continue;
-                ItemStack item = new ItemStack(stackTag);
-                lines.add(item.getDisplayName() + "x" + NumberUtils.formatCompact(amount));
-            }
-        }
-
-        if (tileData.hasKey("FluidInv")) {
-            NBTTagCompound fluidInv = tileData.getCompoundTag("FluidInv");
-            Set<String> keys = fluidInv.getKeySet();
-            for (String key : keys) {
-                if (!key.startsWith("Tank_")) continue;
-                NBTTagCompound tankTag = fluidInv.getCompoundTag(key);
-                FluidStack fluid = FluidStack.loadFluidStackFromNBT(tankTag);
-                if (fluid == null || fluid.amount <= 0) continue;
-                lines.add(fluid.getLocalizedName() + "x" + NumberUtils.formatCompact(fluid.amount));
+        if (tileData.hasKey("StorageV2", Constants.NBT.TAG_COMPOUND)) {
+            NBTTagList tanks = tileData.getCompoundTag("StorageV2")
+                    .getTagList("Tanks", Constants.NBT.TAG_COMPOUND);
+            for (int i = 0; i < tanks.tagCount(); i++) {
+                NBTTagCompound entry = tanks.getCompoundTagAt(i);
+                if (!entry.hasKey("Fluid", Constants.NBT.TAG_COMPOUND)) continue;
+                long amount = Math.max(0L, entry.getLong("Amount"));
+                if (amount == 0L) continue;
+                FluidStack fluid = FluidStack.loadFluidStackFromNBT(
+                        entry.getCompoundTag("Fluid"));
+                if (fluid == null) continue;
+                lines.add(fluid.getLocalizedName() + "x" + NumberUtils.formatCompact(amount));
             }
         }
 
         return lines;
     }
 
+    static List<String> collectStoredItemLines(IBigItemHandler handler) {
+        List<String> lines = new ArrayList<>();
+        if (handler == null) {
+            return lines;
+        }
+        for (int slot = 0; slot < handler.getSlotCount(); slot++) {
+            BigItemStack snapshot = handler.getSlotSnapshot(slot);
+            if (snapshot == null || snapshot.isEmpty()) {
+                continue;
+            }
+            ItemStack template = snapshot.getTemplate();
+            lines.add(template.getDisplayName()
+                    + "x" + NumberUtils.formatCompact(snapshot.getAmount()));
+        }
+        return lines;
+    }
+
     @Nullable
-    private IItemHandler createItemHandler(ItemStack stack) {
+    private IBigItemHandler createItemHandler(ItemStack stack) {
         if (block instanceof WoodDrawerBlock) {
-            DrawerType drawerType = ((WoodDrawerBlock) block).getDrawerType();
-            return new DrawerStackItemHandler(stack, drawerType);
+            DrawerLayout drawerLayout = ((WoodDrawerBlock) block).getDrawerLayout();
+            return new DrawerStackItemHandler(stack, drawerLayout);
         }
         if (block instanceof CompactingDrawerBlock) {
             return new CompactingStackItemHandler(stack, 3);
@@ -154,8 +144,8 @@ public class DrawerItemBlock extends ItemBlock {
     @Nullable
     private IFluidHandlerItem createFluidItemHandler(ItemStack stack) {
         if (block instanceof FluidDrawerBlock) {
-            DrawerType drawerType = ((FluidDrawerBlock) block).getDrawerType();
-            return new FluidDrawerStackItemHandler(stack, drawerType);
+            DrawerLayout drawerLayout = ((FluidDrawerBlock) block).getDrawerLayout();
+            return new FluidDrawerStackItemHandler(stack, drawerLayout);
         }
         return null;
     }

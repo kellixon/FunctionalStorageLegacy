@@ -134,7 +134,7 @@ public class UniversalItemGeneration extends UtilityUpgradeItem {
         if (handler instanceof CompactingInventoryHandler) {
             CompactingInventoryHandler compactingHandler = (CompactingInventoryHandler) handler;
 
-            if (!compactingHandler.isSetup()) {
+            if (!compactingHandler.isConfigured()) {
                 if (CompactingUtil.CompressionDrawertrEatment(tile, itemToGenerate, compactingHandler)) return false;
             }
         }

@@ -1,5 +1,6 @@
 package com.xinyihl.functionalstoragelegacy.common.tile;
 
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
 import com.xinyihl.functionalstoragelegacy.common.inventory.ArmoryCabinetInventoryHandler;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.NetworkManager;
@@ -8,7 +9,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.items.CapabilityItemHandler;
-import net.minecraftforge.items.IItemHandler;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -31,7 +31,7 @@ public class ArmoryCabinetTile extends TileEntity {
         };
     }
 
-    public IItemHandler getStorage() {
+    public IBigItemHandler getStorage() {
         return handler;
     }
 
@@ -39,16 +39,14 @@ public class ArmoryCabinetTile extends TileEntity {
     @Override
     public NBTTagCompound writeToNBT(@Nonnull NBTTagCompound compound) {
         compound = super.writeToNBT(compound);
-        compound.setTag("Inventory", handler.serializeNBT());
+        writeStorage(compound);
         return compound;
     }
 
     @Override
     public void readFromNBT(@Nonnull NBTTagCompound compound) {
         super.readFromNBT(compound);
-        if (compound.hasKey("Inventory")) {
-            handler.deserializeNBT(compound.getCompoundTag("Inventory"));
-        }
+        handler.deserializeNBT(compound);
     }
 
     public boolean isEverythingEmpty() {
@@ -64,19 +62,19 @@ public class ArmoryCabinetTile extends TileEntity {
      * Save tile data to NBT for item storage.
      */
     public NBTTagCompound saveTileToNBT() {
-        NBTTagCompound nbt = new NBTTagCompound();
-        nbt.setTag("Inventory", handler.serializeNBT());
-        return nbt;
+        return handler.serializeNBT();
     }
 
     /**
      * Load tile data from item NBT.
      */
     public void loadTileFromNBT(NBTTagCompound nbt) {
-        if (nbt.hasKey("Inventory")) {
-            handler.deserializeNBT(nbt.getCompoundTag("Inventory"));
-        }
+        handler.deserializeNBT(nbt);
         markDirty();
+    }
+
+    private void writeStorage(NBTTagCompound nbt) {
+        nbt.setTag("StorageV2", handler.serializeNBT().getCompoundTag("StorageV2"));
     }
 
     @Override

@@ -1,260 +1,305 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory;
 
-import com.xinyihl.functionalstoragelegacy.api.IBigItemHandler;
-import com.xinyihl.functionalstoragelegacy.api.ILockable;
+import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
+import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
 import com.xinyihl.functionalstoragelegacy.util.ItemUtil;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
+import net.minecraftforge.common.util.Constants;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /**
- * Compacting inventory handler. Maintains items at multiple compression tiers.
- * For example: Iron Nugget <-> Iron Ingot <-> Iron Block.
- * Inserting at any tier auto-converts amounts across all tiers.
+ * Large-capacity storage whose visible slots are lossless representations of
+ * one shared amount in the lowest-tier unit. Tier definitions and slot reads
+ * are immutable snapshots; simulations never configure or mutate storage.
  */
-public abstract class CompactingInventoryHandler implements IBigItemHandler, ILockable {
+public abstract class CompactingInventoryHandler implements IBigItemHandler {
 
-    private final List<Result> results;
-    private final int slots;
-    private boolean setup = false;
-    // Total stored in base item units
-    private long totalInBase = 0;
+    private static final String STORAGE_V2 = "StorageV2";
+    private static final String BASE_AMOUNT = "BaseAmount";
+    private static final String TIERS = "Tiers";
+    private static final String INDEX = "Index";
+    private static final String STACK = "Stack";
+    private static final String BASE_UNITS = "BaseUnits";
 
-    public CompactingInventoryHandler(int slots) {
-        this.slots = slots;
-        this.results = new ArrayList<>();
-        for (int i = 0; i < slots; i++) {
-            this.results.add(new Result(ItemStack.EMPTY, 1));
-        }
-    }
+    private final Tier[] tiers;
+    private long baseAmount;
+    private boolean configured;
 
-    private boolean areItemStacksCompatible(ItemStack a, ItemStack b) {
-        return ItemUtil.areItemStacksCompatible(a, b, allowsEquivalentItems());
+    protected CompactingInventoryHandler(int slots) {
+        tiers = new Tier[Math.max(0, slots)];
+        clearConfiguration();
     }
 
     @Override
-    public int getSlots() {
-        if (isVoid()) return slots + 1;
-        return slots;
-    }
-
-    public boolean canDoubleClickSlot(int slot) {
-        if (slot >= slots) return false;
-        Result result = results.get(slot);
-        return isLocked() || !result.getStack().isEmpty();
+    public final int getSlotCount() {
+        return tiers.length;
     }
 
     @Nonnull
     @Override
-    public ItemStack getStackInSlot(int slot) {
-        if (slot >= slots) return ItemStack.EMPTY;
-        Result result = results.get(slot);
-        if (result.getStack().isEmpty()) return ItemStack.EMPTY;
-        long totalInBase = getTotalInBase();
-        long amountAtTier = totalInBase / result.getNeeded();
-        if (isCreative() && amountAtTier > 0) amountAtTier = Integer.MAX_VALUE;
-        ItemStack out = result.getStack().copy();
-        out.setCount((int) Math.min(amountAtTier, Integer.MAX_VALUE));
-        return out;
+    public final BigItemStack getSlotSnapshot(int slot) {
+        if (!isValidSlot(slot) || !tiers[slot].hasTemplate()) {
+            return BigItemStack.empty();
+        }
+        long amount = isCreative() ? Long.MAX_VALUE : baseAmount / tiers[slot].baseUnits;
+        return new BigItemStack(tiers[slot].template, amount);
+    }
+
+    @Override
+    public final long getSlotCapacity(int slot) {
+        if (!isValidSlot(slot) || !tiers[slot].hasTemplate()) {
+            return 0L;
+        }
+        if (hasMaxStorage() || isCreative()) {
+            return Long.MAX_VALUE;
+        }
+        return getTotalBaseCapacity() / tiers[slot].baseUnits;
     }
 
     @Nonnull
     @Override
-    public ItemStack insertItem(int slot, @Nonnull ItemStack stack, boolean simulate) {
-        if (stack.isEmpty()) return ItemStack.EMPTY;
-        long remaining = insertItemLong(slot, stack, stack.getCount(), simulate);
-        if (remaining <= 0) return ItemStack.EMPTY;
-        if (remaining >= stack.getCount()) return stack;
-        ItemStack rem = stack.copy();
-        rem.setCount((int) remaining);
-        return rem;
+    public final TransferResult<BigItemStack> insertIntoSlot(
+            int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action) {
+        Objects.requireNonNull(action, "action");
+        long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
+        if (requested == 0L || !isOperationEnabled() || !isValidSlot(slot)) {
+            return emptyResult(requested, action);
+        }
+
+        Tier tier = tiers[slot];
+        if (!tier.hasTemplate()
+                || !ItemUtil.areItemStacksCompatible(
+                        tier.template, request.getTemplate(), allowsEquivalentItems())) {
+            return emptyResult(requested, action);
+        }
+
+        if (isCreative()) {
+            return processedResult(request, requested, action);
+        }
+
+        long capacity = getTotalBaseCapacity();
+        long freeBaseUnits = baseAmount >= capacity ? 0L : capacity - baseAmount;
+        long inserted = Math.min(requested, freeBaseUnits / tier.baseUnits);
+        long processed = voidsOverflow() ? requested : inserted;
+
+        if (action == StorageAction.EXECUTE && inserted > 0L) {
+            baseAmount = saturatedAdd(baseAmount, inserted * tier.baseUnits);
+            onChange();
+        }
+        return processedResult(request, processed, action);
     }
 
     @Nonnull
     @Override
-    public ItemStack extractItem(int slot, int amount, boolean simulate) {
-        if (amount <= 0 || slot < 0 || slot >= slots) return ItemStack.EMPTY;
-        Result result = results.get(slot);
-        if (result.getStack().isEmpty()) return ItemStack.EMPTY;
-        ItemStack out = result.getStack().copy();
-        int maxExtract = Math.min(amount, result.getStack().getMaxStackSize());
-        long extracted = extractItemLong(slot, maxExtract, simulate);
-        if (extracted <= 0) return ItemStack.EMPTY;
-        out.setCount((int) Math.min(extracted, Integer.MAX_VALUE));
-        return out;
-    }
-
-    @Override
-    public int getSlotLimit(int slot) {
-        return (int) Math.min(getLongSlotLimit(slot), Integer.MAX_VALUE);
-    }
-
-    public long getLongSlotLimit(int slot) {
-        if (isCreative()) return Long.MAX_VALUE;
-        if (slot >= slots) return Long.MAX_VALUE;
-        double stackSize = 1;
-        Result result = results.get(slot);
-        if (!result.getStack().isEmpty()) {
-            stackSize = result.getStack().getMaxStackSize() / 64D;
+    public final TransferResult<BigItemStack> extractFromSlot(
+            int slot, long amount, @Nonnull StorageAction action) {
+        Objects.requireNonNull(action, "action");
+        long requested = Math.max(0L, amount);
+        if (requested == 0L || !isOperationEnabled()
+                || !isValidSlot(slot) || !tiers[slot].hasTemplate()) {
+            return emptyResult(requested, action);
         }
-        return (long) Math.floor(getTotalCapacity() * stackSize / result.getNeeded());
-    }
 
-    @Override
-    public boolean isItemValid(int slot, @Nonnull ItemStack stack) {
-        if (slot >= slots) return false;
-        Result result = results.get(slot);
-        if (result.getStack().isEmpty()) return !isLocked();
-        return areItemStacksCompatible(result.getStack(), stack);
-    }
-
-    @Override
-    public long insertItemLong(int slot, @Nonnull ItemStack stack, long amount, boolean simulate) {
-        if (stack.isEmpty() || amount <= 0) return amount;
-        if (isVoid() && slot == slots && isVoidValid(stack)) return 0;
-
-        if (slot < slots) {
-            Result result = results.get(slot);
-            if (!result.getStack().isEmpty() && areItemStacksCompatible(result.getStack(), stack)) {
-                long baseEquiv = amount * result.getNeeded();
-                long maxBase = getLongSlotLimit(getBaseSlot()) * getBaseResult().getNeeded();
-                long currentBase = getTotalInBase();
-                long canInsertBase = Math.min(baseEquiv, maxBase - currentBase);
-                long insertedItems = canInsertBase / result.getNeeded();
-
-                if (insertedItems <= 0) {
-                    if (isVoid()) return 0;
-                    return amount;
-                }
-
-                if (!simulate && !isCreative()) {
-                    setTotalInBase(currentBase + insertedItems * result.getNeeded());
-                    onChange();
-                }
-
-                long leftover = amount - insertedItems;
-                if (leftover > 0 && isVoid()) return 0;
-                return Math.max(0, leftover);
-            }
+        Tier tier = tiers[slot];
+        long available = isCreative() ? requested : baseAmount / tier.baseUnits;
+        long extracted = Math.min(requested, available);
+        if (extracted == 0L) {
+            return emptyResult(requested, action);
         }
-        return amount;
-    }
 
-    @Override
-    public long extractItemLong(int slot, long amount, boolean simulate) {
-        if (amount <= 0 || slot >= slots || slot < 0) return 0;
-        Result result = results.get(slot);
-        if (result.getStack().isEmpty()) return 0;
-
-        long totalBase = getTotalInBase();
-        long available = isCreative() ? amount : totalBase / result.getNeeded();
-        long extracting = Math.min(amount, available);
-        if (extracting <= 0) return 0;
-
-        if (!simulate && !isCreative()) {
-            setTotalInBase(totalBase - extracting * result.getNeeded());
-            if (totalInBase <= 0 && !isLocked()) {
-                resetConfiguration();
+        if (action == StorageAction.EXECUTE && !isCreative()) {
+            baseAmount -= extracted * tier.baseUnits;
+            if (baseAmount == 0L && !isLocked()) {
+                clearConfiguration();
             }
             onChange();
         }
-        return extracting;
+        return new TransferResult<>(
+                requested, new BigItemStack(tier.template, extracted), action);
     }
 
-    @Override
-    public long getStoredAmount(int slot) {
-        if (slot < 0 || slot >= slots) return 0;
-        Result result = results.get(slot);
-        if (result.getStack().isEmpty()) return 0;
-        return isCreative() && getTotalInBase() > 0 ? Long.MAX_VALUE : getTotalInBase() / result.getNeeded();
+    /**
+     * Replaces compression tiers with detached immutable definitions. Missing
+     * entries are padded with empty tiers and extra entries are ignored.
+     * Existing base units are preserved when a valid configuration is refreshed.
+     */
+    public final void configureTiers(@Nonnull List<Tier> newTiers) {
+        Objects.requireNonNull(newTiers, "newTiers");
+        Tier[] replacement = new Tier[tiers.length];
+        boolean hasTemplate = false;
+        for (int slot = 0; slot < replacement.length; slot++) {
+            Tier tier = slot < newTiers.size() && newTiers.get(slot) != null
+                    ? newTiers.get(slot) : Tier.empty();
+            replacement[slot] = new Tier(tier.template, tier.baseUnits);
+            hasTemplate |= replacement[slot].hasTemplate();
+        }
+
+        boolean changed = configured != hasTemplate;
+        for (int slot = 0; slot < tiers.length; slot++) {
+            changed |= !tiers[slot].sameDefinition(replacement[slot]);
+            tiers[slot] = replacement[slot];
+        }
+        configured = hasTemplate;
+        if (!configured && baseAmount != 0L) {
+            baseAmount = 0L;
+            changed = true;
+        }
+        if (changed) {
+            onChange();
+        }
     }
 
+    /** @return an unmodifiable list of detached immutable tier definitions */
     @Nonnull
-    @Override
-    public ItemStack getStoredType(int slot) {
-        if (slot >= 0 && slot < slots) {
-            return results.get(slot).getStack();
+    public final List<Tier> getTiers() {
+        List<Tier> snapshots = new ArrayList<>(tiers.length);
+        for (Tier tier : tiers) {
+            snapshots.add(new Tier(tier.template, tier.baseUnits));
         }
-        return ItemStack.EMPTY;
+        return Collections.unmodifiableList(snapshots);
     }
 
-    @Override
-    public int getRealSlotCount() {
-        return slots;
+    /** @return whether at least one compression tier has a retained template */
+    public final boolean isConfigured() {
+        return configured;
     }
 
-    private boolean isVoidValid(ItemStack stack) {
-        for (Result result : results) {
-            if (areItemStacksCompatible(result.getStack(), stack)) return true;
-        }
-        return false;
+    /** @return exact stored amount in lowest-tier units */
+    public final long getStoredBaseAmount() {
+        return baseAmount;
     }
 
-    public NBTTagCompound serializeNBT() {
-        NBTTagCompound nbt = new NBTTagCompound();
-        nbt.setBoolean("Setup", setup);
-        nbt.setLong("TotalBase", getTotalInBase());
-        for (int i = 0; i < results.size(); i++) {
-            NBTTagCompound entry = new NBTTagCompound();
-            NBTTagCompound stackTag = new NBTTagCompound();
-            if (!results.get(i).getStack().isEmpty()) {
-                results.get(i).getStack().writeToNBT(stackTag);
-            }
-            entry.setTag("Stack", stackTag);
-            entry.setInteger("Needed", results.get(i).getNeeded());
-            nbt.setTag("Result_" + i, entry);
-        }
-        return nbt;
-    }
-
-    public void deserializeNBT(NBTTagCompound nbt) {
-        setup = nbt.getBoolean("Setup");
-        for (int i = 0; i < results.size(); i++) {
-            String key = "Result_" + i;
-            if (nbt.hasKey(key)) {
-                NBTTagCompound entry = nbt.getCompoundTag(key);
-                NBTTagCompound stackTag = entry.getCompoundTag("Stack");
-                ItemStack stack = stackTag.getKeySet().isEmpty() ? ItemStack.EMPTY : new ItemStack(stackTag);
-                results.get(i).setStack(stack);
-                results.get(i).setNeeded(entry.getInteger("Needed"));
-            }
-        }
-        setTotalInBase(nbt.getLong("TotalBase"));
-    }
-
-    // Abstract methods
-    public abstract void onChange();
-
-    public abstract float getMultiplier();
-
-    public abstract boolean isVoid();
-
-    public abstract boolean isLocked();
-
-    public abstract boolean isCreative();
-
-    // Total capacity in base items
-    public long getTotalCapacity() {
-        if (hasMaxStorage()) {
+    /**
+     * @return maximum shared amount in lowest-tier units, saturated at long max
+     */
+    public final long getTotalBaseCapacity() {
+        if (hasMaxStorage() || isCreative()) {
             return Long.MAX_VALUE;
         }
-        int nonEmptyCount = 0;
-        for (Result r : results) {
-            if (!r.getStack().isEmpty()) nonEmptyCount++;
-        }
-        int exponent = nonEmptyCount - 1;
-        if (exponent < 0) {
-            return (long) (64.0 * getMultiplier() / 9.0);
-        }
-        long pow = 1;
-        for (int j = 0; j < exponent; j++) {
-            pow *= 9;
-        }
-        return (long) (64 * pow * getMultiplier());
+        return getTotalBaseCapacity(getMultiplier());
     }
+
+    /**
+     * Calculates base-unit capacity for a prospective multiplier without
+     * mutating upgrades or contents.
+     */
+    public final long getTotalBaseCapacity(double multiplier) {
+        if (!configured) {
+            return 0L;
+        }
+        long largestUnits = 1L;
+        Tier baseTier = null;
+        for (Tier tier : tiers) {
+            if (!tier.hasTemplate()) {
+                continue;
+            }
+            largestUnits = Math.max(largestUnits, tier.baseUnits);
+            if (baseTier == null || tier.baseUnits < baseTier.baseUnits) {
+                baseTier = tier;
+            }
+        }
+        if (baseTier == null) {
+            return 0L;
+        }
+
+        if (Double.isNaN(multiplier) || multiplier <= 0D) {
+            return 0L;
+        }
+        double capacity = multiplier
+                * Math.max(0, baseTier.template.getMaxStackSize())
+                * (double) largestUnits;
+        if (Double.isInfinite(capacity) || capacity >= Long.MAX_VALUE) {
+            return Long.MAX_VALUE;
+        }
+        return capacity <= 0D ? 0L : (long) Math.floor(capacity);
+    }
+
+    /** @return whether the configured slot participates in double-click insertion */
+    public final boolean canDoubleClickSlot(int slot) {
+        return isValidSlot(slot) && (isLocked() || tiers[slot].hasTemplate());
+    }
+
+    /**
+     * Synchronizes empty tier retention with an externally owned lock flag.
+     * Unlocking an empty handler clears its configured tiers; stored base units
+     * and their tier definitions are never discarded.
+     *
+     * @param locked desired lock state
+     */
+    public final void setLockFilters(boolean locked) {
+        if (!locked && !isCreative() && baseAmount == 0L && configured) {
+            clearConfiguration();
+            onChange();
+        }
+    }
+
+    /** Serializes only {@code StorageV2.BaseAmount/Tiers}. */
+    @Nonnull
+    public final NBTTagCompound serializeNBT() {
+        NBTTagCompound root = new NBTTagCompound();
+        NBTTagCompound storage = new NBTTagCompound();
+        storage.setLong(BASE_AMOUNT, baseAmount);
+        NBTTagList tierList = new NBTTagList();
+        for (int slot = 0; slot < tiers.length; slot++) {
+            Tier tier = tiers[slot];
+            if (!tier.hasTemplate()) {
+                continue;
+            }
+            NBTTagCompound entry = new NBTTagCompound();
+            entry.setInteger(INDEX, slot);
+            entry.setTag(STACK, tier.template.writeToNBT(new NBTTagCompound()));
+            entry.setLong(BASE_UNITS, tier.baseUnits);
+            tierList.appendTag(entry);
+        }
+        storage.setTag(TIERS, tierList);
+        root.setTag(STORAGE_V2, storage);
+        return root;
+    }
+
+    /**
+     * Replaces configuration and contents from the 2.0 schema. Missing
+     * {@code StorageV2} means empty storage and legacy compacting keys are ignored.
+     */
+    public final void deserializeNBT(@Nonnull NBTTagCompound root) {
+        clearConfiguration();
+        if (root == null || !root.hasKey(STORAGE_V2, Constants.NBT.TAG_COMPOUND)) {
+            return;
+        }
+        NBTTagCompound storage = root.getCompoundTag(STORAGE_V2);
+        NBTTagList tierList = storage.getTagList(TIERS, Constants.NBT.TAG_COMPOUND);
+        for (int i = 0; i < tierList.tagCount(); i++) {
+            NBTTagCompound entry = tierList.getCompoundTagAt(i);
+            int slot = entry.getInteger(INDEX);
+            if (!isValidSlot(slot) || !entry.hasKey(STACK, Constants.NBT.TAG_COMPOUND)) {
+                continue;
+            }
+            ItemStack template = new ItemStack(entry.getCompoundTag(STACK));
+            if (template.isEmpty()) {
+                continue;
+            }
+            tiers[slot] = new Tier(template, Math.max(1L, entry.getLong(BASE_UNITS)));
+            configured = true;
+        }
+        baseAmount = configured ? Math.max(0L, storage.getLong(BASE_AMOUNT)) : 0L;
+        if (baseAmount == 0L && !isLocked() && !isCreative()) {
+            clearConfiguration();
+        }
+    }
+
+    /** Called once after an executed operation changes observable state. */
+    public abstract void onChange();
+
+    /** @return the compacting storage multiplier */
+    public abstract double getMultiplier();
 
     protected boolean allowsEquivalentItems() {
         return false;
@@ -264,79 +309,83 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler, ILo
         return false;
     }
 
-    public long getTotalInBase() {
-        return totalInBase;
+    /** @return whether this handler's owning container currently allows transactions */
+    protected boolean isOperationEnabled() {
+        return true;
     }
 
-    public void setTotalInBase(long totalInBase) {
-        this.totalInBase = Math.max(0, totalInBase);
+    private boolean isValidSlot(int slot) {
+        return slot >= 0 && slot < tiers.length;
     }
 
-    public List<Result> getResults() {
-        return results;
-    }
-
-    /**
-     * Set the compacting results (highest tier first).
-     * e.g., [Iron Block(need=81), Iron Ingot(need=9), Iron Nugget(need=1)]
-     */
-    public void setResults(List<Result> newResults) {
-        results.clear();
-        results.addAll(newResults);
-        setup = true;
-    }
-
-    public boolean isSetup() {
-        return setup;
-    }
-
-    private void resetConfiguration() {
-        setTotalInBase(0);
-        for (Result result : results) {
-            result.setStack(ItemStack.EMPTY);
-            result.setNeeded(1);
+    private void clearConfiguration() {
+        for (int slot = 0; slot < tiers.length; slot++) {
+            tiers[slot] = Tier.empty();
         }
-        setup = false;
+        baseAmount = 0L;
+        configured = false;
     }
 
-    private int getBaseSlot() {
-        return results.size() - 1;
+    private static long saturatedAdd(long left, long right) {
+        return left >= Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
     }
 
-    private Result getBaseResult() {
-        return results.get(getBaseSlot());
+    private static TransferResult<BigItemStack> emptyResult(
+            long requested, StorageAction action) {
+        return new TransferResult<>(requested, BigItemStack.empty(), action);
     }
 
-    /**
-     * Represents a compacting tier.
-     */
-    public static class Result {
-        private ItemStack stack;
-        private int needed;
+    private static TransferResult<BigItemStack> processedResult(
+            BigItemStack request, long processed, StorageAction action) {
+        return new TransferResult<>(
+                request.getAmount(),
+                processed == 0L ? BigItemStack.empty() : request.withAmount(processed),
+                action);
+    }
 
-        public Result(ItemStack stack, int needed) {
-            this.stack = stack.copy();
-            this.needed = Math.max(1, needed);
+    /** Immutable definition of one visible compression tier. */
+    public static final class Tier {
+        private static final Tier EMPTY = new Tier(ItemStack.EMPTY, 1L);
+
+        private final ItemStack template;
+        private final long baseUnits;
+
+        public Tier(@Nonnull ItemStack template, long baseUnits) {
+            this.template = normalize(template);
+            this.baseUnits = Math.max(1L, baseUnits);
         }
 
-        public ItemStack getStack() {
-            return stack;
+        @Nonnull
+        public static Tier empty() {
+            return EMPTY;
         }
 
-        public void setStack(ItemStack stack) {
-            this.stack = stack.copy();
+        @Nonnull
+        public ItemStack getTemplate() {
+            return template.isEmpty() ? ItemStack.EMPTY : template.copy();
         }
 
-        public int getNeeded() {
-            return needed;
+        public long getBaseUnits() {
+            return baseUnits;
         }
 
-        public void setNeeded(int needed) {
-            this.needed = Math.max(1, needed);
+        public boolean hasTemplate() {
+            return !template.isEmpty();
         }
 
-        public Result copy() {
-            return new Result(stack.copy(), needed);
+        private boolean sameDefinition(Tier other) {
+            return baseUnits == other.baseUnits
+                    && ItemUtil.areItemStacksEqual(template, other.template);
+        }
+
+        @Nonnull
+        private static ItemStack normalize(ItemStack stack) {
+            if (stack == null || stack.isEmpty()) {
+                return ItemStack.EMPTY;
+            }
+            ItemStack copy = stack.copy();
+            copy.setCount(1);
+            return copy;
         }
     }
 }

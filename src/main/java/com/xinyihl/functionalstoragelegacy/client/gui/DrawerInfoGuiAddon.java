@@ -1,5 +1,6 @@
 package com.xinyihl.functionalstoragelegacy.client.gui;
 
+import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
 import com.xinyihl.functionalstoragelegacy.util.NumberUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
@@ -14,11 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
-/**
- * Renders drawer item info panel within the GUI.
- * Shows stored items with amounts in a 48x48 panel using background.png.
- * Ported from FunctionalStorage 1.21's DrawerInfoGuiAddon.
- */
+/** Renders immutable long-capacity item snapshots in the drawer GUI panel. */
 public class DrawerInfoGuiAddon {
 
     private final int posX;
@@ -26,109 +23,94 @@ public class DrawerInfoGuiAddon {
     private final ResourceLocation gui;
     private final int slotAmount;
     private final Function<Integer, Pair<Integer, Integer>> slotPosition;
-    private final Function<Integer, ItemStack> slotStack;
+    private final Function<Integer, BigItemStack> slotSnapshot;
     private final Function<Integer, Long> slotMaxAmount;
-    private final Function<Integer, ItemStack> slotLockedDisplay;
 
     public DrawerInfoGuiAddon(int posX, int posY, ResourceLocation gui, int slotAmount,
                               Function<Integer, Pair<Integer, Integer>> slotPosition,
-                              Function<Integer, ItemStack> slotStack,
-                              Function<Integer, Long> slotMaxAmount,
-                              Function<Integer, ItemStack> slotLockedDisplay) {
+                              Function<Integer, BigItemStack> slotSnapshot,
+                              Function<Integer, Long> slotMaxAmount) {
         this.posX = posX;
         this.posY = posY;
         this.gui = gui;
         this.slotAmount = slotAmount;
         this.slotPosition = slotPosition;
-        this.slotStack = slotStack;
+        this.slotSnapshot = slotSnapshot;
         this.slotMaxAmount = slotMaxAmount;
-        this.slotLockedDisplay = slotLockedDisplay;
     }
 
-    /**
-     * Draw the background panel and items with amount text.
-     */
     public void drawBackground(GuiScreen screen, int guiX, int guiY) {
         Minecraft mc = Minecraft.getMinecraft();
-        int size = 48; // 16 * 2 + 16
-        // Draw background.png as the base background
-        // Draw front texture as the panel overlay (16x16 block texture scaled to 48x48)
+        int size = 48;
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         mc.getTextureManager().bindTexture(gui);
         GlStateManager.enableBlend();
         Gui.drawScaledCustomSizeModalRect(guiX + posX, guiY + posY, 0, 0, 16, 16, size, size, 16, 16);
         GlStateManager.disableBlend();
 
-        for (int i = 0; i < slotAmount; i++) {
-            ItemStack itemStack = slotStack.apply(i);
-            if (itemStack.isEmpty() && !slotLockedDisplay.apply(i).isEmpty()) {
-                itemStack = slotLockedDisplay.apply(i);
+        for (int slot = 0; slot < slotAmount; slot++) {
+            BigItemStack snapshot = safeSnapshot(slot);
+            if (!snapshot.hasTemplate()) {
+                continue;
             }
-            if (!itemStack.isEmpty()) {
-                int x = guiX + slotPosition.apply(i).getLeft() + posX;
-                int y = guiY + slotPosition.apply(i).getRight() + posY;
+            ItemStack itemStack = snapshot.getTemplate();
+            int x = guiX + slotPosition.apply(slot).getLeft() + posX;
+            int y = guiY + slotPosition.apply(slot).getRight() + posY;
 
-                RenderHelper.enableGUIStandardItemLighting();
-                mc.getRenderItem().renderItemAndEffectIntoGUI(itemStack, x, y);
-                RenderHelper.disableStandardItemLighting();
+            RenderHelper.enableGUIStandardItemLighting();
+            mc.getRenderItem().renderItemAndEffectIntoGUI(itemStack, x, y);
+            RenderHelper.disableStandardItemLighting();
 
-                String amount = NumberUtils.formatCompact(slotStack.apply(i).getCount())
-                        + "/" + NumberUtils.formatCompact(slotMaxAmount.apply(i));
-                float scale = 1f;
-                GlStateManager.pushMatrix();
-                GlStateManager.translate(0, 0, 200);
-                GlStateManager.scale(scale, scale, scale);
-                int textX = (int) ((x + 17 - mc.fontRenderer.getStringWidth(amount) / 2F) * (1 / scale));
-                int textY = (int) ((y + 12) * (1 / scale));
-                mc.fontRenderer.drawStringWithShadow(amount, textX, textY, 0xFFFFFF);
-                GlStateManager.popMatrix();
-            }
+            String amount = NumberUtils.formatCompact(snapshot.getAmount())
+                    + "/" + NumberUtils.formatCompact(slotMaxAmount.apply(slot));
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(0, 0, 200);
+            int textX = (int) (x + 17 - mc.fontRenderer.getStringWidth(amount) / 2F);
+            mc.fontRenderer.drawStringWithShadow(amount, textX, y + 12, 0xFFFFFF);
+            GlStateManager.popMatrix();
         }
     }
 
-    /**
-     * Draw hover highlight and tooltip on mouse-over.
-     */
     public void drawForeground(GuiScreen screen, int guiX, int guiY, int mouseX, int mouseY) {
-        Minecraft mc = Minecraft.getMinecraft();
-        for (int i = 0; i < slotAmount; i++) {
-            int x = slotPosition.apply(i).getLeft() + posX + guiX;
-            int y = slotPosition.apply(i).getRight() + posY + guiY;
-            if (mouseX > x && mouseX < x + 18 && mouseY > y && mouseY < y + 18) {
-                // Draw highlight (relative to gui origin for foreground layer)
-                int fx = slotPosition.apply(i).getLeft() + posX;
-                int fy = slotPosition.apply(i).getRight() + posY;
-                GlStateManager.disableLighting();
-                GlStateManager.disableDepth();
-                GlStateManager.colorMask(true, true, true, false);
-                Gui.drawRect(fx - 1, fy - 1, fx + 17, fy + 17, 0x80FFFFFF);
-                GlStateManager.colorMask(true, true, true, true);
-                GlStateManager.enableLighting();
-                GlStateManager.enableDepth();
-
-                // Build tooltip
-                List<String> tooltip = new ArrayList<>();
-                ItemStack over = slotStack.apply(i);
-                if (over.isEmpty() && !slotLockedDisplay.apply(i).isEmpty()) {
-                    over = slotLockedDisplay.apply(i);
-                }
-                if (over.isEmpty()) {
-                    tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.item")
-                            + "§f" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.empty"));
-                } else {
-                    tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.item")
-                            + "§f" + over.getDisplayName());
-                    String amountStr = NumberUtils.formatCompact(slotStack.apply(i).getCount())
-                            + "/" + NumberUtils.formatCompact(slotMaxAmount.apply(i));
-                    tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.amount")
-                            + "§f" + amountStr);
-                }
-                tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.slot")
-                        + "§f" + i);
-
-                screen.drawHoveringText(tooltip, mouseX - guiX, mouseY - guiY);
+        for (int slot = 0; slot < slotAmount; slot++) {
+            int x = slotPosition.apply(slot).getLeft() + posX + guiX;
+            int y = slotPosition.apply(slot).getRight() + posY + guiY;
+            if (mouseX <= x || mouseX >= x + 18 || mouseY <= y || mouseY >= y + 18) {
+                continue;
             }
+
+            int fx = slotPosition.apply(slot).getLeft() + posX;
+            int fy = slotPosition.apply(slot).getRight() + posY;
+            GlStateManager.disableLighting();
+            GlStateManager.disableDepth();
+            GlStateManager.colorMask(true, true, true, false);
+            Gui.drawRect(fx - 1, fy - 1, fx + 17, fy + 17, 0x80FFFFFF);
+            GlStateManager.colorMask(true, true, true, true);
+            GlStateManager.enableLighting();
+            GlStateManager.enableDepth();
+
+            BigItemStack snapshot = safeSnapshot(slot);
+            List<String> tooltip = new ArrayList<>();
+            if (!snapshot.hasTemplate()) {
+                tooltip.add("\u00a76" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.item")
+                        + "\u00a7f" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.empty"));
+            } else {
+                tooltip.add("\u00a76" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.item")
+                        + "\u00a7f" + snapshot.getTemplate().getDisplayName());
+                String amount = NumberUtils.formatCompact(snapshot.getAmount())
+                        + "/" + NumberUtils.formatCompact(slotMaxAmount.apply(slot));
+                tooltip.add("\u00a76" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.amount")
+                        + "\u00a7f" + amount);
+            }
+            tooltip.add("\u00a76" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.slot")
+                    + "\u00a7f" + slot);
+            screen.drawHoveringText(tooltip, mouseX - guiX, mouseY - guiY);
         }
+    }
+
+    private BigItemStack safeSnapshot(int slot) {
+        BigItemStack snapshot = slotSnapshot.apply(slot);
+        return snapshot == null ? BigItemStack.empty() : snapshot;
     }
 
     public int getPosX() {

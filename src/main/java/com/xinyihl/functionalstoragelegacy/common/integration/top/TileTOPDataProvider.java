@@ -1,13 +1,12 @@
 package com.xinyihl.functionalstoragelegacy.common.integration.top;
 
 import com.xinyihl.functionalstoragelegacy.Tags;
-import com.xinyihl.functionalstoragelegacy.api.IBigItemHandler;
-import com.xinyihl.functionalstoragelegacy.common.inventory.CompactingInventoryHandler;
-import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigInventoryHandler;
-import com.xinyihl.functionalstoragelegacy.common.tile.EnderDrawerTile;
-import com.xinyihl.functionalstoragelegacy.common.tile.WoodDrawerTile;
+import com.xinyihl.functionalstoragelegacy.api.storage.BigFluidStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigFluidHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.common.tile.FluidDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
-import com.xinyihl.functionalstoragelegacy.common.tile.compact.CompactingDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.controller.DrawerControllerTile;
 import com.xinyihl.functionalstoragelegacy.util.NumberUtils;
 import mcjty.theoneprobe.api.*;
@@ -17,12 +16,7 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
-import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
-import net.minecraftforge.fluids.capability.IFluidHandler;
-import net.minecraftforge.fluids.capability.IFluidTankProperties;
-import net.minecraftforge.items.IItemHandler;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -77,86 +71,52 @@ public class TileTOPDataProvider implements IProbeInfoProvider {
 
     private List<ItemEntry> collectItems(TileEntity te) {
         List<ItemEntry> items = new ArrayList<>();
-
-        if (te instanceof WoodDrawerTile) {
-            BigInventoryHandler handler = ((WoodDrawerTile) te).getHandler();
-            for (int i = 0; i < handler.getSlotCount(); i++) {
-                BigInventoryHandler.BigStack big = handler.getBigStack(i);
-                if (!big.getStack().isEmpty() && big.getAmount() > 0) {
-                    items.add(new ItemEntry(iconStack(big.getStack()), safeAmount(big.getAmount()), safeCapacity(handler.getLongSlotLimit(i))));
-                }
-            }
+        if (!(te instanceof ControllableDrawerTile)) {
             return items;
         }
-
-        if (te instanceof EnderDrawerTile) {
-            IItemHandler itemHandler = ((EnderDrawerTile) te).getItemHandler();
-            if (itemHandler instanceof BigInventoryHandler) {
-                BigInventoryHandler handler = (BigInventoryHandler) itemHandler;
-                for (int i = 0; i < handler.getSlotCount(); i++) {
-                    BigInventoryHandler.BigStack big = handler.getBigStack(i);
-                    if (!big.getStack().isEmpty() && big.getAmount() > 0) {
-                        items.add(new ItemEntry(iconStack(big.getStack()), safeAmount(big.getAmount()), safeCapacity(handler.getLongSlotLimit(i))));
-                    }
-                }
-            }
+        IBigItemHandler handler = ((ControllableDrawerTile) te).getItemHandler();
+        if (handler == null) {
             return items;
         }
-
-        if (te instanceof CompactingDrawerTile) {
-            CompactingInventoryHandler handler = ((CompactingDrawerTile) te).getCompactingHandler();
-            for (int i = 0; i < handler.getSlots(); i++) {
-                ItemStack stack = handler.getStackInSlot(i);
-                if (!stack.isEmpty() && stack.getCount() > 0) {
-                    items.add(new ItemEntry(iconStack(stack), safeAmount(stack.getCount()), safeCapacity(handler.getLongSlotLimit(i))));
-                }
-            }
-            return items;
-        }
-
-        if (te instanceof DrawerControllerTile) {
-            IItemHandler handler = ((DrawerControllerTile) te).getItemHandler();
-            for (int i = 0; i < handler.getSlots(); i++) {
-                ItemStack stack = handler.getStackInSlot(i);
-                if (!stack.isEmpty() && stack.getCount() > 0) {
-                    long amount = handler instanceof IBigItemHandler
-                            ? ((IBigItemHandler) handler).getStoredAmount(i)
-                            : stack.getCount();
-                    long slotLimit = handler instanceof IBigItemHandler
-                            ? ((IBigItemHandler) handler).getLongSlotLimit(i)
-                            : handler.getSlotLimit(i);
-                    items.add(new ItemEntry(iconStack(stack), safeAmount(amount), safeCapacity(slotLimit)));
-                }
+        for (int slot = 0; slot < handler.getSlotCount(); slot++) {
+            BigItemStack snapshot = handler.getSlotSnapshot(slot);
+            if (snapshot != null && !snapshot.isEmpty()) {
+                items.add(new ItemEntry(
+                        iconStack(snapshot.getTemplate()),
+                        safeAmount(snapshot.getAmount()),
+                        safeCapacity(handler.getSlotCapacity(slot))));
             }
         }
-
         return items;
     }
 
     private List<FluidEntry> collectFluids(TileEntity te) {
         List<FluidEntry> fluids = new ArrayList<>();
 
-        IFluidHandler fluidHandler = getFluidHandler(te);
-        if (fluidHandler == null) {
+        IBigFluidHandler handler = getFluidHandler(te);
+        if (handler == null) {
             return fluids;
         }
-        IFluidTankProperties[] properties = fluidHandler.getTankProperties();
-        for (IFluidTankProperties property : properties) {
-            FluidStack fluid = property.getContents();
-            if (fluid != null && fluid.amount > 0) {
-                long amount = safeAmount(fluid.amount);
-                long capacity = safeCapacity(property.getCapacity());
-                fluids.add(new FluidEntry(fluid.getLocalizedName(), amount, capacity));
+        for (int tank = 0; tank < handler.getTankCount(); tank++) {
+            BigFluidStack snapshot = handler.getTankSnapshot(tank);
+            if (snapshot != null && !snapshot.isEmpty()) {
+                FluidStack fluid = snapshot.getTemplate();
+                fluids.add(new FluidEntry(
+                        fluid.getLocalizedName(),
+                        safeAmount(snapshot.getAmount()),
+                        safeCapacity(handler.getTankCapacity(tank))));
             }
         }
 
         return fluids;
     }
 
-    private IFluidHandler getFluidHandler(TileEntity te) {
-        Capability<IFluidHandler> fluidCap = CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY;
-        if (te.hasCapability(fluidCap, null)) {
-            return te.getCapability(fluidCap, null);
+    private IBigFluidHandler getFluidHandler(TileEntity te) {
+        if (te instanceof FluidDrawerTile) {
+            return ((FluidDrawerTile) te).getFluidHandler();
+        }
+        if (te instanceof DrawerControllerTile) {
+            return ((DrawerControllerTile) te).getFluidHandler();
         }
         return null;
     }
@@ -211,7 +171,7 @@ public class TileTOPDataProvider implements IProbeInfoProvider {
         if (drawer.isLocked()) {
             states.add("Locked");
         }
-        if (drawer.isVoid()) {
+        if (drawer.voidsOverflow()) {
             states.add("Void");
         }
         if (drawer.isCreative()) {

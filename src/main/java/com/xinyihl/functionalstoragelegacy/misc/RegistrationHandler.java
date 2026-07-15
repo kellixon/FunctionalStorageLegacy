@@ -1,8 +1,9 @@
 package com.xinyihl.functionalstoragelegacy.misc;
 
 import com.xinyihl.functionalstoragelegacy.Tags;
-import com.xinyihl.functionalstoragelegacy.api.DrawerType;
-import com.xinyihl.functionalstoragelegacy.api.DrawerWoodType;
+import com.xinyihl.functionalstoragelegacy.api.upgrade.StorageFeature;
+import com.xinyihl.functionalstoragelegacy.common.block.DrawerWoodType;
+import com.xinyihl.functionalstoragelegacy.common.storage.DrawerLayout;
 import com.xinyihl.functionalstoragelegacy.common.block.ArmoryCabinetBlock;
 import com.xinyihl.functionalstoragelegacy.common.block.EnderDrawerBlock;
 import com.xinyihl.functionalstoragelegacy.common.block.FluidDrawerBlock;
@@ -107,8 +108,8 @@ public class RegistrationHandler {
     public static void registerBlocks(RegistryEvent.Register<Block> event) {
         // Wood drawers
         for (DrawerWoodType wood : DrawerWoodType.values()) {
-            for (DrawerType type : DrawerType.values()) {
-                WoodDrawerBlock block = new WoodDrawerBlock(wood, type);
+            for (DrawerLayout layout : DrawerLayout.values()) {
+                WoodDrawerBlock block = new WoodDrawerBlock(wood, layout);
                 WOOD_DRAWER_BLOCKS.add(block);
                 event.getRegistry().register(block);
             }
@@ -119,9 +120,9 @@ public class RegistrationHandler {
         CONTROLLER_EXTENSION_BLOCK = new ControllerExtensionBlock();
         COMPACTING_DRAWER_BLOCK = new CompactingDrawerBlock();
         SIMPLE_COMPACTING_DRAWER_BLOCK = new SimpleCompactingDrawerBlock();
-        FLUID_DRAWER_1 = new FluidDrawerBlock(DrawerType.X_1);
-        FLUID_DRAWER_2 = new FluidDrawerBlock(DrawerType.X_2);
-        FLUID_DRAWER_4 = new FluidDrawerBlock(DrawerType.X_4);
+        FLUID_DRAWER_1 = new FluidDrawerBlock(DrawerLayout.X_1);
+        FLUID_DRAWER_2 = new FluidDrawerBlock(DrawerLayout.X_2);
+        FLUID_DRAWER_4 = new FluidDrawerBlock(DrawerLayout.X_4);
         ENDER_DRAWER_BLOCK = new EnderDrawerBlock();
         ARMORY_CABINET_BLOCK = new ArmoryCabinetBlock();
 
@@ -181,7 +182,7 @@ public class RegistrationHandler {
         MAX_STORAGE_UPGRADE.setRegistryName("max_storage_upgrade");
         MAX_STORAGE_UPGRADE.setTranslationKey(Tags.MOD_ID + ".max_storage_upgrade");
 
-        CREATIVE_VENDING_UPGRADE = new UpgradeItem(UpgradeItem.Type.STORAGE) {
+        CREATIVE_VENDING_UPGRADE = new UpgradeItem(DrawerUpgradeBehavior.SlotType.STORAGE, StorageFeature.CREATIVE) {
         };
         CREATIVE_VENDING_UPGRADE.setRegistryName("creative_vending_upgrade");
         CREATIVE_VENDING_UPGRADE.setTranslationKey(Tags.MOD_ID + ".creative_vending_upgrade");

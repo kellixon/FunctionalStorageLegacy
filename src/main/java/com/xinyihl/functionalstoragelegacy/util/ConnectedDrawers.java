@@ -1,7 +1,7 @@
 package com.xinyihl.functionalstoragelegacy.util;
 
-import com.xinyihl.functionalstoragelegacy.api.IBigFluidHandler;
-import com.xinyihl.functionalstoragelegacy.api.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigFluidHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
 import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.controller.ControllerExtensionTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.controller.DrawerControllerTile;
@@ -14,10 +14,6 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.common.util.Constants;
-import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
-import net.minecraftforge.fluids.capability.IFluidHandler;
-import net.minecraftforge.items.CapabilityItemHandler;
-import net.minecraftforge.items.IItemHandler;
 
 import java.util.*;
 
@@ -83,30 +79,59 @@ public class ConnectedDrawers {
     /**
      * Rebuild the connected drawers list using BFS from the controller position.
      */
-    public void rebuild() {
+    public boolean rebuild() {
         itemHandlers.clear();
         fluidHandlers.clear();
 
-        if (world == null || controllerPos == null) return;
+        if (world == null || controllerPos == null) return false;
+
+        return rebuildWithResolver(new LoadedTileResolver() {
+            @Override
+            public boolean isLoaded(BlockPos pos) {
+                return world.isBlockLoaded(pos);
+            }
+
+            @Override
+            public TileEntity getTileEntity(BlockPos pos) {
+                return world.getTileEntity(pos);
+            }
+        });
+    }
+
+    boolean rebuildWithResolver(LoadedTileResolver resolver) {
+        itemHandlers.clear();
+        fluidHandlers.clear();
+        boolean topologyChanged = false;
 
         Iterator<Long> iterator = connectedDrawerPositions.iterator();
         while (iterator.hasNext()) {
             Long posLong = iterator.next();
             BlockPos pos = BlockPos.fromLong(posLong);
-            TileEntity te = world.getTileEntity(pos);
-            if (!isConnectableDrawer(te)) {
-                iterator.remove();
+            if (!resolver.isLoaded(pos)) {
                 continue;
             }
-            if (te.hasCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null)) {
-                IItemHandler ih = te.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
-                if (ih instanceof IBigItemHandler) itemHandlers.add((IBigItemHandler) ih);
+            TileEntity te = resolver.getTileEntity(pos);
+            if (!isConnectableDrawer(te)) {
+                iterator.remove();
+                topologyChanged = true;
+                continue;
             }
-            if (te.hasCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, null)) {
-                IFluidHandler fh = te.getCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, null);
-                if (fh instanceof IBigFluidHandler) fluidHandlers.add((IBigFluidHandler) fh);
+            IBigItemHandler itemHandler = ((ControllableDrawerTile) te).getItemHandler();
+            if (itemHandler != null) {
+                itemHandlers.add(itemHandler);
+            }
+            IBigFluidHandler fluidHandler = ((ControllableDrawerTile) te).getFluidHandler();
+            if (fluidHandler != null) {
+                fluidHandlers.add(fluidHandler);
             }
         }
+        return topologyChanged;
+    }
+
+    interface LoadedTileResolver {
+        boolean isLoaded(BlockPos pos);
+
+        TileEntity getTileEntity(BlockPos pos);
     }
 
     /**
@@ -141,13 +166,13 @@ public class ConnectedDrawers {
                 if (isConnectableDrawer(te)) {
                     connectedDrawerPositions.add(neighbor.toLong());
 
-                    if (te.hasCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null)) {
-                        IItemHandler ih = te.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
-                        if (ih instanceof IBigItemHandler) itemHandlers.add((IBigItemHandler) ih);
+                    IBigItemHandler itemHandler = ((ControllableDrawerTile) te).getItemHandler();
+                    if (itemHandler != null) {
+                        itemHandlers.add(itemHandler);
                     }
-                    if (te.hasCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, null)) {
-                        IFluidHandler fh = te.getCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, null);
-                        if (fh instanceof IBigFluidHandler) fluidHandlers.add((IBigFluidHandler) fh);
+                    IBigFluidHandler fluidHandler = ((ControllableDrawerTile) te).getFluidHandler();
+                    if (fluidHandler != null) {
+                        fluidHandlers.add(fluidHandler);
                     }
 
                     queue.add(neighbor);

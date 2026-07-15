@@ -7,13 +7,16 @@ import appeng.api.storage.IStorageChannel;
 import appeng.api.storage.channels.IItemStorageChannel;
 import appeng.api.storage.data.IAEItemStack;
 import appeng.api.storage.data.IItemList;
-import com.xinyihl.functionalstoragelegacy.api.IBigItemHandler;
-import com.xinyihl.functionalstoragelegacy.util.ItemUtil;
+import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
+import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
 import net.minecraft.item.ItemStack;
 
 /**
- * AE2 ME inventory handler wrapping an IBigItemHandler for compacting drawers.
- * Each compacting tier exposes as a separate entry in AE2.
+ * Dedicated AE2 view of compacting storage. Visible tier snapshots perform the
+ * base-unit conversion in the compacting handler; routed transactions preserve
+ * that conversion while exposing every configured tier to AE2.
  */
 public class CompactingMEItemHandler implements IDrawerMEInventoryHandler<IAEItemStack> {
 
@@ -27,64 +30,49 @@ public class CompactingMEItemHandler implements IDrawerMEInventoryHandler<IAEIte
 
     @Override
     public IAEItemStack injectItems(IAEItemStack input, Actionable type, IActionSource src) {
-        if (input == null || input.getStackSize() <= 0) return null;
-
-        ItemStack inputStack = input.getDefinition();
-        long remaining = input.getStackSize();
-        boolean simulate = type == Actionable.SIMULATE;
-
-        for (int i = 0; i < handler.getRealSlotCount(); i++) {
-            ItemStack stored = handler.getStoredType(i);
-            if (stored.isEmpty() || !ItemUtil.areItemStacksEqual(stored, inputStack)) continue;
-
-            remaining = handler.insertItemLong(i, inputStack, remaining, simulate);
-            if (remaining <= 0) return null;
+        BigItemStack request = requestOf(input);
+        if (request.isEmpty()) {
+            return null;
         }
-
-        if (remaining >= input.getStackSize()) return input;
-
-        IAEItemStack result = input.copy();
-        result.setStackSize(remaining);
-        return result;
+        TransferResult<BigItemStack> result = handler.insertRouted(request, actionOf(type));
+        long remaining = result.getRemainingAmount();
+        if (remaining == 0L) {
+            return null;
+        }
+        if (remaining == request.getAmount()) {
+            return input;
+        }
+        IAEItemStack remainder = input.copy();
+        remainder.setStackSize(remaining);
+        return remainder;
     }
 
     @Override
-    public IAEItemStack extractItems(IAEItemStack request, Actionable mode, IActionSource src) {
-        if (request == null || request.getStackSize() <= 0) return null;
-
-        ItemStack requestStack = request.getDefinition();
-        long toExtract = request.getStackSize();
-        long extracted = 0;
-        boolean simulate = mode == Actionable.SIMULATE;
-
-        for (int i = 0; i < handler.getRealSlotCount(); i++) {
-            ItemStack stored = handler.getStoredType(i);
-            if (stored.isEmpty() || !ItemUtil.areItemStacksEqual(stored, requestStack)) continue;
-
-            long ext = handler.extractItemLong(i, toExtract - extracted, simulate);
-            extracted += ext;
-            if (extracted >= toExtract) break;
+    public IAEItemStack extractItems(IAEItemStack requestStack, Actionable mode, IActionSource src) {
+        BigItemStack request = requestOf(requestStack);
+        if (request.isEmpty()) {
+            return null;
         }
-
-        if (extracted <= 0) return null;
-
-        IAEItemStack result = request.copy();
-        result.setStackSize(extracted);
-        return result;
+        TransferResult<BigItemStack> result = handler.extractRouted(request, actionOf(mode));
+        if (result.getProcessedAmount() == 0L) {
+            return null;
+        }
+        IAEItemStack extracted = requestStack.copy();
+        extracted.setStackSize(result.getProcessedAmount());
+        return extracted;
     }
 
     @Override
     public IItemList<IAEItemStack> getAvailableItems(IItemList<IAEItemStack> out) {
-        for (int i = 0; i < handler.getRealSlotCount(); i++) {
-            ItemStack stored = handler.getStoredType(i);
-            if (stored.isEmpty()) continue;
-            long amount = handler.getStoredAmount(i);
-            if (amount <= 0) continue;
-
-            IAEItemStack aeStack = channel.createStack(stored);
+        for (int slot = 0; slot < handler.getSlotCount(); slot++) {
+            BigItemStack snapshot = handler.getSlotSnapshot(slot);
+            if (snapshot.isEmpty()) {
+                continue;
+            }
+            IAEItemStack aeStack = channel.createStack(snapshot.getTemplate());
             if (aeStack != null) {
-                aeStack.setStackSize(amount);
-                out.addStorage(aeStack);
+                aeStack.setStackSize(snapshot.getAmount());
+                AE2StorageListHelper.addStorageSaturated(out, aeStack);
             }
         }
         return out;
@@ -102,11 +90,13 @@ public class CompactingMEItemHandler implements IDrawerMEInventoryHandler<IAEIte
 
     @Override
     public boolean isPrioritized(IAEItemStack input) {
-        if (input == null) return false;
-        ItemStack inputStack = input.getDefinition();
-        for (int i = 0; i < handler.getRealSlotCount(); i++) {
-            ItemStack stored = handler.getStoredType(i);
-            if (!stored.isEmpty() && ItemUtil.areItemStacksEqual(stored, inputStack)) {
+        BigItemStack request = requestOf(input);
+        if (request.isEmpty()) {
+            return false;
+        }
+        for (int slot = 0; slot < handler.getSlotCount(); slot++) {
+            BigItemStack snapshot = handler.getSlotSnapshot(slot);
+            if (snapshot.hasTemplate() && snapshot.isSameType(request)) {
                 return true;
             }
         }
@@ -115,17 +105,10 @@ public class CompactingMEItemHandler implements IDrawerMEInventoryHandler<IAEIte
 
     @Override
     public boolean canAccept(IAEItemStack input) {
-        if (input == null) return false;
-        ItemStack inputStack = input.getDefinition();
-
-        for (int i = 0; i < handler.getRealSlotCount(); i++) {
-            ItemStack stored = handler.getStoredType(i);
-            if (!stored.isEmpty() && ItemUtil.areItemStacksEqual(stored, inputStack)) {
-                if (handler.isCreative() || handler.isVoid()) return true;
-                if (handler.getStoredAmount(i) < handler.getLongSlotLimit(i)) return true;
-            }
-        }
-        return false;
+        BigItemStack request = requestOf(input);
+        return !request.isEmpty()
+                && handler.insertRouted(request.withAmount(1L), StorageAction.SIMULATE)
+                .getProcessedAmount() == 1L;
     }
 
     @Override
@@ -141,5 +124,19 @@ public class CompactingMEItemHandler implements IDrawerMEInventoryHandler<IAEIte
     @Override
     public boolean validForPass(int pass) {
         return true;
+    }
+
+    private static BigItemStack requestOf(IAEItemStack stack) {
+        if (stack == null || stack.getStackSize() <= 0L) {
+            return BigItemStack.empty();
+        }
+        ItemStack definition = stack.getDefinition();
+        return definition == null || definition.isEmpty()
+                ? BigItemStack.empty()
+                : new BigItemStack(definition, stack.getStackSize());
+    }
+
+    private static StorageAction actionOf(Actionable actionable) {
+        return actionable == Actionable.SIMULATE ? StorageAction.SIMULATE : StorageAction.EXECUTE;
     }
 }
