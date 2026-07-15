@@ -1,0 +1,9 @@
+{
+  "parent": "functionalstoragelegacy:block/base_x_2",
+  "textures": {
+    "particle": "functionalstoragelegacy:blocks/framed_side",
+    "front": "functionalstoragelegacy:blocks/framed_front_2",
+    "side": "functionalstoragelegacy:blocks/framed_side",
+    "top": "functionalstoragelegacy:blocks/framed_side"
+  }
+}

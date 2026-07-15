@@ -7,6 +7,7 @@ import com.xinyihl.functionalstoragelegacy.common.storage.DrawerLayout;
 import com.xinyihl.functionalstoragelegacy.common.block.ArmoryCabinetBlock;
 import com.xinyihl.functionalstoragelegacy.common.block.EnderDrawerBlock;
 import com.xinyihl.functionalstoragelegacy.common.block.FluidDrawerBlock;
+import com.xinyihl.functionalstoragelegacy.common.block.FramedDrawerBlock;
 import com.xinyihl.functionalstoragelegacy.common.block.WoodDrawerBlock;
 import com.xinyihl.functionalstoragelegacy.common.block.base.DrawerBlock;
 import com.xinyihl.functionalstoragelegacy.common.block.compact.CompactingDrawerBlock;
@@ -52,6 +53,7 @@ public class RegistrationHandler {
     // ====== Blocks ======
     // Wood drawers
     public static final List<WoodDrawerBlock> WOOD_DRAWER_BLOCKS = new ArrayList<>();
+    public static final List<FramedDrawerBlock> FRAMED_DRAWER_BLOCKS = new ArrayList<>();
     public static DrawerControllerBlock DRAWER_CONTROLLER_BLOCK;
     // ====== Creative Tab ======
     public static final CreativeTabs CREATIVE_TAB = new CreativeTabs(Tags.MOD_ID) {
@@ -115,6 +117,12 @@ public class RegistrationHandler {
             }
         }
 
+        for (DrawerLayout layout : DrawerLayout.values()) {
+            FramedDrawerBlock block = new FramedDrawerBlock(layout);
+            FRAMED_DRAWER_BLOCKS.add(block);
+            event.getRegistry().register(block);
+        }
+
         // Special blocks
         DRAWER_CONTROLLER_BLOCK = new DrawerControllerBlock();
         CONTROLLER_EXTENSION_BLOCK = new ControllerExtensionBlock();
@@ -143,6 +151,9 @@ public class RegistrationHandler {
     public static void registerItems(RegistryEvent.Register<Item> event) {
         // ItemBlocks for all blocks
         for (WoodDrawerBlock block : WOOD_DRAWER_BLOCKS) {
+            event.getRegistry().register(createItemBlock(block));
+        }
+        for (FramedDrawerBlock block : FRAMED_DRAWER_BLOCKS) {
             event.getRegistry().register(createItemBlock(block));
         }
         event.getRegistry().registerAll(

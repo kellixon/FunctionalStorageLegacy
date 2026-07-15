@@ -4,6 +4,7 @@ import com.xinyihl.functionalstoragelegacy.Tags;
 import com.xinyihl.functionalstoragelegacy.common.tile.ArmoryCabinetTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.EnderDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.FluidDrawerTile;
+import com.xinyihl.functionalstoragelegacy.common.tile.FramedDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.WoodDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.compact.CompactingDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.compact.SimpleCompactingDrawerTile;
@@ -20,6 +21,7 @@ public class CommonProxy {
     public void preInit(FMLPreInitializationEvent event) {
         // Register TileEntities
         GameRegistry.registerTileEntity(WoodDrawerTile.class, new ResourceLocation(Tags.MOD_ID, "drawer"));
+        GameRegistry.registerTileEntity(FramedDrawerTile.class, new ResourceLocation(Tags.MOD_ID, "framed_drawer"));
         GameRegistry.registerTileEntity(CompactingDrawerTile.class, new ResourceLocation(Tags.MOD_ID, "compacting_drawer"));
         GameRegistry.registerTileEntity(SimpleCompactingDrawerTile.class, new ResourceLocation(Tags.MOD_ID, "simple_compacting_drawer"));
         GameRegistry.registerTileEntity(FluidDrawerTile.class, new ResourceLocation(Tags.MOD_ID, "fluid_drawer"));

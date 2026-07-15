@@ -20,6 +20,10 @@ tile.functionalstoragelegacy.acacia_4.name=Acacia Drawer (4 Slots)
 tile.functionalstoragelegacy.dark_oak_1.name=Dark Oak Drawer (1 Slot)
 tile.functionalstoragelegacy.dark_oak_2.name=Dark Oak Drawer (2 Slots)
 tile.functionalstoragelegacy.dark_oak_4.name=Dark Oak Drawer (4 Slots)
+tile.functionalstoragelegacy.framed_1.name=Framed Drawer (1 Slot)
+tile.functionalstoragelegacy.framed_2.name=Framed Drawer (2 Slots)
+tile.functionalstoragelegacy.framed_4.name=Framed Drawer (4 Slots)
+frameddrawer.use=Style in a 2x2 grid: exterior, front, drawer, optional divider.
 
 # Special Blocks
 tile.functionalstoragelegacy.compacting_drawer.name=Compacting Drawer

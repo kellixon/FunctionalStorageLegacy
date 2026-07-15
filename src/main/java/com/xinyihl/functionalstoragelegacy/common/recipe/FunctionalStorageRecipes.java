@@ -4,6 +4,7 @@ import com.xinyihl.functionalstoragelegacy.Tags;
 import com.xinyihl.functionalstoragelegacy.common.block.DrawerWoodType;
 import com.xinyihl.functionalstoragelegacy.common.storage.DrawerLayout;
 import com.xinyihl.functionalstoragelegacy.common.block.WoodDrawerBlock;
+import com.xinyihl.functionalstoragelegacy.common.block.FramedDrawerBlock;
 import com.xinyihl.functionalstoragelegacy.misc.RegistrationHandler;
 import net.minecraft.init.Blocks;
 import net.minecraft.init.Items;
@@ -33,8 +34,37 @@ public final class FunctionalStorageRecipes {
         Ingredient drawerlessWood = new DrawerlessWoodIngredient(buildDrawerlessWoodStacks());
 
         registerWoodDrawerRecipes(registry, drawerlessWood);
+        registerFramedDrawerRecipes(registry);
         registerBlockRecipes(registry, emptyDrawer);
         registerItemRecipes(registry, emptyDrawer);
+        FramedDrawerStyleRecipe styleRecipe = new FramedDrawerStyleRecipe();
+        styleRecipe.setRegistryName(new ResourceLocation(Tags.MOD_ID, "framed_style"));
+        registry.register(styleRecipe);
+    }
+
+    private static void registerFramedDrawerRecipes(IForgeRegistry<IRecipe> registry) {
+        for (FramedDrawerBlock block : RegistrationHandler.FRAMED_DRAWER_BLOCKS) {
+            ItemStack output = new ItemStack(block, block.getDrawerLayout().getSlotCount());
+            String name = block.getRegistryName().getPath();
+            if (block.getDrawerLayout() == DrawerLayout.X_1) {
+                registerShaped(registry, name, output,
+                        "PPP", "PCP", "PPP",
+                        'P', "nuggetIron",
+                        'C', "chestWood");
+            }
+            if (block.getDrawerLayout() == DrawerLayout.X_2) {
+                registerShaped(registry, name, output,
+                        "PCP", "PPP", "PCP",
+                        'P', "nuggetIron",
+                        'C', "chestWood");
+            }
+            if (block.getDrawerLayout() == DrawerLayout.X_4) {
+                registerShaped(registry, name, output,
+                        "CPC", "PPP", "CPC",
+                        'P', "nuggetIron",
+                        'C', "chestWood");
+            }
+        }
     }
 
     private static void registerWoodDrawerRecipes(IForgeRegistry<IRecipe> registry, Ingredient drawerlessWood) {
@@ -240,6 +270,9 @@ public final class FunctionalStorageRecipes {
     private static ItemStack[] buildDrawerStacks() {
         List<ItemStack> stacks = new ArrayList<>();
         for (WoodDrawerBlock block : RegistrationHandler.WOOD_DRAWER_BLOCKS) {
+            stacks.add(new ItemStack(block));
+        }
+        for (FramedDrawerBlock block : RegistrationHandler.FRAMED_DRAWER_BLOCKS) {
             stacks.add(new ItemStack(block));
         }
         stacks.add(new ItemStack(RegistrationHandler.COMPACTING_DRAWER_BLOCK));

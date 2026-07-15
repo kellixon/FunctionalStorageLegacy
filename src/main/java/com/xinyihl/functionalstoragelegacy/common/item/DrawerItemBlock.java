@@ -3,6 +3,7 @@ package com.xinyihl.functionalstoragelegacy.common.item;
 import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
 import com.xinyihl.functionalstoragelegacy.common.block.FluidDrawerBlock;
+import com.xinyihl.functionalstoragelegacy.common.block.FramedDrawerBlock;
 import com.xinyihl.functionalstoragelegacy.common.block.WoodDrawerBlock;
 import com.xinyihl.functionalstoragelegacy.common.block.compact.CompactingDrawerBlock;
 import com.xinyihl.functionalstoragelegacy.common.block.compact.SimpleCompactingDrawerBlock;
@@ -65,6 +66,11 @@ public class DrawerItemBlock extends ItemBlock {
     @Override
     public void addInformation(@Nonnull ItemStack stack, @Nullable World worldIn, @Nonnull java.util.List<String> tooltip, @Nonnull ITooltipFlag flagIn) {
         super.addInformation(stack, worldIn, tooltip, flagIn);
+
+        if (block instanceof FramedDrawerBlock) {
+            tooltip.add(TextFormatting.GRAY + new TextComponentTranslation(
+                    "frameddrawer.use").getUnformattedText());
+        }
 
         List<String> stored = collectStoredLines(stack);
         if (stored.isEmpty()) return;
@@ -130,6 +136,10 @@ public class DrawerItemBlock extends ItemBlock {
     private IBigItemHandler createItemHandler(ItemStack stack) {
         if (block instanceof WoodDrawerBlock) {
             DrawerLayout drawerLayout = ((WoodDrawerBlock) block).getDrawerLayout();
+            return new DrawerStackItemHandler(stack, drawerLayout);
+        }
+        if (block instanceof FramedDrawerBlock) {
+            DrawerLayout drawerLayout = ((FramedDrawerBlock) block).getDrawerLayout();
             return new DrawerStackItemHandler(stack, drawerLayout);
         }
         if (block instanceof CompactingDrawerBlock) {
