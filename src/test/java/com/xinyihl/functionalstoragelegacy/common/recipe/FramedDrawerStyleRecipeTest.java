@@ -58,6 +58,29 @@ public class FramedDrawerStyleRecipeTest {
                 .getCompoundTag("StorageV2").getLong("SentinelAmount"));
     }
 
+    @Test
+    public void threeByThreeGridRecognizesAVisualTwoByTwoSquare() {
+        FramedDrawerBlock block = new FramedDrawerBlock(DrawerLayout.X_1);
+        ItemStack drawer = new ItemStack(new DrawerItemBlock(block));
+        InventoryCrafting crafting = new InventoryCrafting(new TestContainer(), 3, 3);
+        crafting.setInventorySlotContents(0, new ItemStack(Blocks.DIAMOND_BLOCK));
+        crafting.setInventorySlotContents(1, new ItemStack(Blocks.PLANKS));
+        crafting.setInventorySlotContents(3, drawer);
+        crafting.setInventorySlotContents(4, new ItemStack(Blocks.GLASS));
+
+        FramedDrawerStyleRecipe recipe = new FramedDrawerStyleRecipe();
+
+        assertTrue(recipe.matches(crafting, null));
+        FramedDrawerStyle style = FramedDrawerStyle.fromDrawerStack(
+                recipe.getCraftingResult(crafting));
+        assertTrue(ItemStack.areItemStacksEqual(
+                new ItemStack(Blocks.DIAMOND_BLOCK), style.getExterior()));
+        assertTrue(ItemStack.areItemStacksEqual(
+                new ItemStack(Blocks.PLANKS), style.getFront()));
+        assertTrue(ItemStack.areItemStacksEqual(
+                new ItemStack(Blocks.GLASS), style.getDivider()));
+    }
+
     private static final class TestContainer extends Container {
         @Override
         public boolean canInteractWith(EntityPlayer player) {

@@ -15,49 +15,47 @@ import javax.annotation.Nonnull;
 public class FramedDrawerStyleRecipe extends IForgeRegistryEntry.Impl<IRecipe>
         implements IRecipe {
 
-    @Override
-    public boolean matches(@Nonnull InventoryCrafting inventory, @Nonnull World world) {
-        if (inventory.getSizeInventory() < 3) {
-            return false;
+    private static Match findMatch(InventoryCrafting inventory) {
+        int width = inventory.getWidth();
+        int height = inventory.getHeight();
+        if (width < 2 || height < 2) {
+            return null;
         }
-        ItemStack exterior = inventory.getStackInSlot(0);
-        ItemStack front = inventory.getStackInSlot(1);
-        ItemStack drawer = inventory.getStackInSlot(2);
-        ItemStack divider = inventory.getSizeInventory() > 3
-                ? inventory.getStackInSlot(3) : ItemStack.EMPTY;
-
-        if (!isBlock(exterior) || !isBlock(front) || !isFramedDrawer(drawer)
-                || (!divider.isEmpty() && !isBlock(divider))) {
-            return false;
-        }
-        for (int slot = 4; slot < inventory.getSizeInventory(); slot++) {
-            if (!inventory.getStackInSlot(slot).isEmpty()) {
-                return false;
+        for (int top = 0; top < height - 1; top++) {
+            for (int left = 0; left < width - 1; left++) {
+                Match match = matchAt(inventory, left, top);
+                if (match != null) {
+                    return match;
+                }
             }
         }
-        return true;
+        return null;
     }
 
-    @Nonnull
-    @Override
-    public ItemStack getCraftingResult(@Nonnull InventoryCrafting inventory) {
-        if (inventory.getSizeInventory() < 3) {
-            return ItemStack.EMPTY;
+    private static Match matchAt(InventoryCrafting inventory, int left, int top) {
+        ItemStack exterior = inventory.getStackInRowAndColumn(left, top);
+        ItemStack front = inventory.getStackInRowAndColumn(left + 1, top);
+        ItemStack drawer = inventory.getStackInRowAndColumn(left, top + 1);
+        ItemStack divider = inventory.getStackInRowAndColumn(left + 1, top + 1);
+        if (!isBlock(exterior) || !isBlock(front) || !isFramedDrawer(drawer)
+                || (!divider.isEmpty() && !isBlock(divider))) {
+            return null;
         }
-        ItemStack result = inventory.getStackInSlot(2).copy();
-        result.setCount(1);
-        ItemStack divider = inventory.getSizeInventory() > 3
-                ? inventory.getStackInSlot(3) : ItemStack.EMPTY;
-        new FramedDrawerStyle(
-                inventory.getStackInSlot(0),
-                inventory.getStackInSlot(1),
-                divider).applyToDrawerStack(result);
-        return result;
+        for (int row = 0; row < inventory.getHeight(); row++) {
+            for (int column = 0; column < inventory.getWidth(); column++) {
+                boolean inside = column >= left && column <= left + 1
+                        && row >= top && row <= top + 1;
+                if (!inside && !inventory.getStackInRowAndColumn(column, row).isEmpty()) {
+                    return null;
+                }
+            }
+        }
+        return new Match(exterior, front, drawer, divider);
     }
 
     @Override
-    public boolean canFit(int width, int height) {
-        return width * height >= 3;
+    public boolean matches(@Nonnull InventoryCrafting inventory, @Nonnull World world) {
+        return findMatch(inventory) != null;
     }
 
     @Nonnull
@@ -78,5 +76,41 @@ public class FramedDrawerStyleRecipe extends IForgeRegistryEntry.Impl<IRecipe>
     private static boolean isFramedDrawer(ItemStack stack) {
         return isBlock(stack)
                 && ((ItemBlock) stack.getItem()).getBlock() instanceof FramedDrawerBlock;
+    }
+
+    @Nonnull
+    @Override
+    public ItemStack getCraftingResult(@Nonnull InventoryCrafting inventory) {
+        Match match = findMatch(inventory);
+        if (match == null) {
+            return ItemStack.EMPTY;
+        }
+        ItemStack result = match.drawer.copy();
+        result.setCount(1);
+        new FramedDrawerStyle(
+                match.exterior,
+                match.front,
+                match.divider).applyToDrawerStack(result);
+        return result;
+    }
+
+    @Override
+    public boolean canFit(int width, int height) {
+        return width >= 2 && height >= 2;
+    }
+
+    private static final class Match {
+        private final ItemStack exterior;
+        private final ItemStack front;
+        private final ItemStack drawer;
+        private final ItemStack divider;
+
+        private Match(ItemStack exterior, ItemStack front,
+                      ItemStack drawer, ItemStack divider) {
+            this.exterior = exterior;
+            this.front = front;
+            this.drawer = drawer;
+            this.divider = divider;
+        }
     }
 }
