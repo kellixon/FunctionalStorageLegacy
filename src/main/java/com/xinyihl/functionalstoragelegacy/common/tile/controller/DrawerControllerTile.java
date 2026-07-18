@@ -3,6 +3,7 @@ package com.xinyihl.functionalstoragelegacy.common.tile.controller;
 import com.xinyihl.functionalstoragelegacy.FunctionalStorageLegacy;
 import com.xinyihl.functionalstoragelegacy.api.storage.*;
 import com.xinyihl.functionalstoragelegacy.client.render.DrawerOptions;
+import com.xinyihl.functionalstoragelegacy.common.block.base.DrawerBlock;
 import com.xinyihl.functionalstoragelegacy.common.inventory.controller.ControllerFluidHandler;
 import com.xinyihl.functionalstoragelegacy.common.inventory.controller.ControllerItemHandler;
 import com.xinyihl.functionalstoragelegacy.common.item.ConfigurationToolItem;
@@ -11,6 +12,7 @@ import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTi
 import com.xinyihl.functionalstoragelegacy.misc.Configurations;
 import com.xinyihl.functionalstoragelegacy.misc.RegistrationHandler;
 import com.xinyihl.functionalstoragelegacy.util.ConnectedDrawers;
+import com.xinyihl.functionalstoragelegacy.util.ItemUtil;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -193,12 +195,22 @@ public class DrawerControllerTile extends ControllableDrawerTile {
             return false;
         }
 
-        if (!world.isRemote) {
-            if (player.isSneaking()) {
-                // Open GUI on sneak-click
-                player.openGui(FunctionalStorageLegacy.INSTANCE, 0, world, pos.getX(), pos.getY(), pos.getZ());
-            }
+        if (player.isSneaking()) {
+            player.openGui(FunctionalStorageLegacy.INSTANCE, 0, world, pos.getX(), pos.getY(), pos.getZ());
+            return true;
+        }
 
+        // Upgrades can be installed by clicking any part or side of the controller.
+        if (ItemUtil.isStorageUpgradeItem(heldStack) || ItemUtil.isUtilityUpgradeItem(heldStack)) {
+            return super.onSlotActivated(player, hand, facing, hitX, hitY, hitZ, slot);
+        }
+
+        // Player item insertion is only available from the controller's front face.
+        if (facing != DrawerBlock.getFrontFacing(world.getBlockState(pos))) {
+            return true;
+        }
+
+        if (!world.isRemote) {
             if (!heldStack.isEmpty()) {
                 BigItemStack request = new BigItemStack(heldStack, heldStack.getCount());
                 TransferResult<BigItemStack, ItemStorageKey> simulated = inventoryHandler.insertRouted(request, StorageAction.SIMULATE);
