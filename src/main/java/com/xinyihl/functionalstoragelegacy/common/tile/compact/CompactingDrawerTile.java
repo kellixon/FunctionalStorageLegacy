@@ -42,16 +42,11 @@ public class CompactingDrawerTile extends ControllableDrawerTile {
         super();
         this.handler = createHandler(slots);
         this.hasCheckedRecipes = false;
+        bindStorageHandler(this.handler, this.handler::notifyConfigurationChanged);
     }
 
     protected CompactingInventoryHandler createHandler(int slots) {
-        return new CompactingInventoryHandler(slots) {
-            @Override
-            public void onChange() {
-                CompactingDrawerTile.this.markDirty();
-                CompactingDrawerTile.this.sendUpdatePacket();
-            }
-
+        CompactingInventoryHandler created = new CompactingInventoryHandler(slots) {
             @Override
             public double getMultiplier() {
                 return CompactingDrawerTile.this.getStorageMultiplier(8.0D);
@@ -82,6 +77,7 @@ public class CompactingDrawerTile extends ControllableDrawerTile {
                 return CompactingDrawerTile.this.isLocked();
             }
         };
+        return created;
     }
 
     @Override
@@ -141,7 +137,7 @@ public class CompactingDrawerTile extends ControllableDrawerTile {
                 if (!results.isEmpty()) {
                     applyCompactingResults(results);
                     markDirty();
-                    sendUpdatePacket();
+                    requestUpdatePacket();
                 }
             }
 
@@ -223,6 +219,7 @@ public class CompactingDrawerTile extends ControllableDrawerTile {
     protected void readCustomData(NBTTagCompound nbt) {
         handler = createHandler(getSlotCount());
         handler.deserializeNBT(nbt);
+        finishStorageRead(handler, handler::notifyConfigurationChanged);
         hasCheckedRecipes = false;
     }
 
@@ -236,9 +233,11 @@ public class CompactingDrawerTile extends ControllableDrawerTile {
 
     @Override
     public void readFromNBT(@Nonnull NBTTagCompound compound) {
-        handler = createHandler(getSlotCount());
+        beginStorageRead();
         super.readFromNBT(compound);
+        handler = createHandler(getSlotCount());
         handler.deserializeNBT(compound);
+        finishStorageRead(handler, handler::notifyConfigurationChanged);
         hasCheckedRecipes = false;
     }
 
@@ -249,7 +248,7 @@ public class CompactingDrawerTile extends ControllableDrawerTile {
 
     @Override
     protected void onLockStateChanged(boolean locked) {
-        handler.setLockFilters(locked);
+        handler.applyLockConfiguration(locked);
     }
 
     @Override

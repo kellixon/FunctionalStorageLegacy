@@ -53,13 +53,13 @@ public class DrawerItemBlockTest {
         Item storedItem = new Item();
         TestBigHandler handler = new TestBigHandler();
         long amount = 5_000_000_123L;
-        handler.insertIntoSlot(
+        handler.insert(
                 0, new BigItemStack(new ItemStack(storedItem), amount), StorageAction.EXECUTE);
 
         List<String> lines = DrawerItemBlock.collectStoredItemLines(handler);
 
         assertEquals(1, lines.size());
-        assertEquals(handler.getSlotSnapshot(0).getTemplate().getDisplayName()
+        assertEquals(handler.getSnapshot(0).getTemplate().getDisplayName()
                 + "x" + NumberUtils.formatCompact(amount), lines.get(0));
     }
 
@@ -68,27 +68,42 @@ public class DrawerItemBlockTest {
         Item normalItem = registeredItem("normal_stack_capability");
         long normalAmount = (long) Integer.MAX_VALUE + 91L;
         TestBigHandler normalSource = new TestBigHandler();
-        normalSource.insertIntoSlot(
+        normalSource.insert(
                 0,
                 new BigItemStack(new ItemStack(normalItem), normalAmount),
                 StorageAction.EXECUTE);
         ItemStack normalDrawer = drawerStackWithTileData(normalSource.serializeNBT());
+        NBTTagCompound normalBeforeConstruction = normalDrawer.getTagCompound().copy();
         DrawerStackItemHandler normalHandler = new DrawerStackItemHandler(
                 normalDrawer, DrawerLayout.X_1);
-        assertEquals(normalAmount, normalHandler.getSlotSnapshot(0).getAmount());
+        assertEquals(normalAmount, normalHandler.getSnapshot(0).getAmount());
+        assertEquals(normalBeforeConstruction, normalDrawer.getTagCompound());
 
         Item compactItem = registeredItem("compact_stack_capability");
         long compactAmount = (long) Integer.MAX_VALUE + 37L;
         TestCompactingHandler compactSource = new TestCompactingHandler();
         compactSource.configureTiers(Arrays.asList(
                 new CompactingInventoryHandler.Tier(new ItemStack(compactItem), 1L)));
-        compactSource.insertIntoSlot(
+        compactSource.insert(
                 0,
                 new BigItemStack(new ItemStack(compactItem), compactAmount),
                 StorageAction.EXECUTE);
+        ItemStack compactDrawerWithData = drawerStackWithTileData(compactSource.serializeNBT());
+        NBTTagCompound compactBeforeConstruction = compactDrawerWithData.getTagCompound().copy();
         CompactingStackItemHandler compactHandler = new CompactingStackItemHandler(
-                drawerStackWithTileData(compactSource.serializeNBT()), 1);
-        assertEquals(compactAmount, compactHandler.getSlotSnapshot(0).getAmount());
+                compactDrawerWithData, 1);
+        assertEquals(compactAmount, compactHandler.getSnapshot(0).getAmount());
+        assertEquals(compactBeforeConstruction, compactDrawerWithData.getTagCompound());
+
+        ItemStack fluidDrawerWithData = drawerStackWithTileData(new NBTTagCompound());
+        FluidDrawerStackItemHandler fluidSeeder = new FluidDrawerStackItemHandler(
+                fluidDrawerWithData, DrawerLayout.X_1);
+        fluidSeeder.insert(0, water(500L), StorageAction.EXECUTE);
+        NBTTagCompound fluidBeforeConstruction = fluidDrawerWithData.getTagCompound().copy();
+        FluidDrawerStackItemHandler fluidHandler = new FluidDrawerStackItemHandler(
+                fluidDrawerWithData, DrawerLayout.X_1);
+        assertEquals(500L, fluidHandler.getSnapshot(0).getAmount());
+        assertEquals(fluidBeforeConstruction, fluidDrawerWithData.getTagCompound());
 
         DrawerStackCapabilityProvider provider = new DrawerStackCapabilityProvider(normalHandler);
         assertSame(normalHandler, provider.getCapability(
@@ -97,7 +112,7 @@ public class DrawerItemBlockTest {
         ItemStack writableDrawer = drawerStackWithTileData(new NBTTagCompound());
         DrawerStackItemHandler writable = new DrawerStackItemHandler(
                 writableDrawer, DrawerLayout.X_1);
-        writable.insertIntoSlot(
+        writable.insert(
                 0,
                 new BigItemStack(new ItemStack(normalItem), 3L),
                 StorageAction.EXECUTE);
@@ -111,7 +126,7 @@ public class DrawerItemBlockTest {
     public void itemFormIgnoresLegacyInventoryAndCompactingKeys() {
         Item normalItem = registeredItem("nested_normal_storage");
         TestBigHandler normalSource = new TestBigHandler();
-        normalSource.insertIntoSlot(
+        normalSource.insert(
                 0,
                 new BigItemStack(new ItemStack(normalItem), 17L),
                 StorageAction.EXECUTE);
@@ -126,7 +141,7 @@ public class DrawerItemBlockTest {
         TestCompactingHandler compactSource = new TestCompactingHandler();
         compactSource.configureTiers(Arrays.asList(
                 new CompactingInventoryHandler.Tier(new ItemStack(compactItem), 1L)));
-        compactSource.insertIntoSlot(
+        compactSource.insert(
                 0,
                 new BigItemStack(new ItemStack(compactItem), 19L),
                 StorageAction.EXECUTE);
@@ -141,8 +156,8 @@ public class DrawerItemBlockTest {
                 drawerStackWithTileData(legacy), DrawerLayout.X_1);
         CompactingStackItemHandler compact = new CompactingStackItemHandler(
                 drawerStackWithTileData(legacy), 1);
-        assertTrue(normal.getSlotSnapshot(0).isEmpty());
-        assertTrue(compact.getSlotSnapshot(0).isEmpty());
+        assertTrue(normal.getSnapshot(0).isEmpty());
+        assertTrue(compact.getSnapshot(0).isEmpty());
 
         DrawerItemBlock item = new DrawerItemBlock(
                 new WoodDrawerBlock(DrawerWoodType.OAK, DrawerLayout.X_1));
@@ -159,7 +174,7 @@ public class DrawerItemBlockTest {
         ItemStack normalDrawer = drawerStackWithTileData(new NBTTagCompound());
         DrawerStackItemHandler normalSeeder = new DrawerStackItemHandler(
                 normalDrawer, DrawerLayout.X_1);
-        assertEquals(5L, normalSeeder.insertIntoSlot(
+        assertEquals(5L, normalSeeder.insert(
                 0,
                 new BigItemStack(new ItemStack(storedItem), 5L),
                 StorageAction.EXECUTE).getProcessedAmount());
@@ -168,17 +183,17 @@ public class DrawerItemBlockTest {
                 normalDrawer, DrawerLayout.X_1);
         NBTTagCompound normalBefore = normalDrawer.getTagCompound().copy();
         for (StorageAction action : StorageAction.values()) {
-            assertEquals(0L, normal.insertIntoSlot(
+            assertEquals(0L, normal.insert(
                     0,
                     new BigItemStack(new ItemStack(storedItem), 2L),
                     action).getProcessedAmount());
-            assertEquals(0L, normal.extractFromSlot(
+            assertEquals(0L, normal.extract(
                     0, 2L, action).getProcessedAmount());
         }
         assertEquals(2, normal.insertItem(
                 0, new ItemStack(storedItem, 2), false).getCount());
         assertTrue(normal.extractItem(0, 2, false).isEmpty());
-        assertEquals(5L, normal.getSlotSnapshot(0).getAmount());
+        assertEquals(5L, normal.getSnapshot(0).getAmount());
         assertEquals(normalBefore, normalDrawer.getTagCompound());
 
         ItemStack compactDrawer = drawerStackWithTileData(new NBTTagCompound());
@@ -186,7 +201,7 @@ public class DrawerItemBlockTest {
                 compactDrawer, 1);
         compactSeeder.configureTiers(Arrays.asList(
                 new CompactingInventoryHandler.Tier(new ItemStack(storedItem), 1L)));
-        assertEquals(5L, compactSeeder.insertIntoSlot(
+        assertEquals(5L, compactSeeder.insert(
                 0,
                 new BigItemStack(new ItemStack(storedItem), 5L),
                 StorageAction.EXECUTE).getProcessedAmount());
@@ -195,32 +210,32 @@ public class DrawerItemBlockTest {
                 compactDrawer, 1);
         NBTTagCompound compactBefore = compactDrawer.getTagCompound().copy();
         for (StorageAction action : StorageAction.values()) {
-            assertEquals(0L, compact.insertIntoSlot(
+            assertEquals(0L, compact.insert(
                     0,
                     new BigItemStack(new ItemStack(storedItem), 2L),
                     action).getProcessedAmount());
-            assertEquals(0L, compact.extractFromSlot(
+            assertEquals(0L, compact.extract(
                     0, 2L, action).getProcessedAmount());
         }
         assertEquals(2, compact.insertItem(
                 0, new ItemStack(storedItem, 2), false).getCount());
         assertTrue(compact.extractItem(0, 2, false).isEmpty());
-        assertEquals(5L, compact.getSlotSnapshot(0).getAmount());
+        assertEquals(5L, compact.getSnapshot(0).getAmount());
         assertEquals(compactBefore, compactDrawer.getTagCompound());
 
         ItemStack fluidDrawer = drawerStackWithTileData(new NBTTagCompound());
         FluidDrawerStackItemHandler fluidSeeder = new FluidDrawerStackItemHandler(
                 fluidDrawer, DrawerLayout.X_1);
-        assertEquals(500L, fluidSeeder.fillTank(
+        assertEquals(500L, fluidSeeder.insert(
                 0, water(500L), StorageAction.EXECUTE).getProcessedAmount());
         fluidDrawer.setCount(2);
         FluidDrawerStackItemHandler fluid = new FluidDrawerStackItemHandler(
                 fluidDrawer, DrawerLayout.X_1);
         NBTTagCompound fluidBefore = fluidDrawer.getTagCompound().copy();
         for (StorageAction action : StorageAction.values()) {
-            assertEquals(0L, fluid.fillTank(
+            assertEquals(0L, fluid.insert(
                     0, water(100L), action).getProcessedAmount());
-            assertEquals(0L, fluid.drainTank(
+            assertEquals(0L, fluid.extract(
                     0, 100L, action).getProcessedAmount());
         }
         assertFalse(fluid.supportsFill(0));
@@ -228,7 +243,7 @@ public class DrawerItemBlockTest {
         assertFalse(fluid.supportsFluid(0, water(1L)));
         assertEquals(0, fluid.fill(new FluidStack(FluidRegistry.WATER, 100), false));
         assertNull(fluid.drain(100, false));
-        assertEquals(500L, fluid.getTankSnapshot(0).getAmount());
+        assertEquals(500L, fluid.getSnapshot(0).getAmount());
         assertEquals(fluidBefore, fluidDrawer.getTagCompound());
     }
 
@@ -242,7 +257,7 @@ public class DrawerItemBlockTest {
         Item storedItem = registeredItem("persisted_drawer_limit");
         DrawerStackItemHandler handler = new DrawerStackItemHandler(
                 drawer, DrawerLayout.X_1);
-        assertEquals(3L, handler.insertIntoSlot(
+        assertEquals(3L, handler.insert(
                 0,
                 new BigItemStack(new ItemStack(storedItem), 3L),
                 StorageAction.EXECUTE).getProcessedAmount());
@@ -289,10 +304,6 @@ public class DrawerItemBlockTest {
         }
 
         @Override
-        public void onChange() {
-        }
-
-        @Override
         public double getMultiplier() {
             return Double.POSITIVE_INFINITY;
         }
@@ -301,10 +312,6 @@ public class DrawerItemBlockTest {
     private static final class TestCompactingHandler extends CompactingInventoryHandler {
         private TestCompactingHandler() {
             super(1);
-        }
-
-        @Override
-        public void onChange() {
         }
 
         @Override

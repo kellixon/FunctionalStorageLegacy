@@ -1,7 +1,10 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory;
 
 import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.ItemStorageKey;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
 import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
 import net.minecraft.init.Bootstrap;
 import net.minecraft.item.Item;
@@ -14,6 +17,8 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
@@ -36,22 +41,22 @@ public class CompactingInventoryHandlerTest {
         TestHandler handler = configuredHandler(1D, compact, base);
         handler.changes = 0;
 
-        TransferResult<BigItemStack> simulated = handler.insertIntoSlot(
+        TransferResult<BigItemStack, ItemStorageKey> simulated = handler.insert(
                 0, new BigItemStack(new ItemStack(compact), 2L), StorageAction.SIMULATE);
         assertEquals(2L, simulated.getProcessedAmount());
         assertEquals(0L, handler.getStoredBaseAmount());
         assertEquals(0, handler.changes);
 
-        handler.insertIntoSlot(
+        handler.insert(
                 0, new BigItemStack(new ItemStack(compact), 2L), StorageAction.EXECUTE);
         assertEquals(18L, handler.getStoredBaseAmount());
-        assertEquals(2L, handler.getSlotSnapshot(0).getAmount());
-        assertEquals(18L, handler.getSlotSnapshot(1).getAmount());
+        assertEquals(2L, handler.getSnapshot(0).getAmount());
+        assertEquals(18L, handler.getSnapshot(1).getAmount());
 
-        handler.extractFromSlot(1, 5L, StorageAction.EXECUTE);
+        handler.extract(1, 5L, StorageAction.EXECUTE);
         assertEquals(13L, handler.getStoredBaseAmount());
-        assertEquals(1L, handler.getSlotSnapshot(0).getAmount());
-        assertEquals(13L, handler.getSlotSnapshot(1).getAmount());
+        assertEquals(1L, handler.getSnapshot(0).getAmount());
+        assertEquals(13L, handler.getSnapshot(1).getAmount());
     }
 
     @Test
@@ -60,12 +65,12 @@ public class CompactingInventoryHandlerTest {
         Item item = new Item();
         String beforeNbt = handler.serializeNBT().toString();
 
-        TransferResult<BigItemStack> result = handler.insertIntoSlot(
+        TransferResult<BigItemStack, ItemStorageKey> result = handler.insert(
                 0, new BigItemStack(new ItemStack(item), 4L), StorageAction.SIMULATE);
 
         assertEquals(0L, result.getProcessedAmount());
         assertFalse(handler.isConfigured());
-        assertFalse(handler.getSlotSnapshot(0).hasTemplate());
+        assertFalse(handler.getSnapshot(0).hasTemplate());
         assertEquals(beforeNbt, handler.serializeNBT().toString());
         assertEquals(0, handler.changes);
     }
@@ -98,14 +103,14 @@ public class CompactingInventoryHandlerTest {
         TestHandler handler = configuredHandler(1D, compact, base);
         handler.locked = true;
 
-        handler.insertIntoSlot(
+        handler.insert(
                 1, new BigItemStack(new ItemStack(base), 5L), StorageAction.EXECUTE);
-        handler.extractFromSlot(1, 5L, StorageAction.EXECUTE);
+        handler.extract(1, 5L, StorageAction.EXECUTE);
 
         assertEquals(0L, handler.getStoredBaseAmount());
         assertTrue(handler.isConfigured());
-        assertTrue(handler.getSlotSnapshot(0).hasTemplate());
-        assertTrue(handler.getSlotSnapshot(0).isEmpty());
+        assertTrue(handler.getSnapshot(0).hasTemplate());
+        assertTrue(handler.getSnapshot(0).isEmpty());
     }
 
     @Test
@@ -116,15 +121,15 @@ public class CompactingInventoryHandlerTest {
         handler.voidOverflow = true;
         handler.changes = 0;
 
-        TransferResult<BigItemStack> result = handler.insertIntoSlot(
+        TransferResult<BigItemStack, ItemStorageKey> result = handler.insert(
                 0, new BigItemStack(new ItemStack(compact), 2L), StorageAction.EXECUTE);
 
         assertEquals(2L, result.getProcessedAmount());
         assertEquals(9L, handler.getStoredBaseAmount());
-        assertEquals(1L, handler.getSlotSnapshot(0).getAmount());
-        assertEquals(2, handler.getSlotCount());
+        assertEquals(1L, handler.getSnapshot(0).getAmount());
+        assertEquals(2, handler.getStorageCount());
         assertEquals(2, handler.getSlots());
-        assertEquals(0L, handler.insertIntoSlot(
+        assertEquals(0L, handler.insert(
                 0, new BigItemStack(new ItemStack(new Item()), 1L), StorageAction.EXECUTE)
                 .getProcessedAmount());
     }
@@ -137,14 +142,14 @@ public class CompactingInventoryHandlerTest {
         creative.creative = true;
         creative.changes = 0;
 
-        assertEquals(Long.MAX_VALUE, creative.getSlotCapacity(0));
-        assertEquals(Long.MAX_VALUE, creative.getSlotSnapshot(0).getAmount());
-        assertEquals(Long.MAX_VALUE, creative.insertIntoSlot(
+        assertEquals(Long.MAX_VALUE, creative.getCapacity(0));
+        assertEquals(Long.MAX_VALUE, creative.getSnapshot(0).getAmount());
+        assertEquals(Long.MAX_VALUE, creative.insert(
                 0,
                 new BigItemStack(new ItemStack(compact), Long.MAX_VALUE),
                 StorageAction.SIMULATE).getProcessedAmount());
         assertEquals(0, creative.changes);
-        assertEquals(Long.MAX_VALUE, creative.extractFromSlot(
+        assertEquals(Long.MAX_VALUE, creative.extract(
                 1, Long.MAX_VALUE, StorageAction.EXECUTE).getProcessedAmount());
         assertEquals(0, creative.changes);
 
@@ -173,13 +178,13 @@ public class CompactingInventoryHandlerTest {
                 .getTagList("Tiers", 10).tagCount());
         empty.configureTiers(Arrays.asList(
                 new CompactingInventoryHandler.Tier(new ItemStack(newType), 1L)));
-        assertEquals(2L, empty.insertIntoSlot(
+        assertEquals(2L, empty.insert(
                 0,
                 new BigItemStack(new ItemStack(newType), 2L),
                 StorageAction.EXECUTE).getProcessedAmount());
 
         TestHandler populated = configuredHandler(1D, oldType, newType);
-        populated.insertIntoSlot(
+        populated.insert(
                 1, new BigItemStack(new ItemStack(newType), 5L), StorageAction.EXECUTE);
         populated.locked = false;
         populated.changes = 0;
@@ -214,8 +219,8 @@ public class CompactingInventoryHandlerTest {
         restored.deserializeNBT(serialized);
         assertTrue(restored.isConfigured());
         assertEquals(0L, restored.getStoredBaseAmount());
-        assertTrue(restored.getSlotSnapshot(0).hasTemplate());
-        assertTrue(restored.getSlotSnapshot(0).isSameType(new ItemStack(stored)));
+        assertTrue(restored.getSnapshot(0).hasTemplate());
+        assertTrue(restored.getSnapshot(0).isSameType(new ItemStack(stored)));
     }
 
     @Test
@@ -223,9 +228,9 @@ public class CompactingInventoryHandlerTest {
         Item compact = new Item();
         Item base = new Item();
         TestHandler handler = configuredHandler(1D, compact, base);
-        handler.insertIntoSlot(
+        handler.insert(
                 1, new BigItemStack(new ItemStack(base), 3L), StorageAction.EXECUTE);
-        handler.extractFromSlot(1, 3L, StorageAction.EXECUTE);
+        handler.extract(1, 3L, StorageAction.EXECUTE);
         assertFalse(handler.isConfigured());
 
         handler.configureTiers(Arrays.asList(
@@ -253,7 +258,7 @@ public class CompactingInventoryHandlerTest {
         source.configureTiers(Arrays.asList(
                 new CompactingInventoryHandler.Tier(compactTemplate, 9L),
                 new CompactingInventoryHandler.Tier(baseTemplate, 1L)));
-        source.insertIntoSlot(
+        source.insert(
                 1, new BigItemStack(baseTemplate, storedAmount), StorageAction.EXECUTE);
 
         NBTTagCompound serialized = source.serializeNBT();
@@ -274,6 +279,100 @@ public class CompactingInventoryHandlerTest {
         assertEquals(2, restored.getTiers().get(1).getTemplate().getMetadata());
         assertEquals("base", restored.getTiers().get(1).getTemplate()
                 .getTagCompound().getString("tier"));
+    }
+
+    @Test
+    public void baseMutationPublishesOneBatchCoveringEveryVisibleTier() {
+        Item compact = new Item();
+        Item base = new Item();
+        TestHandler handler = configuredHandler(1D, compact, base);
+        List<StorageChange<BigItemStack, ItemStorageKey>> events = new ArrayList<>();
+        handler.subscribe(events::add);
+
+        handler.insert(
+                1, new BigItemStack(new ItemStack(base), 5L), StorageAction.SIMULATE);
+        assertTrue(events.isEmpty());
+        handler.insert(
+                1, new BigItemStack(new ItemStack(base), 5L), StorageAction.EXECUTE);
+
+        assertEquals(1, events.size());
+        assertTrue(events.get(0).isDelta());
+        assertEquals(2, events.get(0).getEntries().size());
+        assertEquals(0, events.get(0).getEntries().get(0).getIndex());
+        assertEquals(0L, events.get(0).getEntries().get(0).getBefore().getAmount());
+        assertEquals(0L, events.get(0).getEntries().get(0).getAfter().getAmount());
+        assertEquals(1, events.get(0).getEntries().get(1).getIndex());
+        assertEquals(5L, events.get(0).getEntries().get(1).getAfter().getAmount());
+    }
+
+    @Test
+    public void tierReplacementTypedZeroResetDeserializeAndReleaseAreExact() {
+        Item first = registeredItem("compacting_event_first");
+        Item second = registeredItem("compacting_event_second");
+        TestHandler handler = new TestHandler(2, 1D);
+        handler.locked = true;
+        List<StorageChange<BigItemStack, ItemStorageKey>> events = new ArrayList<>();
+        StorageSubscription subscription = handler.subscribe(events::add);
+
+        handler.configureTiers(Arrays.asList(
+                new CompactingInventoryHandler.Tier(new ItemStack(first), 9L),
+                new CompactingInventoryHandler.Tier(new ItemStack(first), 1L)));
+        assertEquals(1, events.size());
+        assertEquals(2, events.get(0).getEntries().size());
+        assertTrue(events.get(0).getEntries().get(0).getAfter().hasTemplate());
+        assertEquals(0L, events.get(0).getEntries().get(0).getAfter().getAmount());
+
+        events.clear();
+        handler.configureTiers(Arrays.asList(
+                new CompactingInventoryHandler.Tier(new ItemStack(second), 9L),
+                new CompactingInventoryHandler.Tier(new ItemStack(second), 1L)));
+        assertEquals(1, events.size());
+        assertEquals(2, events.get(0).getEntries().size());
+        assertFalse(events.get(0).getEntries().get(0).getBefore().getKey()
+                .equals(events.get(0).getEntries().get(0).getAfter().getKey()));
+
+        NBTTagCompound same = handler.serializeNBT();
+        events.clear();
+        handler.deserializeNBT(same);
+        assertTrue(events.isEmpty());
+        handler.deserializeNBT(new NBTTagCompound());
+        assertEquals(1, events.size());
+        assertTrue(events.get(0).isReset());
+        handler.notifyConfigurationChanged();
+        handler.applyLockConfiguration(false);
+        assertEquals(3, events.size());
+        assertTrue(events.get(1).isReset());
+        assertTrue(events.get(2).isReset());
+
+        subscription.close();
+        handler.configureTiers(Arrays.asList(
+                new CompactingInventoryHandler.Tier(new ItemStack(first), 1L)));
+        assertEquals(3, events.size());
+    }
+
+    @Test
+    public void pureVoidAndCreativeCompactingOperationsEmitNoFalseEvents() {
+        Item compact = new Item();
+        Item base = new Item();
+        TestHandler voiding = configuredHandler(1D / 64D, compact, base);
+        voiding.voidOverflow = true;
+        List<StorageChange<BigItemStack, ItemStorageKey>> voidEvents = new ArrayList<>();
+        voiding.subscribe(voidEvents::add);
+        voiding.insert(
+                0, new BigItemStack(new ItemStack(compact), 2L), StorageAction.EXECUTE);
+        assertEquals(1, voidEvents.size());
+        voiding.insert(
+                0, new BigItemStack(new ItemStack(compact), 1L), StorageAction.EXECUTE);
+        assertEquals(1, voidEvents.size());
+
+        TestHandler creative = configuredHandler(1D, compact, base);
+        creative.creative = true;
+        List<StorageChange<BigItemStack, ItemStorageKey>> creativeEvents = new ArrayList<>();
+        creative.subscribe(creativeEvents::add);
+        creative.insert(
+                0, new BigItemStack(new ItemStack(compact), 2L), StorageAction.EXECUTE);
+        creative.extract(1, 2L, StorageAction.EXECUTE);
+        assertTrue(creativeEvents.isEmpty());
     }
 
     private static Item registeredItem(String path) {
@@ -315,11 +414,7 @@ public class CompactingInventoryHandlerTest {
         private TestHandler(int slots, double multiplier) {
             super(slots);
             this.multiplier = multiplier;
-        }
-
-        @Override
-        public void onChange() {
-            changes++;
+            subscribe(change -> changes++);
         }
 
         @Override

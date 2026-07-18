@@ -1,7 +1,10 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory.base;
 
 import com.xinyihl.functionalstoragelegacy.api.storage.BigFluidStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.FluidStorageKey;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
 import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
 import net.minecraft.init.Bootstrap;
 import net.minecraft.nbt.NBTTagCompound;
@@ -11,6 +14,9 @@ import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.FluidStack;
 import org.junit.Test;
 import org.junit.BeforeClass;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -30,12 +36,12 @@ public class BigFluidHandlerTest {
         TestHandler handler = new TestHandler(1, 3_000_000D);
         long amount = (long) Integer.MAX_VALUE + 500_000_000L;
 
-        TransferResult<BigFluidStack> result = handler.fillTank(
+        TransferResult<BigFluidStack, FluidStorageKey> result = handler.insert(
                 0, water(amount), StorageAction.EXECUTE);
 
         assertEquals(amount, result.getProcessedAmount());
-        assertEquals(amount, handler.getTankSnapshot(0).getAmount());
-        assertEquals(3_000_000_000L, handler.getTankCapacity(0));
+        assertEquals(amount, handler.getSnapshot(0).getAmount());
+        assertEquals(3_000_000_000L, handler.getCapacity(0));
         assertEquals(Integer.MAX_VALUE, handler.getTankProperties()[0].getCapacity());
         assertEquals(Integer.MAX_VALUE, handler.getTankProperties()[0].getContents().amount);
         assertEquals(1, handler.changes);
@@ -44,16 +50,16 @@ public class BigFluidHandlerTest {
     @Test
     public void capacityUsesDoubleAndSaturatesAtLongMax() {
         TestHandler huge = new TestHandler(1, Double.MAX_VALUE);
-        assertEquals(Long.MAX_VALUE, huge.getTankCapacity(0));
+        assertEquals(Long.MAX_VALUE, huge.getCapacity(0));
 
         TestHandler invalid = new TestHandler(1, Double.NaN);
-        assertEquals(0L, invalid.getTankCapacity(0));
+        assertEquals(0L, invalid.getCapacity(0));
         invalid.multiplier = -2D;
-        assertEquals(0L, invalid.getTankCapacity(0));
+        assertEquals(0L, invalid.getCapacity(0));
 
         TestHandler maxUpgrade = new TestHandler(1, 1D);
         maxUpgrade.maxStorage = true;
-        assertEquals(Long.MAX_VALUE, maxUpgrade.getTankCapacity(0));
+        assertEquals(Long.MAX_VALUE, maxUpgrade.getCapacity(0));
     }
 
     @Test
@@ -61,23 +67,23 @@ public class BigFluidHandlerTest {
         TestHandler handler = new TestHandler(1, 10D);
         NBTTagCompound beforeFill = handler.serializeNBT();
 
-        TransferResult<BigFluidStack> simulatedFill = handler.fillTank(
+        TransferResult<BigFluidStack, FluidStorageKey> simulatedFill = handler.insert(
                 0, water(4_000L), StorageAction.SIMULATE);
         assertEquals(4_000L, simulatedFill.getProcessedAmount());
-        assertTrue(handler.getTankSnapshot(0).isEmpty());
+        assertTrue(handler.getSnapshot(0).isEmpty());
         assertNull(handler.getTankFilter(0));
         assertEquals(beforeFill, handler.serializeNBT());
         assertEquals(0, handler.changes);
 
-        handler.fillTank(0, water(4_000L), StorageAction.EXECUTE);
+        handler.insert(0, water(4_000L), StorageAction.EXECUTE);
         handler.setLocked(true);
         handler.changes = 0;
         NBTTagCompound beforeDrain = handler.serializeNBT();
 
-        TransferResult<BigFluidStack> simulatedDrain = handler.drainTank(
+        TransferResult<BigFluidStack, FluidStorageKey> simulatedDrain = handler.extract(
                 0, 4_000L, StorageAction.SIMULATE);
         assertEquals(4_000L, simulatedDrain.getProcessedAmount());
-        assertEquals(4_000L, handler.getTankSnapshot(0).getAmount());
+        assertEquals(4_000L, handler.getSnapshot(0).getAmount());
         assertNotNull(handler.getTankFilter(0));
         assertEquals(beforeDrain, handler.serializeNBT());
         assertEquals(0, handler.changes);
@@ -86,23 +92,23 @@ public class BigFluidHandlerTest {
     @Test
     public void lockedTankRetainsFilterAndRejectsOtherFluid() {
         TestHandler handler = new TestHandler(1, 5D);
-        handler.fillTank(0, water(2_000L), StorageAction.EXECUTE);
+        handler.insert(0, water(2_000L), StorageAction.EXECUTE);
         handler.setLocked(true);
 
-        handler.drainTank(0, 2_000L, StorageAction.EXECUTE);
-        BigFluidStack retained = handler.getTankSnapshot(0);
+        handler.extract(0, 2_000L, StorageAction.EXECUTE);
+        BigFluidStack retained = handler.getSnapshot(0);
         assertTrue(retained.isEmpty());
         assertTrue(retained.hasTemplate());
         assertTrue(retained.isSameType(new FluidStack(FluidRegistry.WATER, 1)));
-        assertEquals(0L, handler.fillTank(
+        assertEquals(0L, handler.insert(
                 0, lava(500L), StorageAction.EXECUTE).getProcessedAmount());
-        assertEquals(500L, handler.fillTank(
+        assertEquals(500L, handler.insert(
                 0, water(500L), StorageAction.EXECUTE).getProcessedAmount());
 
-        handler.drainTank(0, 500L, StorageAction.EXECUTE);
+        handler.extract(0, 500L, StorageAction.EXECUTE);
         handler.setLocked(false);
-        assertFalse(handler.getTankSnapshot(0).hasTemplate());
-        assertEquals(500L, handler.fillTank(
+        assertFalse(handler.getSnapshot(0).hasTemplate());
+        assertEquals(500L, handler.insert(
                 0, lava(500L), StorageAction.EXECUTE).getProcessedAmount());
     }
 
@@ -111,17 +117,17 @@ public class BigFluidHandlerTest {
         TestHandler handler = new TestHandler(1, 1D);
         handler.voiding = true;
 
-        TransferResult<BigFluidStack> first = handler.fillTank(
+        TransferResult<BigFluidStack, FluidStorageKey> first = handler.insert(
                 0, water(1_500L), StorageAction.EXECUTE);
         assertEquals(1_500L, first.getProcessedAmount());
-        assertEquals(1_000L, handler.getTankSnapshot(0).getAmount());
+        assertEquals(1_000L, handler.getSnapshot(0).getAmount());
 
         int changes = handler.changes;
-        TransferResult<BigFluidStack> overflow = handler.fillTank(
+        TransferResult<BigFluidStack, FluidStorageKey> overflow = handler.insert(
                 0, water(500L), StorageAction.EXECUTE);
         assertEquals(500L, overflow.getProcessedAmount());
         assertEquals(changes, handler.changes);
-        assertEquals(0L, handler.fillTank(
+        assertEquals(0L, handler.insert(
                 0, lava(500L), StorageAction.EXECUTE).getProcessedAmount());
     }
 
@@ -130,19 +136,36 @@ public class BigFluidHandlerTest {
         TestHandler handler = new TestHandler(1, 1D);
         handler.creative = true;
 
-        assertEquals(7L, handler.fillTank(
+        assertEquals(7L, handler.insert(
                 0, water(7L), StorageAction.SIMULATE).getProcessedAmount());
-        assertFalse(handler.getTankSnapshot(0).hasTemplate());
+        assertFalse(handler.getSnapshot(0).hasTemplate());
         assertEquals(0, handler.changes);
 
-        handler.fillTank(0, water(7L), StorageAction.EXECUTE);
-        assertEquals(Long.MAX_VALUE, handler.getTankSnapshot(0).getAmount());
-        assertEquals(Long.MAX_VALUE, handler.getTankCapacity(0));
+        handler.insert(0, water(7L), StorageAction.EXECUTE);
+        assertEquals(Long.MAX_VALUE, handler.getSnapshot(0).getAmount());
+        assertEquals(Long.MAX_VALUE, handler.getCapacity(0));
         int changes = handler.changes;
-        TransferResult<BigFluidStack> drained = handler.drainTank(
+        TransferResult<BigFluidStack, FluidStorageKey> drained = handler.extract(
                 0, Long.MAX_VALUE, StorageAction.EXECUTE);
         assertEquals(Long.MAX_VALUE, drained.getProcessedAmount());
-        assertEquals(Long.MAX_VALUE, handler.getTankSnapshot(0).getAmount());
+        assertEquals(Long.MAX_VALUE, handler.getSnapshot(0).getAmount());
+        assertEquals(changes, handler.changes);
+    }
+
+    @Test
+    public void creativeInsertPreservesExistingFiniteFluidAmountWithoutEvent() {
+        TestHandler handler = new TestHandler(1, 1D);
+        handler.insert(0, water(250L), StorageAction.EXECUTE);
+        int changes = handler.changes;
+
+        handler.creative = true;
+        assertEquals(50L, handler.insert(
+                0, water(50L), StorageAction.EXECUTE).getProcessedAmount());
+        assertEquals(Long.MAX_VALUE, handler.getSnapshot(0).getAmount());
+        assertEquals(changes, handler.changes);
+
+        handler.creative = false;
+        assertEquals(250L, handler.getSnapshot(0).getAmount());
         assertEquals(changes, handler.changes);
     }
 
@@ -150,7 +173,7 @@ public class BigFluidHandlerTest {
     public void storageV2RoundTripsLongAmountAndFilter() {
         TestHandler source = new TestHandler(2, 5_000_000D);
         long amount = (long) Integer.MAX_VALUE + 123_456L;
-        source.fillTank(1, water(amount), StorageAction.EXECUTE);
+        source.insert(1, water(amount), StorageAction.EXECUTE);
         source.setLocked(true);
 
         NBTTagCompound serialized = source.serializeNBT();
@@ -167,8 +190,8 @@ public class BigFluidHandlerTest {
         TestHandler restored = new TestHandler(2, 5_000_000D);
         restored.locked = true;
         restored.deserializeNBT(serialized);
-        assertEquals(amount, restored.getTankSnapshot(1).getAmount());
-        assertTrue(restored.getTankSnapshot(1).isSameType(
+        assertEquals(amount, restored.getSnapshot(1).getAmount());
+        assertTrue(restored.getSnapshot(1).isSameType(
                 new FluidStack(FluidRegistry.WATER, 1)));
         assertNotNull(restored.getTankFilter(1));
     }
@@ -176,7 +199,7 @@ public class BigFluidHandlerTest {
     @Test
     public void missingStorageV2ClearsStateAndIgnoresLegacyFormat() {
         TestHandler handler = new TestHandler(1, 5D);
-        handler.fillTank(0, water(1_000L), StorageAction.EXECUTE);
+        handler.insert(0, water(1_000L), StorageAction.EXECUTE);
 
         NBTTagCompound legacy = new NBTTagCompound();
         NBTTagCompound tank = new NBTTagCompound();
@@ -186,8 +209,8 @@ public class BigFluidHandlerTest {
         wrapper.setTag("FluidInv", legacy);
 
         handler.deserializeNBT(wrapper);
-        assertTrue(handler.getTankSnapshot(0).isEmpty());
-        assertFalse(handler.getTankSnapshot(0).hasTemplate());
+        assertTrue(handler.getSnapshot(0).isEmpty());
+        assertFalse(handler.getSnapshot(0).hasTemplate());
     }
 
     @Test
@@ -206,13 +229,90 @@ public class BigFluidHandlerTest {
 
         TestHandler handler = new TestHandler(1, 5D);
         handler.deserializeNBT(root);
-        assertFalse(handler.getTankSnapshot(0).hasTemplate());
+        assertFalse(handler.getSnapshot(0).hasTemplate());
 
-        TransferResult<BigFluidStack> filled = handler.fillTank(
+        TransferResult<BigFluidStack, FluidStorageKey> filled = handler.insert(
                 0, lava(500L), StorageAction.EXECUTE);
         assertEquals(500L, filled.getProcessedAmount());
-        assertTrue(handler.getTankSnapshot(0).isSameType(
+        assertTrue(handler.getSnapshot(0).isSameType(
                 new FluidStack(FluidRegistry.LAVA, 1)));
+    }
+
+    @Test
+    public void fluidEventsPreserveTypedZeroAndBatchFilterTransitions() {
+        TestHandler handler = new TestHandler(2, 2D);
+        handler.locked = true;
+        List<StorageChange<BigFluidStack, FluidStorageKey>> events = new ArrayList<>();
+        handler.subscribe(events::add);
+
+        handler.insert(0, water(500L), StorageAction.SIMULATE);
+        assertTrue(events.isEmpty());
+        handler.insert(0, water(500L), StorageAction.EXECUTE);
+        handler.extract(0, 500L, StorageAction.EXECUTE);
+        assertEquals(2, events.size());
+        StorageChange.Entry<BigFluidStack, FluidStorageKey> drained =
+                events.get(1).getEntries().get(0);
+        assertEquals(500L, drained.getBefore().getAmount());
+        assertEquals(0L, drained.getAfter().getAmount());
+        assertTrue(drained.getAfter().hasTemplate());
+
+        handler.insert(1, water(1L), StorageAction.EXECUTE);
+        handler.extract(1, 1L, StorageAction.EXECUTE);
+        events.clear();
+        handler.locked = false;
+        handler.setLockFilters(false);
+        assertEquals(1, events.size());
+        assertTrue(events.get(0).isDelta());
+        assertEquals(2, events.get(0).getEntries().size());
+        assertFalse(events.get(0).getEntries().get(0).getAfter().hasTemplate());
+        assertFalse(events.get(0).getEntries().get(1).getAfter().hasTemplate());
+    }
+
+    @Test
+    public void fluidResetDeserializeAndSubscriptionReleaseAreExact() {
+        TestHandler source = new TestHandler(1, 2D);
+        source.insert(0, water(250L), StorageAction.EXECUTE);
+        NBTTagCompound populated = source.serializeNBT();
+
+        TestHandler handler = new TestHandler(1, 2D);
+        handler.deserializeNBT(populated);
+        List<StorageChange<BigFluidStack, FluidStorageKey>> events = new ArrayList<>();
+        StorageSubscription subscription = handler.subscribe(events::add);
+        handler.deserializeNBT(populated);
+        assertTrue(events.isEmpty());
+        handler.deserializeNBT(new NBTTagCompound());
+        assertEquals(1, events.size());
+        assertTrue(events.get(0).isReset());
+        handler.notifyConfigurationChanged();
+        handler.locked = true;
+        handler.applyLockConfiguration(true);
+        assertEquals(3, events.size());
+        assertTrue(events.get(1).isReset());
+        assertTrue(events.get(2).isReset());
+
+        subscription.close();
+        handler.insert(0, water(1L), StorageAction.EXECUTE);
+        assertEquals(3, events.size());
+    }
+
+    @Test
+    public void pureVoidAndRepeatedCreativeFluidOperationsEmitNoFalseEvents() {
+        TestHandler voiding = new TestHandler(1, 1D);
+        voiding.voiding = true;
+        List<StorageChange<BigFluidStack, FluidStorageKey>> voidEvents = new ArrayList<>();
+        voiding.subscribe(voidEvents::add);
+        voiding.insert(0, water(1_000L), StorageAction.EXECUTE);
+        voiding.insert(0, water(50L), StorageAction.EXECUTE);
+        assertEquals(1, voidEvents.size());
+
+        TestHandler creative = new TestHandler(1, 1D);
+        creative.creative = true;
+        List<StorageChange<BigFluidStack, FluidStorageKey>> creativeEvents = new ArrayList<>();
+        creative.subscribe(creativeEvents::add);
+        creative.insert(0, water(5L), StorageAction.EXECUTE);
+        creative.insert(0, water(5L), StorageAction.EXECUTE);
+        creative.extract(0, 5L, StorageAction.EXECUTE);
+        assertEquals(1, creativeEvents.size());
     }
 
     private static BigFluidStack water(long amount) {
@@ -234,11 +334,7 @@ public class BigFluidHandlerTest {
         private TestHandler(int tanks, double multiplier) {
             super(tanks);
             this.multiplier = multiplier;
-        }
-
-        @Override
-        public void onChange() {
-            changes++;
+            subscribe(change -> changes++);
         }
 
         @Override

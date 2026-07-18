@@ -47,6 +47,7 @@ public class StorageValueTest {
         assertEquals("source", secondRead.getTagCompound().getString("owner"));
         assertEquals(Integer.MAX_VALUE, snapshot.toItemStack().getCount());
         assertEquals(Long.MAX_VALUE, snapshot.getAmount());
+        assertNotNull(snapshot.getKey());
     }
 
     @Test
@@ -89,6 +90,53 @@ public class StorageValueTest {
         assertEquals("source", secondRead.tag.getString("owner"));
         assertEquals(Integer.MAX_VALUE, snapshot.toFluidStack().amount);
         assertEquals(Long.MAX_VALUE, snapshot.getAmount());
+        assertNotNull(snapshot.getKey());
+    }
+
+    @Test
+    public void itemKeysHaveStableMetadataAndNbtValueSemantics() {
+        Item item = new Item();
+        ItemStack source = new ItemStack(item, 20, 7);
+        NBTTagCompound tag = new NBTTagCompound();
+        tag.setString("owner", "source");
+        source.setTagCompound(tag);
+
+        ItemStorageKey key = new ItemStorageKey(source);
+        source.setItemDamage(8);
+        source.getTagCompound().setString("owner", "mutated");
+
+        ItemStack equivalent = new ItemStack(item, 1, 7);
+        NBTTagCompound equivalentTag = new NBTTagCompound();
+        equivalentTag.setString("owner", "source");
+        equivalent.setTagCompound(equivalentTag);
+        ItemStorageKey equalKey = new ItemStorageKey(equivalent);
+
+        assertEquals(key, equalKey);
+        assertEquals(key.hashCode(), equalKey.hashCode());
+        assertEquals(7, key.toItemStack().getMetadata());
+        assertEquals("source", key.toItemStack().getTagCompound().getString("owner"));
+        assertFalse(key.equals(new ItemStorageKey(new ItemStack(item, 1, 8))));
+    }
+
+    @Test
+    public void fluidKeysHaveStableFluidAndNbtValueSemantics() {
+        FluidStack source = new FluidStack(FluidRegistry.WATER, 500);
+        source.tag = new NBTTagCompound();
+        source.tag.setString("owner", "source");
+
+        FluidStorageKey key = new FluidStorageKey(source);
+        source.tag.setString("owner", "mutated");
+
+        FluidStack equivalent = new FluidStack(FluidRegistry.WATER, 1);
+        equivalent.tag = new NBTTagCompound();
+        equivalent.tag.setString("owner", "source");
+        FluidStorageKey equalKey = new FluidStorageKey(equivalent);
+
+        assertEquals(key, equalKey);
+        assertEquals(key.hashCode(), equalKey.hashCode());
+        assertEquals("source", key.toFluidStack().tag.getString("owner"));
+        assertFalse(key.equals(new FluidStorageKey(
+                new FluidStack(FluidRegistry.LAVA, 1))));
     }
 
     @Test
@@ -112,7 +160,7 @@ public class StorageValueTest {
     @Test
     public void transferResultDerivesRemainingWithoutOverflow() {
         BigItemStack processed = new BigItemStack(new ItemStack(new Item()), Long.MAX_VALUE);
-        TransferResult<BigItemStack> complete = new TransferResult<>(
+        TransferResult<BigItemStack, ItemStorageKey> complete = new TransferResult<>(
                 Long.MAX_VALUE, processed, StorageAction.SIMULATE);
 
         assertEquals(Long.MAX_VALUE, complete.getRequestedAmount());
@@ -121,12 +169,12 @@ public class StorageValueTest {
         assertTrue(complete.isComplete());
         assertEquals(StorageAction.SIMULATE, complete.getAction());
 
-        TransferResult<BigItemStack> partial = new TransferResult<>(
+        TransferResult<BigItemStack, ItemStorageKey> partial = new TransferResult<>(
                 Long.MAX_VALUE, processed.withAmount(Long.MAX_VALUE - 1L), StorageAction.EXECUTE);
         assertEquals(1L, partial.getRemainingAmount());
         assertFalse(partial.isComplete());
 
-        TransferResult<BigItemStack> zero = new TransferResult<>(
+        TransferResult<BigItemStack, ItemStorageKey> zero = new TransferResult<>(
                 0L, BigItemStack.empty(), StorageAction.EXECUTE);
         assertTrue(zero.isComplete());
     }
@@ -149,7 +197,8 @@ public class StorageValueTest {
         assertNullPointer(new Runnable() {
             @Override
             public void run() {
-                new TransferResult<BigItemStack>(0L, null, StorageAction.EXECUTE);
+                new TransferResult<BigItemStack, ItemStorageKey>(
+                        0L, null, StorageAction.EXECUTE);
             }
         });
         assertNullPointer(new Runnable() {
@@ -162,12 +211,43 @@ public class StorageValueTest {
 
     @Test
     public void storageDefaultsAndActionConversionAreExplicit() {
-        IStorageHandler handler = new IStorageHandler() {
+        IStorageHandler<BigItemStack, ItemStorageKey> handler =
+                new IStorageHandler<BigItemStack, ItemStorageKey>() {
+            @Override
+            public int getStorageCount() {
+                return 0;
+            }
+
+            @Override
+            public BigItemStack getSnapshot(int index) {
+                return BigItemStack.empty();
+            }
+
+            @Override
+            public long getCapacity(int index) {
+                return 0L;
+            }
+
+            @Override
+            public TransferResult<BigItemStack, ItemStorageKey> insert(
+                    int index, BigItemStack request, StorageAction action) {
+                return new TransferResult<>(
+                        request.getAmount(), BigItemStack.empty(), action);
+            }
+
+            @Override
+            public TransferResult<BigItemStack, ItemStorageKey> extract(
+                    int index, long amount, StorageAction action) {
+                return new TransferResult<>(
+                        Math.max(0L, amount), BigItemStack.empty(), action);
+            }
         };
 
         assertFalse(handler.isLocked());
         assertFalse(handler.voidsOverflow());
         assertFalse(handler.isCreative());
+        assertEquals(1.0D, handler.getMultiplier(), 0.0D);
+        assertTrue(handler.getStorageIdentity() == handler);
         assertEquals(StorageAction.SIMULATE, StorageAction.fromSimulation(true));
         assertEquals(StorageAction.EXECUTE, StorageAction.fromSimulation(false));
         assertTrue(StorageAction.SIMULATE.isSimulation());

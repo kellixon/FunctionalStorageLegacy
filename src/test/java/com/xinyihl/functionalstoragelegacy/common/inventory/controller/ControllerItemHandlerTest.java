@@ -2,6 +2,7 @@ package com.xinyihl.functionalstoragelegacy.common.inventory.controller;
 
 import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.ItemStorageKey;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
 import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
 import net.minecraft.init.Bootstrap;
@@ -34,21 +35,21 @@ public class ControllerItemHandlerTest {
         controller.setHandlers(Arrays.asList(first, second));
         BigItemStack request = new BigItemStack(new ItemStack(new Item()), 3L);
 
-        TransferResult<BigItemStack> inserted = controller.insertIntoSlot(
+        TransferResult<BigItemStack, ItemStorageKey> inserted = controller.insert(
                 2, request, StorageAction.EXECUTE);
 
-        assertEquals(3, controller.getSlotCount());
+        assertEquals(3, controller.getStorageCount());
         assertEquals(3L, inserted.getProcessedAmount());
         assertEquals(0, first.insertCalls);
         assertEquals(1, second.insertCalls);
         assertEquals(0, second.lastInsertSlot);
-        assertEquals(3L, second.getSlotSnapshot(0).getAmount());
+        assertEquals(3L, second.getSnapshot(0).getAmount());
 
-        controller.extractFromSlot(2, 2L, StorageAction.EXECUTE);
+        controller.extract(2, 2L, StorageAction.EXECUTE);
         assertEquals(0, first.extractCalls);
         assertEquals(1, second.extractCalls);
         assertEquals(0, second.lastExtractSlot);
-        assertEquals(1L, second.getSlotSnapshot(0).getAmount());
+        assertEquals(1L, second.getSnapshot(0).getAmount());
     }
 
     @Test
@@ -58,15 +59,15 @@ public class ControllerItemHandlerTest {
         controller.setHandlers(Arrays.asList(child));
         BigItemStack request = new BigItemStack(new ItemStack(new Item()), 3L);
 
-        assertEquals(0L, controller.insertIntoSlot(
+        assertEquals(0L, controller.insert(
                 0, BigItemStack.empty(), StorageAction.EXECUTE).getProcessedAmount());
-        assertEquals(0L, controller.insertIntoSlot(
+        assertEquals(0L, controller.insert(
                 -1, request, StorageAction.EXECUTE).getProcessedAmount());
-        assertEquals(0L, controller.insertIntoSlot(
+        assertEquals(0L, controller.insert(
                 1, request, StorageAction.EXECUTE).getProcessedAmount());
-        assertEquals(0L, controller.extractFromSlot(
+        assertEquals(0L, controller.extract(
                 0, 0L, StorageAction.EXECUTE).getProcessedAmount());
-        assertEquals(0L, controller.extractFromSlot(
+        assertEquals(0L, controller.extract(
                 0, -2L, StorageAction.EXECUTE).getProcessedAmount());
 
         assertEquals(0, child.insertCalls);
@@ -86,14 +87,14 @@ public class ControllerItemHandlerTest {
         ControllerItemHandler controller = new ControllerItemHandler();
         controller.setHandlers(Arrays.asList(empty, matching, locked));
 
-        TransferResult<BigItemStack> inserted = controller.insertRouted(
+        TransferResult<BigItemStack, ItemStorageKey> inserted = controller.insertRouted(
                 new BigItemStack(new ItemStack(item), 6L), StorageAction.EXECUTE);
 
         assertEquals(Arrays.asList("locked", "matching", "empty"), calls);
         assertEquals(6L, inserted.getProcessedAmount());
-        assertEquals(2L, locked.getSlotSnapshot(0).getAmount());
-        assertEquals(2L, matching.getSlotSnapshot(0).getAmount());
-        assertEquals(2L, empty.getSlotSnapshot(0).getAmount());
+        assertEquals(2L, locked.getSnapshot(0).getAmount());
+        assertEquals(2L, matching.getSnapshot(0).getAmount());
+        assertEquals(2L, empty.getSnapshot(0).getAmount());
     }
 
     @Test
@@ -107,18 +108,18 @@ public class ControllerItemHandlerTest {
         ControllerItemHandler controller = new ControllerItemHandler();
         controller.setHandlers(Arrays.asList(first, second));
 
-        TransferResult<BigItemStack> simulation = controller.insertRouted(
+        TransferResult<BigItemStack, ItemStorageKey> simulation = controller.insertRouted(
                 new BigItemStack(new ItemStack(item), 2L), StorageAction.SIMULATE);
         assertEquals(2L, simulation.getProcessedAmount());
-        assertEquals(3L, first.getSlotSnapshot(0).getAmount());
-        assertEquals(3L, second.getSlotSnapshot(0).getAmount());
+        assertEquals(3L, first.getSnapshot(0).getAmount());
+        assertEquals(3L, second.getSnapshot(0).getAmount());
         assertTrue(calls.isEmpty());
 
-        TransferResult<BigItemStack> extracted = controller.extractRouted(
+        TransferResult<BigItemStack, ItemStorageKey> extracted = controller.extractRouted(
                 new BigItemStack(new ItemStack(item), 5L), StorageAction.EXECUTE);
         assertEquals(5L, extracted.getProcessedAmount());
-        assertEquals(0L, first.getSlotSnapshot(0).getAmount());
-        assertEquals(1L, second.getSlotSnapshot(0).getAmount());
+        assertEquals(0L, first.getSnapshot(0).getAmount());
+        assertEquals(1L, second.getSnapshot(0).getAmount());
     }
 
     @Test
@@ -130,12 +131,12 @@ public class ControllerItemHandlerTest {
         ControllerItemHandler controller = new ControllerItemHandler();
         controller.setHandlers(source);
         source.clear();
-        assertEquals(2, controller.getSlotCount());
+        assertEquals(2, controller.getStorageCount());
 
         controller.setHandlers(Arrays.asList(replacement));
-        assertEquals(1, controller.getSlotCount());
-        assertEquals(0L, controller.getSlotCapacity(1));
-        assertTrue(controller.getSlotSnapshot(1).isEmpty());
+        assertEquals(1, controller.getStorageCount());
+        assertEquals(0L, controller.getCapacity(1));
+        assertTrue(controller.getSnapshot(1).isEmpty());
         try {
             controller.getHandlers().clear();
             throw new AssertionError("handler list must be immutable");
@@ -151,15 +152,15 @@ public class ControllerItemHandlerTest {
         ControllerItemHandler controller = new ControllerItemHandler();
         controller.setHandlers(Arrays.asList(shared, shared));
 
-        TransferResult<BigItemStack> simulated = controller.insertRouted(
+        TransferResult<BigItemStack, ItemStorageKey> simulated = controller.insertRouted(
                 new BigItemStack(new ItemStack(new Item()), 12L),
                 StorageAction.SIMULATE);
 
         assertEquals(1, controller.getHandlers().size());
-        assertEquals(1, controller.getSlotCount());
+        assertEquals(1, controller.getStorageCount());
         assertEquals(8L, simulated.getProcessedAmount());
         assertEquals(1, shared.insertCalls);
-        assertTrue(shared.getSlotSnapshot(0).isEmpty());
+        assertTrue(shared.getSnapshot(0).isEmpty());
     }
 
     private static final class SpyHandler implements IBigItemHandler {
@@ -183,24 +184,24 @@ public class ControllerItemHandlerTest {
         }
 
         @Override
-        public int getSlotCount() {
+        public int getStorageCount() {
             return slots.length;
         }
 
         @Nonnull
         @Override
-        public BigItemStack getSlotSnapshot(int slot) {
+        public BigItemStack getSnapshot(int slot) {
             return valid(slot) ? slots[slot] : BigItemStack.empty();
         }
 
         @Override
-        public long getSlotCapacity(int slot) {
+        public long getCapacity(int slot) {
             return valid(slot) ? capacity : 0L;
         }
 
         @Nonnull
         @Override
-        public TransferResult<BigItemStack> insertIntoSlot(
+        public TransferResult<BigItemStack, ItemStorageKey> insert(
                 int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action) {
             insertCalls++;
             lastInsertSlot = slot;
@@ -228,7 +229,7 @@ public class ControllerItemHandlerTest {
 
         @Nonnull
         @Override
-        public TransferResult<BigItemStack> extractFromSlot(
+        public TransferResult<BigItemStack, ItemStorageKey> extract(
                 int slot, long amount, @Nonnull StorageAction action) {
             extractCalls++;
             lastExtractSlot = slot;

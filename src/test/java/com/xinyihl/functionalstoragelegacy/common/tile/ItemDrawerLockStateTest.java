@@ -31,23 +31,27 @@ public class ItemDrawerLockStateTest {
         IBigItemHandler handler = tile.getItemHandler();
         Item original = new Item();
         Item replacement = new Item();
-        handler.insertIntoSlot(
+        handler.insert(
                 0, new BigItemStack(new ItemStack(original), 4L), StorageAction.EXECUTE);
         tile.setLocked(true);
-        handler.extractFromSlot(0, 4L, StorageAction.EXECUTE);
-        assertTrue(handler.getSlotSnapshot(0).hasTemplate());
+        handler.extract(0, 4L, StorageAction.EXECUTE);
+        assertTrue(handler.getSnapshot(0).hasTemplate());
         assertEquals(1, tile.saveTileToNBT()
                 .getCompoundTag("StorageV2").getTagList("Items", 10).tagCount());
         tile.resetNotifications();
 
         tile.setLocked(false);
 
-        assertFalse(handler.getSlotSnapshot(0).hasTemplate());
+        assertFalse(handler.getSnapshot(0).hasTemplate());
         assertEquals(0, tile.saveTileToNBT()
                 .getCompoundTag("StorageV2").getTagList("Items", 10).tagCount());
         assertTrue(tile.dirtyCalls > 0);
-        assertTrue(tile.updateCalls > 0);
-        assertEquals(2L, handler.insertIntoSlot(
+        assertEquals(0, tile.updateCalls);
+        tile.update();
+        assertEquals(1, tile.updateCalls);
+        tile.update();
+        assertEquals(1, tile.updateCalls);
+        assertEquals(2L, handler.insert(
                 0,
                 new BigItemStack(new ItemStack(replacement), 2L),
                 StorageAction.EXECUTE).getProcessedAmount());
@@ -63,9 +67,9 @@ public class ItemDrawerLockStateTest {
         handler.configureTiers(Arrays.asList(
                 new CompactingInventoryHandler.Tier(new ItemStack(original), 1L)));
         tile.setLocked(true);
-        handler.insertIntoSlot(
+        handler.insert(
                 0, new BigItemStack(new ItemStack(original), 3L), StorageAction.EXECUTE);
-        handler.extractFromSlot(0, 3L, StorageAction.EXECUTE);
+        handler.extract(0, 3L, StorageAction.EXECUTE);
         assertTrue(handler.isConfigured());
         tile.resetNotifications();
 
@@ -75,10 +79,14 @@ public class ItemDrawerLockStateTest {
         assertEquals(0, tile.saveTileToNBT()
                 .getCompoundTag("StorageV2").getTagList("Tiers", 10).tagCount());
         assertTrue(tile.dirtyCalls > 0);
-        assertTrue(tile.updateCalls > 0);
+        assertEquals(0, tile.updateCalls);
+        tile.update();
+        assertEquals(1, tile.updateCalls);
+        tile.update();
+        assertEquals(1, tile.updateCalls);
         handler.configureTiers(Arrays.asList(
                 new CompactingInventoryHandler.Tier(new ItemStack(replacement), 1L)));
-        assertEquals(2L, handler.insertIntoSlot(
+        assertEquals(2L, handler.insert(
                 0,
                 new BigItemStack(new ItemStack(replacement), 2L),
                 StorageAction.EXECUTE).getProcessedAmount());
@@ -89,14 +97,14 @@ public class ItemDrawerLockStateTest {
         CountingWoodDrawerTile tile = new CountingWoodDrawerTile();
         IBigItemHandler handler = tile.getItemHandler();
         Item stored = new Item();
-        handler.insertIntoSlot(
+        handler.insert(
                 0, new BigItemStack(new ItemStack(stored), 9L), StorageAction.EXECUTE);
         tile.setLocked(true);
 
         tile.setLocked(false);
 
-        assertEquals(9L, handler.getSlotSnapshot(0).getAmount());
-        assertTrue(handler.getSlotSnapshot(0).isSameType(new ItemStack(stored)));
+        assertEquals(9L, handler.getSnapshot(0).getAmount());
+        assertTrue(handler.getSnapshot(0).isSameType(new ItemStack(stored)));
         assertEquals(1, tile.saveTileToNBT()
                 .getCompoundTag("StorageV2").getTagList("Items", 10).tagCount());
     }
@@ -110,14 +118,14 @@ public class ItemDrawerLockStateTest {
         handler.configureTiers(Arrays.asList(
                 new CompactingInventoryHandler.Tier(new ItemStack(stored), 1L)));
         tile.setLocked(true);
-        handler.insertIntoSlot(
+        handler.insert(
                 0, new BigItemStack(new ItemStack(stored), 11L), StorageAction.EXECUTE);
 
         tile.setLocked(false);
 
         assertTrue(handler.isConfigured());
         assertEquals(11L, handler.getStoredBaseAmount());
-        assertTrue(handler.getSlotSnapshot(0).isSameType(new ItemStack(stored)));
+        assertTrue(handler.getSnapshot(0).isSameType(new ItemStack(stored)));
         assertEquals(1, tile.saveTileToNBT()
                 .getCompoundTag("StorageV2").getTagList("Tiers", 10).tagCount());
     }

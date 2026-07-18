@@ -28,12 +28,7 @@ public class CompactingStackItemHandler extends CompactingInventoryHandler {
         if (tileData != null) {
             deserializeNBT(tileData);
         }
-    }
-
-    @Override
-    public void onChange() {
-        NBTTagCompound tileData = DrawerStackDataHelper.getOrCreateTileData(drawerStack);
-        tileData.setTag("StorageV2", serializeNBT().getCompoundTag("StorageV2"));
+        subscribe(change -> persistStorage());
     }
 
     @Override
@@ -69,6 +64,11 @@ public class CompactingStackItemHandler extends CompactingInventoryHandler {
     @Override
     public boolean isCreative() {
         return upgradeState.hasFeature(StorageFeature.CREATIVE);
+    }
+
+    private void persistStorage() {
+        NBTTagCompound tileData = DrawerStackDataHelper.getOrCreateTileData(drawerStack);
+        tileData.setTag("StorageV2", serializeNBT().getCompoundTag("StorageV2"));
     }
 
 }

@@ -78,13 +78,13 @@ public class TileTOPDataProvider implements IProbeInfoProvider {
         if (handler == null) {
             return items;
         }
-        for (int slot = 0; slot < handler.getSlotCount(); slot++) {
-            BigItemStack snapshot = handler.getSlotSnapshot(slot);
+        for (int slot = 0; slot < handler.getStorageCount(); slot++) {
+            BigItemStack snapshot = handler.getSnapshot(slot);
             if (snapshot != null && !snapshot.isEmpty()) {
                 items.add(new ItemEntry(
                         iconStack(snapshot.getTemplate()),
                         safeAmount(snapshot.getAmount()),
-                        safeCapacity(handler.getSlotCapacity(slot))));
+                        safeCapacity(handler.getCapacity(slot))));
             }
         }
         return items;
@@ -97,14 +97,14 @@ public class TileTOPDataProvider implements IProbeInfoProvider {
         if (handler == null) {
             return fluids;
         }
-        for (int tank = 0; tank < handler.getTankCount(); tank++) {
-            BigFluidStack snapshot = handler.getTankSnapshot(tank);
+        for (int tank = 0; tank < handler.getStorageCount(); tank++) {
+            BigFluidStack snapshot = handler.getSnapshot(tank);
             if (snapshot != null && !snapshot.isEmpty()) {
                 FluidStack fluid = snapshot.getTemplate();
                 fluids.add(new FluidEntry(
                         fluid.getLocalizedName(),
                         safeAmount(snapshot.getAmount()),
-                        safeCapacity(handler.getTankCapacity(tank))));
+                        safeCapacity(handler.getCapacity(tank))));
             }
         }
 

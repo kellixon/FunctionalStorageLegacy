@@ -2,6 +2,7 @@ package com.xinyihl.functionalstoragelegacy.common.tile;
 
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
 import com.xinyihl.functionalstoragelegacy.api.storage.BigFluidStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.FluidStorageKey;
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigFluidHandler;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
 import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
@@ -43,16 +44,11 @@ public class FluidDrawerTile extends ControllableDrawerTile {
         super();
         this.drawerLayout = drawerLayout;
         this.fluidHandler = createFluidHandler();
+        bindStorageHandler(this.fluidHandler, this.fluidHandler::notifyConfigurationChanged);
     }
 
     private BigFluidHandler createFluidHandler() {
-        return new BigFluidHandler(drawerLayout.getSlotCount()) {
-            @Override
-            public void onChange() {
-                FluidDrawerTile.this.markDirty();
-                FluidDrawerTile.this.sendUpdatePacket();
-            }
-
+        BigFluidHandler created = new BigFluidHandler(drawerLayout.getSlotCount()) {
             @Override
             public double getMultiplier() {
                 return FluidDrawerTile.this.getFluidMultiplier(
@@ -79,6 +75,7 @@ public class FluidDrawerTile extends ControllableDrawerTile {
                 return FluidDrawerTile.this.isCreative();
             }
         };
+        return created;
     }
 
     @Override
@@ -86,7 +83,7 @@ public class FluidDrawerTile extends ControllableDrawerTile {
                                    float hitX, float hitY, float hitZ, int slot) {
         ItemStack heldStack = player.getHeldItem(hand);
 
-        if (!world.isRemote && slot >= 0 && slot < fluidHandler.getTankCount() && !heldStack.isEmpty()) {
+        if (!world.isRemote && slot >= 0 && slot < fluidHandler.getStorageCount() && !heldStack.isEmpty()) {
             boolean fluidInteraction = FluidUtil.interactWithFluidHandler(player, hand, getSingleTankHandler(slot));
             if (fluidInteraction) {
                 return true;
@@ -98,7 +95,7 @@ public class FluidDrawerTile extends ControllableDrawerTile {
 
     @Override
     public void onClicked(EntityPlayer player, int slot) {
-        if (!world.isRemote && slot >= 0 && slot < fluidHandler.getTankCount()) {
+        if (!world.isRemote && slot >= 0 && slot < fluidHandler.getStorageCount()) {
             ItemStack heldStack = player.getHeldItem(EnumHand.MAIN_HAND);
             if (!heldStack.isEmpty()) {
                 FluidUtil.interactWithFluidHandler(player, EnumHand.MAIN_HAND, getSingleTankHandler(slot));
@@ -110,7 +107,7 @@ public class FluidDrawerTile extends ControllableDrawerTile {
         return new IFluidHandler() {
             @Override
             public IFluidTankProperties[] getTankProperties() {
-                if (slot < 0 || slot >= fluidHandler.getTankCount()) {
+                if (slot < 0 || slot >= fluidHandler.getStorageCount()) {
                     return new IFluidTankProperties[0];
                 }
                 IFluidTankProperties[] all = fluidHandler.getTankProperties();
@@ -122,7 +119,7 @@ public class FluidDrawerTile extends ControllableDrawerTile {
                 if (resource == null || resource.amount <= 0) {
                     return 0;
                 }
-                TransferResult<BigFluidStack> result = fluidHandler.fillTank(
+                TransferResult<BigFluidStack, FluidStorageKey> result = fluidHandler.insert(
                         slot,
                         new BigFluidStack(resource, resource.amount),
                         doFill ? StorageAction.EXECUTE : StorageAction.SIMULATE);
@@ -134,11 +131,11 @@ public class FluidDrawerTile extends ControllableDrawerTile {
                 if (resource == null || resource.amount <= 0) {
                     return null;
                 }
-                BigFluidStack current = fluidHandler.getTankSnapshot(slot);
+                BigFluidStack current = fluidHandler.getSnapshot(slot);
                 if (current.isEmpty() || !current.isSameType(resource)) {
                     return null;
                 }
-                TransferResult<BigFluidStack> result = fluidHandler.drainTank(
+                TransferResult<BigFluidStack, FluidStorageKey> result = fluidHandler.extract(
                         slot,
                         resource.amount,
                         doDrain ? StorageAction.EXECUTE : StorageAction.SIMULATE);
@@ -147,10 +144,10 @@ public class FluidDrawerTile extends ControllableDrawerTile {
 
             @Override
             public FluidStack drain(int maxDrain, boolean doDrain) {
-                if (maxDrain <= 0 || fluidHandler.getTankSnapshot(slot).isEmpty()) {
+                if (maxDrain <= 0 || fluidHandler.getSnapshot(slot).isEmpty()) {
                     return null;
                 }
-                TransferResult<BigFluidStack> result = fluidHandler.drainTank(
+                TransferResult<BigFluidStack, FluidStorageKey> result = fluidHandler.extract(
                         slot,
                         maxDrain,
                         doDrain ? StorageAction.EXECUTE : StorageAction.SIMULATE);
@@ -161,7 +158,7 @@ public class FluidDrawerTile extends ControllableDrawerTile {
 
     @Override
     protected void onLockStateChanged(boolean locked) {
-        fluidHandler.setLockFilters(locked);
+        fluidHandler.applyLockConfiguration(locked);
     }
 
     @Override
@@ -177,6 +174,7 @@ public class FluidDrawerTile extends ControllableDrawerTile {
         }
         fluidHandler = createFluidHandler();
         fluidHandler.deserializeNBT(nbt);
+        finishStorageRead(fluidHandler, fluidHandler::notifyConfigurationChanged);
     }
 
     @Nonnull
@@ -190,12 +188,14 @@ public class FluidDrawerTile extends ControllableDrawerTile {
 
     @Override
     public void readFromNBT(@Nonnull NBTTagCompound compound) {
+        beginStorageRead();
         if (compound.hasKey("DrawerLayout")) {
             drawerLayout = DrawerLayout.fromId(compound.getString("DrawerLayout"));
         }
-        fluidHandler = createFluidHandler();
         super.readFromNBT(compound);
+        fluidHandler = createFluidHandler();
         fluidHandler.deserializeNBT(compound);
+        finishStorageRead(fluidHandler, fluidHandler::notifyConfigurationChanged);
     }
 
     @Override
@@ -221,8 +221,8 @@ public class FluidDrawerTile extends ControllableDrawerTile {
     @Override
     public boolean isEverythingEmpty() {
         if (!super.isEverythingEmpty()) return false;
-        for (int tank = 0; tank < fluidHandler.getTankCount(); tank++) {
-            if (!fluidHandler.getTankSnapshot(tank).isEmpty()) return false;
+        for (int tank = 0; tank < fluidHandler.getStorageCount(); tank++) {
+            if (!fluidHandler.getSnapshot(tank).isEmpty()) return false;
         }
         return true;
     }
@@ -231,9 +231,9 @@ public class FluidDrawerTile extends ControllableDrawerTile {
     protected int calculateRedstoneSignal() {
         double totalCapacity = 0D;
         double totalStored = 0D;
-        for (int tank = 0; tank < fluidHandler.getTankCount(); tank++) {
-            totalCapacity += fluidHandler.getTankCapacity(tank);
-            totalStored += fluidHandler.getTankSnapshot(tank).getAmount();
+        for (int tank = 0; tank < fluidHandler.getStorageCount(); tank++) {
+            totalCapacity += fluidHandler.getCapacity(tank);
+            totalStored += fluidHandler.getSnapshot(tank).getAmount();
         }
         if (totalCapacity <= 0D) return 0;
         return (int) Math.min(15D, (totalStored / totalCapacity) * 15D);
@@ -247,8 +247,8 @@ public class FluidDrawerTile extends ControllableDrawerTile {
         }
         double calculated = state.calculate(UpgradeAttribute.FLUID_CAPACITY, drawerLayout.getBaseCapacity());
         long capacityPerTank = (long) Math.floor(calculated * 1000D);
-        for (int tank = 0; tank < fluidHandler.getTankCount(); tank++) {
-            if (fluidHandler.getTankSnapshot(tank).getAmount() > capacityPerTank) {
+        for (int tank = 0; tank < fluidHandler.getStorageCount(); tank++) {
+            if (fluidHandler.getSnapshot(tank).getAmount() > capacityPerTank) {
                 return false;
             }
         }

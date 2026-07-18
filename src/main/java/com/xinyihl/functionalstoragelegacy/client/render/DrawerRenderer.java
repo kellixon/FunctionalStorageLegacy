@@ -139,13 +139,13 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
     }
 
     private void renderItemSlot(IBigItemHandler handler, int slot, float posX, float posY, float slotScale, boolean showRender, boolean showCount, float textScale, DrawerOptions options) {
-        if (slot < 0 || slot >= handler.getSlotCount()) return;
-        BigItemStack snapshot = handler.getSlotSnapshot(slot);
+        if (slot < 0 || slot >= handler.getStorageCount()) return;
+        BigItemStack snapshot = handler.getSnapshot(slot);
         if (snapshot == null || !snapshot.hasTemplate()) return;
         ItemStack stack = snapshot.getTemplate();
 
         long count = snapshot.getAmount();
-        long maxAmount = handler.getSlotCapacity(slot);
+        long maxAmount = handler.getCapacity(slot);
         float progress = ratio(count, maxAmount);
         renderIndicatorOnFace(posX, posY, slotScale, progress, options, Z_OFFSET_INDICATOR);
         if (showRender) {
@@ -184,13 +184,13 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
     }
 
     private void renderCompactSlot(IBigItemHandler handler, int slot, float posX, float posY, boolean showRender, boolean showCount, DrawerOptions options) {
-        if (slot < 0 || slot >= handler.getSlotCount()) return;
-        BigItemStack snapshot = handler.getSlotSnapshot(slot);
+        if (slot < 0 || slot >= handler.getStorageCount()) return;
+        BigItemStack snapshot = handler.getSnapshot(slot);
         if (snapshot == null || !snapshot.hasTemplate()) return;
         ItemStack stack = snapshot.getTemplate();
 
         long count = snapshot.getAmount();
-        long maxAmount = handler.getSlotCapacity(slot);
+        long maxAmount = handler.getCapacity(slot);
         float progress = ratio(count, maxAmount);
         renderIndicatorOnFace(posX, posY, 0.5F, progress, options, Z_OFFSET_INDICATOR);
         if (showRender) {
@@ -207,12 +207,12 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
     // ============================================================
     private void renderEnderSlot(EnderDrawerTile te, DrawerOptions options) {
         IBigItemHandler handler = te.getItemHandler();
-        if (handler == null || handler.getSlotCount() < 1) return;
+        if (handler == null || handler.getStorageCount() < 1) return;
 
         boolean showRender = options == null || options.isShowItemRender();
         boolean showCount = options == null || options.isShowItemCount();
 
-        BigItemStack snapshot = handler.getSlotSnapshot(0);
+        BigItemStack snapshot = handler.getSnapshot(0);
         if (snapshot == null || !snapshot.hasTemplate()) return;
         ItemStack stack = snapshot.getTemplate();
 
@@ -256,13 +256,13 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
                                        float fluidHalfWidth, float fluidHalfHeight,
                                        boolean showRender, boolean showCount, float textScale,
                                        DrawerOptions options) {
-        if (slot < 0 || slot >= handler.getTankCount()) return;
-        BigFluidStack snapshot = handler.getTankSnapshot(slot);
+        if (slot < 0 || slot >= handler.getStorageCount()) return;
+        BigFluidStack snapshot = handler.getSnapshot(slot);
         if (snapshot == null || !snapshot.hasTemplate()) return;
         FluidStack fluid = snapshot.getTemplate();
 
         long count = snapshot.getAmount();
-        long maxAmount = handler.getTankCapacity(slot);
+        long maxAmount = handler.getCapacity(slot);
         float progress = ratio(count, maxAmount);
         renderIndicatorOnFace(posX, posY, slotScale, progress, options, Z_OFFSET_INDICATOR);
         if (showRender) {

@@ -31,12 +31,7 @@ public class DrawerStackItemHandler extends BigInventoryHandler {
         if (tileData != null) {
             deserializeNBT(tileData);
         }
-    }
-
-    @Override
-    public void onChange() {
-        NBTTagCompound tileData = DrawerStackDataHelper.getOrCreateTileData(drawerStack);
-        tileData.setTag("StorageV2", serializeNBT().getCompoundTag("StorageV2"));
+        subscribe(change -> persistStorage());
     }
 
     @Override
@@ -72,5 +67,10 @@ public class DrawerStackItemHandler extends BigInventoryHandler {
     @Override
     public boolean isCreative() {
         return upgradeState.hasFeature(StorageFeature.CREATIVE);
+    }
+
+    private void persistStorage() {
+        NBTTagCompound tileData = DrawerStackDataHelper.getOrCreateTileData(drawerStack);
+        tileData.setTag("StorageV2", serializeNBT().getCompoundTag("StorageV2"));
     }
 }

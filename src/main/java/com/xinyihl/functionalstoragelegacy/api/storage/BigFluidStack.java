@@ -12,16 +12,19 @@ import javax.annotation.Nullable;
  * amounts are clamped to zero. An absent resource is normalized to
  * {@link #empty()}.
  */
-public final class BigFluidStack implements StorageSnapshot {
+public final class BigFluidStack implements StorageSnapshot<BigFluidStack, FluidStorageKey> {
 
     private static final BigFluidStack EMPTY = new BigFluidStack();
 
     @Nullable
     private final FluidStack template;
+    @Nullable
+    private final FluidStorageKey key;
     private final long amount;
 
     private BigFluidStack() {
         this.template = null;
+        this.key = null;
         this.amount = 0L;
     }
 
@@ -35,11 +38,13 @@ public final class BigFluidStack implements StorageSnapshot {
     public BigFluidStack(@Nullable FluidStack template, long amount) {
         if (template == null) {
             this.template = null;
+            this.key = null;
             this.amount = 0L;
             return;
         }
         this.template = template.copy();
         this.template.amount = 1;
+        this.key = new FluidStorageKey(this.template);
         this.amount = Math.max(0L, amount);
     }
 
@@ -62,6 +67,13 @@ public final class BigFluidStack implements StorageSnapshot {
         return template == null ? null : template.copy();
     }
 
+    /** @return immutable exact fluid key, or {@code null} when unconfigured */
+    @Nullable
+    @Override
+    public FluidStorageKey getKey() {
+        return key;
+    }
+
     /**
      * @return the represented amount
      */
@@ -79,6 +91,7 @@ public final class BigFluidStack implements StorageSnapshot {
      * @return an immutable snapshot with the requested amount
      */
     @Nonnull
+    @Override
     public BigFluidStack withAmount(long newAmount) {
         return template == null ? empty() : new BigFluidStack(template, newAmount);
     }
@@ -89,8 +102,9 @@ public final class BigFluidStack implements StorageSnapshot {
      *
      * @return whether this snapshot carries a resource template
      */
+    @Override
     public boolean hasTemplate() {
-        return template != null;
+        return key != null;
     }
 
     /**
@@ -99,8 +113,9 @@ public final class BigFluidStack implements StorageSnapshot {
      * @param other other snapshot
      * @return {@code true} when both snapshots carry the same fluid template
      */
+    @Override
     public boolean isSameType(@Nullable BigFluidStack other) {
-        return other != null && isSameType(other.template);
+        return StorageSnapshot.super.isSameType(other);
     }
 
     /**

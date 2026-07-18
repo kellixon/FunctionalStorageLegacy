@@ -12,15 +12,18 @@ import javax.annotation.Nullable;
  * amounts are clamped to zero. An absent resource is normalized to
  * {@link #empty()}.
  */
-public final class BigItemStack implements StorageSnapshot {
+public final class BigItemStack implements StorageSnapshot<BigItemStack, ItemStorageKey> {
 
     private static final BigItemStack EMPTY = new BigItemStack();
 
     private final ItemStack template;
+    @Nullable
+    private final ItemStorageKey key;
     private final long amount;
 
     private BigItemStack() {
         this.template = ItemStack.EMPTY;
+        this.key = null;
         this.amount = 0L;
     }
 
@@ -34,11 +37,13 @@ public final class BigItemStack implements StorageSnapshot {
     public BigItemStack(@Nullable ItemStack template, long amount) {
         if (template == null || template.isEmpty()) {
             this.template = ItemStack.EMPTY;
+            this.key = null;
             this.amount = 0L;
             return;
         }
         this.template = template.copy();
         this.template.setCount(1);
+        this.key = new ItemStorageKey(this.template);
         this.amount = Math.max(0L, amount);
     }
 
@@ -61,6 +66,13 @@ public final class BigItemStack implements StorageSnapshot {
         return template.isEmpty() ? ItemStack.EMPTY : template.copy();
     }
 
+    /** @return immutable exact item key, or {@code null} when unconfigured */
+    @Nullable
+    @Override
+    public ItemStorageKey getKey() {
+        return key;
+    }
+
     /**
      * @return the represented amount
      */
@@ -78,6 +90,7 @@ public final class BigItemStack implements StorageSnapshot {
      * @return an immutable snapshot with the requested amount
      */
     @Nonnull
+    @Override
     public BigItemStack withAmount(long newAmount) {
         return template.isEmpty() ? empty() : new BigItemStack(template, newAmount);
     }
@@ -88,8 +101,9 @@ public final class BigItemStack implements StorageSnapshot {
      *
      * @return whether this snapshot carries a resource template
      */
+    @Override
     public boolean hasTemplate() {
-        return !template.isEmpty();
+        return key != null;
     }
 
     /**
@@ -98,8 +112,9 @@ public final class BigItemStack implements StorageSnapshot {
      * @param other other snapshot
      * @return {@code true} when both snapshots carry the same item template
      */
+    @Override
     public boolean isSameType(@Nullable BigItemStack other) {
-        return other != null && isSameType(other.template);
+        return StorageSnapshot.super.isSameType(other);
     }
 
     /**

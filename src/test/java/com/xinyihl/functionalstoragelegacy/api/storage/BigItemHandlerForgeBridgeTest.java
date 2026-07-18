@@ -16,7 +16,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertTrue;
 
-public class BigItemHandlerDefaultsTest {
+public class BigItemHandlerForgeBridgeTest {
 
     @BeforeClass
     public static void bootstrapMinecraft() {
@@ -32,14 +32,14 @@ public class BigItemHandlerDefaultsTest {
         ItemStack simulatedRemainder = handler.insertItem(0, input, true);
         assertEquals(6, simulatedRemainder.getCount());
         assertEquals(16, input.getCount());
-        assertEquals(0L, handler.getSlotSnapshot(0).getAmount());
+        assertEquals(0L, handler.getSnapshot(0).getAmount());
         assertEquals(0, handler.changeCount);
         assertEquals(StorageAction.SIMULATE, handler.lastInsertAction);
 
         ItemStack executedRemainder = handler.insertItem(0, input, false);
         assertEquals(6, executedRemainder.getCount());
         assertNotSame(input, executedRemainder);
-        assertEquals(10L, handler.getSlotSnapshot(0).getAmount());
+        assertEquals(10L, handler.getSnapshot(0).getAmount());
         assertEquals(1, handler.changeCount);
         assertEquals(StorageAction.EXECUTE, handler.lastInsertAction);
 
@@ -69,13 +69,13 @@ public class BigItemHandlerDefaultsTest {
 
         ItemStack simulated = handler.extractItem(0, 100, true);
         assertEquals(16, simulated.getCount());
-        assertEquals(100L, handler.getSlotSnapshot(0).getAmount());
+        assertEquals(100L, handler.getSnapshot(0).getAmount());
         assertEquals(0, handler.changeCount);
         assertEquals(StorageAction.SIMULATE, handler.lastExtractAction);
 
         ItemStack executed = handler.extractItem(0, 100, false);
         assertEquals(16, executed.getCount());
-        assertEquals(84L, handler.getSlotSnapshot(0).getAmount());
+        assertEquals(84L, handler.getSnapshot(0).getAmount());
         assertEquals(1, handler.changeCount);
         assertEquals(StorageAction.EXECUTE, handler.lastExtractAction);
 
@@ -89,7 +89,7 @@ public class BigItemHandlerDefaultsTest {
         MinimalItemHandler handler = new MinimalItemHandler(4L);
 
         assertTrue(handler.isItemValid(0, new ItemStack(item)));
-        assertEquals(0L, handler.getSlotSnapshot(0).getAmount());
+        assertEquals(0L, handler.getSnapshot(0).getAmount());
         assertEquals(0, handler.changeCount);
         assertEquals(StorageAction.SIMULATE, handler.lastInsertAction);
         assertFalse(handler.isItemValid(-1, new ItemStack(item)));
@@ -103,15 +103,15 @@ public class BigItemHandlerDefaultsTest {
         handler.setSlot(1, new BigItemStack(new ItemStack(item), 4L));
         handler.setSlot(2, new BigItemStack(new ItemStack(item), 0L));
 
-        TransferResult<BigItemStack> result = handler.insertRouted(
+        TransferResult<BigItemStack, ItemStorageKey> result = handler.insertRouted(
                 new BigItemStack(new ItemStack(item), 12L), StorageAction.EXECUTE);
 
         assertEquals(Arrays.asList(1, 2, 0), handler.insertOrder);
         assertEquals(12L, result.getProcessedAmount());
         assertTrue(result.isComplete());
-        assertEquals(3L, handler.getSlotSnapshot(0).getAmount());
-        assertEquals(10L, handler.getSlotSnapshot(1).getAmount());
-        assertEquals(3L, handler.getSlotSnapshot(2).getAmount());
+        assertEquals(3L, handler.getSnapshot(0).getAmount());
+        assertEquals(10L, handler.getSnapshot(1).getAmount());
+        assertEquals(3L, handler.getSnapshot(2).getAmount());
     }
 
     @Test
@@ -120,21 +120,21 @@ public class BigItemHandlerDefaultsTest {
         MinimalItemHandler handler = new MinimalItemHandler(Long.MAX_VALUE, Long.MAX_VALUE);
         handler.setSlot(0, new BigItemStack(new ItemStack(item), Long.MAX_VALUE - 2L));
 
-        TransferResult<BigItemStack> simulation = handler.insertRouted(
+        TransferResult<BigItemStack, ItemStorageKey> simulation = handler.insertRouted(
                 new BigItemStack(new ItemStack(item), Long.MAX_VALUE), StorageAction.SIMULATE);
         assertEquals(Long.MAX_VALUE, simulation.getProcessedAmount());
         assertTrue(simulation.isComplete());
-        assertEquals(Long.MAX_VALUE - 2L, handler.getSlotSnapshot(0).getAmount());
-        assertEquals(0L, handler.getSlotSnapshot(1).getAmount());
+        assertEquals(Long.MAX_VALUE - 2L, handler.getSnapshot(0).getAmount());
+        assertEquals(0L, handler.getSnapshot(1).getAmount());
         assertEquals(0, handler.changeCount);
 
         handler.setSlot(0, new BigItemStack(new ItemStack(item), 3L));
         handler.setSlot(1, new BigItemStack(new ItemStack(item), 4L));
-        TransferResult<BigItemStack> extracted = handler.extractRouted(
+        TransferResult<BigItemStack, ItemStorageKey> extracted = handler.extractRouted(
                 new BigItemStack(new ItemStack(item), 6L), StorageAction.EXECUTE);
         assertEquals(6L, extracted.getProcessedAmount());
-        assertEquals(0L, handler.getSlotSnapshot(0).getAmount());
-        assertEquals(1L, handler.getSlotSnapshot(1).getAmount());
+        assertEquals(0L, handler.getSnapshot(0).getAmount());
+        assertEquals(1L, handler.getSnapshot(1).getAmount());
     }
 
     @Test
@@ -142,14 +142,14 @@ public class BigItemHandlerDefaultsTest {
         MinimalItemHandler handler = new MinimalItemHandler(5L);
         BigItemStack request = new BigItemStack(new ItemStack(new Item()), 4L);
 
-        TransferResult<BigItemStack> invalidInsert = handler.insertIntoSlot(
+        TransferResult<BigItemStack, ItemStorageKey> invalidInsert = handler.insert(
                 -1, request, StorageAction.EXECUTE);
         assertEquals(4L, invalidInsert.getRequestedAmount());
         assertEquals(0L, invalidInsert.getProcessedAmount());
-        assertEquals(0L, handler.extractFromSlot(2, 4L, StorageAction.EXECUTE).getProcessedAmount());
-        assertEquals(0L, handler.extractFromSlot(0, -4L, StorageAction.EXECUTE).getRequestedAmount());
-        assertTrue(handler.getSlotSnapshot(-1).isEmpty());
-        assertEquals(0L, handler.getSlotCapacity(1));
+        assertEquals(0L, handler.extract(2, 4L, StorageAction.EXECUTE).getProcessedAmount());
+        assertEquals(0L, handler.extract(0, -4L, StorageAction.EXECUTE).getRequestedAmount());
+        assertTrue(handler.getSnapshot(-1).isEmpty());
+        assertEquals(0L, handler.getCapacity(1));
     }
 
     private static final class MinimalItemHandler implements IBigItemHandler {
@@ -167,24 +167,24 @@ public class BigItemHandlerDefaultsTest {
         }
 
         @Override
-        public int getSlotCount() {
+        public int getStorageCount() {
             return slots.length;
         }
 
         @Nonnull
         @Override
-        public BigItemStack getSlotSnapshot(int slot) {
+        public BigItemStack getSnapshot(int slot) {
             return valid(slot) ? slots[slot] : BigItemStack.empty();
         }
 
         @Override
-        public long getSlotCapacity(int slot) {
+        public long getCapacity(int slot) {
             return valid(slot) ? Math.max(0L, capacities[slot]) : 0L;
         }
 
         @Nonnull
         @Override
-        public TransferResult<BigItemStack> insertIntoSlot(
+        public TransferResult<BigItemStack, ItemStorageKey> insert(
                 int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action) {
             long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
             lastInsertAction = action;
@@ -196,7 +196,7 @@ public class BigItemHandlerDefaultsTest {
             if (current.hasTemplate() && !current.isSameType(request)) {
                 return new TransferResult<>(requested, BigItemStack.empty(), action);
             }
-            long capacity = getSlotCapacity(slot);
+            long capacity = getCapacity(slot);
             long space = current.getAmount() >= capacity ? 0L : capacity - current.getAmount();
             long accepted = Math.min(requested, space);
             if (accepted > 0L && action == StorageAction.EXECUTE) {
@@ -212,7 +212,7 @@ public class BigItemHandlerDefaultsTest {
 
         @Nonnull
         @Override
-        public TransferResult<BigItemStack> extractFromSlot(
+        public TransferResult<BigItemStack, ItemStorageKey> extract(
                 int slot, long amount, @Nonnull StorageAction action) {
             long requested = Math.max(0L, amount);
             lastExtractAction = action;

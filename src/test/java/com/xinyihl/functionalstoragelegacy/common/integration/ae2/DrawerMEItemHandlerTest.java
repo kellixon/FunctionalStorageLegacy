@@ -4,8 +4,10 @@ import appeng.api.config.Actionable;
 import appeng.api.storage.data.IAEItemStack;
 import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.ItemStorageKey;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
 import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
+import com.xinyihl.functionalstoragelegacy.common.inventory.controller.ControllerItemHandler;
 import net.minecraft.init.Bootstrap;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -16,8 +18,10 @@ import javax.annotation.Nonnull;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class DrawerMEItemHandlerTest {
 
@@ -65,6 +69,29 @@ public class DrawerMEItemHandlerTest {
         assertEquals(5L, storage.stored);
     }
 
+    @Test
+    public void controllerAdapterUsesTypedIndexedCandidatesWithoutRescanningChildren() {
+        Item matchingItem = new Item();
+        Item unrelatedItem = new Item();
+        RecordingHandler matching = new RecordingHandler(matchingItem, 20L, 9L);
+        RecordingHandler unrelated = new RecordingHandler(unrelatedItem, 20L, 4L);
+        ControllerItemHandler controller = new ControllerItemHandler();
+        controller.setHandlers(Arrays.asList(matching, unrelated));
+        int readsAfterBind = matching.snapshotReads + unrelated.snapshotReads;
+
+        DrawerMEItemHandler adapter = new DrawerMEItemHandler(controller, null);
+        IAEItemStack request = aeStack(new ItemStack(matchingItem), 4L);
+
+        assertTrue(adapter.isPrioritized(request));
+        assertTrue(adapter.canAccept(request));
+        IAEItemStack extracted = adapter.extractItems(request, Actionable.SIMULATE, null);
+
+        assertEquals(4L, extracted.getStackSize());
+        assertEquals(readsAfterBind, matching.snapshotReads + unrelated.snapshotReads);
+        assertEquals(9L, matching.stored);
+        assertEquals(4L, unrelated.stored);
+    }
+
     private static IAEItemStack aeStack(ItemStack definition, long amount) {
         StackInvocation invocation = new StackInvocation(definition, amount);
         return (IAEItemStack) Proxy.newProxyInstance(
@@ -110,6 +137,7 @@ public class DrawerMEItemHandlerTest {
         private final long capacity;
         private long stored;
         private StorageAction lastAction;
+        private int snapshotReads;
 
         private RecordingHandler(Item item, long capacity, long stored) {
             this.item = item;
@@ -118,26 +146,27 @@ public class DrawerMEItemHandlerTest {
         }
 
         @Override
-        public int getSlotCount() {
+        public int getStorageCount() {
             return 1;
         }
 
         @Nonnull
         @Override
-        public BigItemStack getSlotSnapshot(int slot) {
+        public BigItemStack getSnapshot(int slot) {
+            snapshotReads++;
             return slot == 0 && stored > 0L
                     ? new BigItemStack(new ItemStack(item), stored)
                     : BigItemStack.empty();
         }
 
         @Override
-        public long getSlotCapacity(int slot) {
+        public long getCapacity(int slot) {
             return slot == 0 ? capacity : 0L;
         }
 
         @Nonnull
         @Override
-        public TransferResult<BigItemStack> insertIntoSlot(
+        public TransferResult<BigItemStack, ItemStorageKey> insert(
                 int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action) {
             lastAction = action;
             long inserted = slot == 0 ? Math.min(request.getAmount(), capacity - stored) : 0L;
@@ -150,7 +179,7 @@ public class DrawerMEItemHandlerTest {
 
         @Nonnull
         @Override
-        public TransferResult<BigItemStack> extractFromSlot(
+        public TransferResult<BigItemStack, ItemStorageKey> extract(
                 int slot, long amount, @Nonnull StorageAction action) {
             lastAction = action;
             long requested = Math.max(0L, amount);

@@ -2,6 +2,7 @@ package com.xinyihl.functionalstoragelegacy.common.world;
 
 import com.xinyihl.functionalstoragelegacy.Tags;
 import com.xinyihl.functionalstoragelegacy.common.inventory.EnderInventoryHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
 import net.minecraft.world.storage.WorldSavedData;
@@ -18,6 +19,7 @@ import java.util.Map;
 public class EnderSavedData extends WorldSavedData {
 
     private final Map<String, EnderInventoryHandler> frequencyMap = new HashMap<>();
+    private final Map<String, StorageSubscription> dirtySubscriptions = new HashMap<>();
 
     public EnderSavedData(String name) {
         super(name);
@@ -38,35 +40,33 @@ public class EnderSavedData extends WorldSavedData {
     }
 
     public EnderInventoryHandler getFrequency(String frequency) {
-        return frequencyMap.computeIfAbsent(frequency, f -> {
-            EnderInventoryHandler handler = new EnderInventoryHandler() {
-                @Override
-                public void onChange() {
-                    super.onChange();
-                    markDirty();
-                }
-            };
-            handler.setFrequency(frequency);
+        final String key = frequency == null ? "" : frequency;
+        return frequencyMap.computeIfAbsent(key, f -> {
+            EnderInventoryHandler handler = new EnderInventoryHandler() { };
+            // Initial construction is deliberately silent to external listeners.
+            handler.setFrequency(f);
+            dirtySubscriptions.put(f, handler.subscribe(change -> markDirty()));
             return handler;
         });
     }
 
     @Override
     public void readFromNBT(NBTTagCompound nbt) {
+        for (StorageSubscription subscription : dirtySubscriptions.values()) {
+            if (subscription != null) {
+                subscription.close();
+            }
+        }
+        dirtySubscriptions.clear();
         frequencyMap.clear();
         int count = nbt.getInteger("FrequencyCount");
         for (int i = 0; i < count; i++) {
             String key = nbt.getString("Freq_" + i);
             NBTTagCompound data = nbt.getCompoundTag("FreqData_" + i);
-            EnderInventoryHandler handler = new EnderInventoryHandler() {
-                @Override
-                public void onChange() {
-                    super.onChange();
-                    markDirty();
-                }
-            };
-            handler.setFrequency(key);
+            EnderInventoryHandler handler = new EnderInventoryHandler() { };
             handler.deserializeNBTFull(data);
+            handler.setFrequency(key);
+            dirtySubscriptions.put(key, handler.subscribe(change -> markDirty()));
             frequencyMap.put(key, handler);
         }
     }

@@ -1,281 +1,361 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory.controller;
 
 import com.xinyihl.functionalstoragelegacy.api.storage.BigFluidStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.FluidStorageKey;
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigFluidHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.IStorageHandler;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageKey;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageRoutingPolicy;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
 import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.IdentityHashMap;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 
-/**
- * Flat aggregate of connected fluid handlers. Tank-addressed operations do one
- * bounds check and delegate to exactly one child tank; global scans occur only
- * in the explicit routed methods. Rebuilding atomically replaces both the
- * immutable child list and its O(1) flattened index.
- */
+/** Fluid-specific routing facade over the generic controller index. */
 public final class ControllerFluidHandler implements IBigFluidHandler {
 
-    private List<IBigFluidHandler> handlers = Collections.emptyList();
-    private List<HandlerTankMapping> tankMappings = Collections.emptyList();
+    private final StorageRoutingPolicy<BigFluidStack, FluidStorageKey> policy;
+    private final ControllerStorageIndex<BigFluidStack, FluidStorageKey> index;
+
+    public ControllerFluidHandler() {
+        this(new FluidStorageRoutingPolicy());
+    }
+
+    public ControllerFluidHandler(
+            @Nonnull StorageRoutingPolicy<BigFluidStack, FluidStorageKey> policy) {
+        this.policy = Objects.requireNonNull(policy, "policy");
+        this.index = new ControllerStorageIndex<>(BigFluidStack.empty(), policy);
+    }
 
     @Override
-    public int getTankCount() {
-        return tankMappings.size();
+    public int getStorageCount() {
+        return index.getStorageCount();
     }
 
     @Nonnull
     @Override
-    public BigFluidStack getTankSnapshot(int tank) {
-        HandlerTankMapping mapping = mappingAt(tank);
-        return mapping == null
-                ? BigFluidStack.empty()
-                : mapping.handler.getTankSnapshot(mapping.localTank);
+    public BigFluidStack getSnapshot(int tank) {
+        return index.getSnapshot(tank);
+    }
+
+    @Nonnull
+    public BigFluidStack getIndexedSnapshot(int globalIndex) {
+        return index.getIndexedSnapshot(globalIndex);
     }
 
     @Override
-    public long getTankCapacity(int tank) {
-        HandlerTankMapping mapping = mappingAt(tank);
-        return mapping == null ? 0L : mapping.handler.getTankCapacity(mapping.localTank);
+    public long getCapacity(int tank) {
+        return index.getCapacity(tank);
     }
 
     @Override
     public boolean supportsFill(int tank) {
-        HandlerTankMapping mapping = mappingAt(tank);
-        return mapping != null && mapping.handler.supportsFill(mapping.localTank);
+        ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> storage =
+                index.getIndexedStorage(tank);
+        return storage != null && fluidHandler(storage).supportsFill(storage.getLocalIndex());
     }
 
     @Override
     public boolean supportsDrain(int tank) {
-        HandlerTankMapping mapping = mappingAt(tank);
-        return mapping != null && mapping.handler.supportsDrain(mapping.localTank);
+        ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> storage =
+                index.getIndexedStorage(tank);
+        return storage != null && fluidHandler(storage).supportsDrain(storage.getLocalIndex());
     }
 
     @Override
     public boolean supportsFluid(int tank, @Nonnull BigFluidStack fluid) {
-        HandlerTankMapping mapping = mappingAt(tank);
-        return mapping != null
-                && fluid != null
-                && mapping.handler.supportsFluid(mapping.localTank, fluid);
+        ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> storage =
+                index.getIndexedStorage(tank);
+        return storage != null && fluid != null
+                && fluidHandler(storage).supportsFluid(storage.getLocalIndex(), fluid);
     }
 
     @Nonnull
     @Override
-    public TransferResult<BigFluidStack> fillTank(
+    public TransferResult<BigFluidStack, FluidStorageKey> insert(
             int tank, @Nonnull BigFluidStack request, @Nonnull StorageAction action) {
-        Objects.requireNonNull(action, "action");
-        long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
-        if (requested == 0L) {
-            return emptyResult(0L, action);
-        }
-        HandlerTankMapping mapping = mappingAt(tank);
-        return mapping == null
-                ? emptyResult(requested, action)
-                : mapping.handler.fillTank(mapping.localTank, request, action);
+        return index.insert(tank, request, action);
     }
 
     @Nonnull
     @Override
-    public TransferResult<BigFluidStack> drainTank(
+    public TransferResult<BigFluidStack, FluidStorageKey> extract(
             int tank, long amount, @Nonnull StorageAction action) {
-        Objects.requireNonNull(action, "action");
-        long requested = Math.max(0L, amount);
-        if (requested == 0L) {
-            return emptyResult(0L, action);
-        }
-        HandlerTankMapping mapping = mappingAt(tank);
-        return mapping == null
-                ? emptyResult(requested, action)
-                : mapping.handler.drainTank(mapping.localTank, requested, action);
+        return index.extract(tank, amount, action);
     }
 
-    /**
-     * Performs one classification scan, then fills matching configured tanks
-     * before unconfigured empty tanks. Mismatched retained filters are skipped.
-     */
     @Nonnull
     @Override
-    public TransferResult<BigFluidStack> fillRouted(
+    public TransferResult<BigFluidStack, FluidStorageKey> fillRouted(
             @Nonnull BigFluidStack request, @Nonnull StorageAction action) {
         Objects.requireNonNull(action, "action");
-        long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
+        long requested = amountOf(request);
         if (requested == 0L) {
             return emptyResult(0L, action);
         }
-
-        List<HandlerTankMapping> matching = new ArrayList<>();
-        List<HandlerTankMapping> empty = new ArrayList<>();
-        for (HandlerTankMapping mapping : tankMappings) {
-            if (!mapping.handler.supportsFill(mapping.localTank)
-                    || !mapping.handler.supportsFluid(mapping.localTank, request)) {
-                continue;
-            }
-            BigFluidStack current = mapping.handler.getTankSnapshot(mapping.localTank);
-            if (current != null && current.hasTemplate()) {
-                if (current.isSameType(request)) {
-                    matching.add(mapping);
-                }
-            } else {
-                empty.add(mapping);
+        ControllerStorageIndex.CandidateSnapshot<BigFluidStack, FluidStorageKey> snapshot =
+                index.snapshotCandidates(request);
+        List<Candidate> candidates = new ArrayList<>();
+        addConfigured(candidates, snapshot.getExact(), request);
+        addConfigured(candidates, snapshot.getAliases(), request);
+        for (ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> candidate
+                : snapshot.getEmpty()) {
+            IBigFluidHandler child = fluidHandler(candidate);
+            int local = candidate.getLocalIndex();
+            if (child.supportsFill(local)
+                    && child.supportsFluid(local, request)
+                    && policy.isEmptySlotEligible(child, local, request)) {
+                candidates.add(new Candidate(candidate, 2));
             }
         }
-
-        long processed = fillCandidates(matching, request, action, 0L);
-        processed = fillCandidates(empty, request, action, processed);
-        return aggregateResult(request, processed, action);
-    }
-
-    /** Routes type-sensitive draining across matching child tanks in flat order. */
-    @Nonnull
-    @Override
-    public TransferResult<BigFluidStack> drainRouted(
-            @Nonnull BigFluidStack request, @Nonnull StorageAction action) {
-        Objects.requireNonNull(action, "action");
-        long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
-        if (requested == 0L) {
-            return emptyResult(0L, action);
-        }
+        Collections.sort(candidates, Comparator
+                .comparingInt((Candidate candidate) -> candidate.priority)
+                .thenComparingInt(candidate -> candidate.storage.getGlobalIndex()));
 
         long processed = 0L;
-        for (HandlerTankMapping mapping : tankMappings) {
-            if (processed >= requested
-                    || !mapping.handler.supportsDrain(mapping.localTank)
-                    || !mapping.handler.supportsFluid(mapping.localTank, request)) {
-                continue;
+        for (Candidate candidate : new ArrayList<>(candidates)) {
+            if (processed >= requested) {
+                break;
             }
-            BigFluidStack current = mapping.handler.getTankSnapshot(mapping.localTank);
-            if (current == null || current.isEmpty() || !current.isSameType(request)) {
+            long remaining = requested - processed;
+            TransferResult<BigFluidStack, FluidStorageKey> filled = fluidHandler(
+                    candidate.storage).insert(candidate.storage.getLocalIndex(),
+                    request.withAmount(remaining), action);
+            processed = saturatedAdd(processed, bounded(filled, remaining));
+        }
+        return aggregate(request, processed, action);
+    }
+
+    @Nonnull
+    @Override
+    public TransferResult<BigFluidStack, FluidStorageKey> drainRouted(
+            @Nonnull BigFluidStack request, @Nonnull StorageAction action) {
+        Objects.requireNonNull(action, "action");
+        long requested = amountOf(request);
+        if (requested == 0L) {
+            return emptyResult(0L, action);
+        }
+        List<ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey>> candidates =
+                index.snapshotCandidates(request).getExact();
+        long processed = 0L;
+        for (ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> candidate
+                : candidates) {
+            if (processed >= requested) {
+                break;
+            }
+            BigFluidStack current = candidate.getSnapshot();
+            IBigFluidHandler child = fluidHandler(candidate);
+            int local = candidate.getLocalIndex();
+            if (current.getAmount() <= 0L || !current.isSameType(request)
+                    || !child.supportsDrain(local) || !child.supportsFluid(local, request)) {
                 continue;
             }
             long remaining = requested - processed;
-            TransferResult<BigFluidStack> result = mapping.handler.drainTank(
-                    mapping.localTank, remaining, action);
-            long drained = result == null ? 0L
-                    : Math.min(remaining, Math.max(0L, result.getProcessedAmount()));
-            processed = saturatedAdd(processed, drained);
+            TransferResult<BigFluidStack, FluidStorageKey> drained = child.extract(
+                    local, remaining, action);
+            processed = saturatedAdd(processed, bounded(drained, remaining));
         }
-        return aggregateResult(request, processed, action);
+        return aggregate(request, processed, action);
     }
 
-    /**
-     * Selects the first drainable non-empty fluid in flat tank order, then
-     * aggregates only that fluid type across the controller.
-     */
     @Nonnull
     @Override
-    public TransferResult<BigFluidStack> drainRouted(
+    public TransferResult<BigFluidStack, FluidStorageKey> drainRouted(
             long amount, @Nonnull StorageAction action) {
         Objects.requireNonNull(action, "action");
         long requested = Math.max(0L, amount);
         if (requested == 0L) {
             return emptyResult(0L, action);
         }
-        for (HandlerTankMapping mapping : tankMappings) {
-            BigFluidStack current = mapping.handler.getTankSnapshot(mapping.localTank);
-            if (current != null && !current.isEmpty()
-                    && mapping.handler.supportsDrain(mapping.localTank)
-                    && mapping.handler.supportsFluid(mapping.localTank, current)) {
+        // occupied is already an ordered amount>0 snapshot; typed-zero filters
+        // never enter this selection pass.
+        List<Integer> occupied = index.getOccupiedIndices();
+        for (Integer global : occupied) {
+            ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> candidate =
+                    index.getIndexedStorage(global);
+            if (candidate == null) {
+                continue;
+            }
+            BigFluidStack current = candidate.getSnapshot();
+            IBigFluidHandler child = fluidHandler(candidate);
+            int local = candidate.getLocalIndex();
+            if (current.getAmount() > 0L && child.supportsDrain(local)
+                    && child.supportsFluid(local, current)) {
                 return drainRouted(current.withAmount(requested), action);
             }
         }
         return emptyResult(requested, action);
     }
 
-    /**
-     * Atomically replaces children and the flattened index. Later mutations of
-     * the caller's list cannot produce stale tank mappings.
-     *
-     * @param newHandlers desired handlers in routing order
-     */
-    public void setHandlers(@Nonnull List<? extends IBigFluidHandler> newHandlers) {
-        Objects.requireNonNull(newHandlers, "newHandlers");
-        List<IBigFluidHandler> handlerCopy = new ArrayList<>(newHandlers.size());
-        List<HandlerTankMapping> mappings = new ArrayList<>();
-        Set<Object> seen = Collections.newSetFromMap(
-                new IdentityHashMap<Object, Boolean>());
-        for (IBigFluidHandler handler : newHandlers) {
-            if (handler == null || !seen.add(identityOf(handler))) {
-                continue;
-            }
-            handlerCopy.add(handler);
-            int tanks = Math.max(0, handler.getTankCount());
-            for (int tank = 0; tank < tanks; tank++) {
-                mappings.add(new HandlerTankMapping(handler, tank));
-            }
-        }
-        handlers = Collections.unmodifiableList(handlerCopy);
-        tankMappings = Collections.unmodifiableList(mappings);
+    public void setHandlers(@Nonnull List<? extends IBigFluidHandler> handlers) {
+        index.setHandlers(handlers);
     }
 
-    /** @return immutable snapshot of current child handler order */
+    public void closeSubscriptions() {
+        index.closeSubscriptions();
+    }
+
     @Nonnull
     public List<IBigFluidHandler> getHandlers() {
-        return handlers;
+        List<IBigFluidHandler> result = new ArrayList<>();
+        for (IStorageHandler<BigFluidStack, FluidStorageKey> handler : index.getHandlers()) {
+            result.add((IBigFluidHandler) handler);
+        }
+        return Collections.unmodifiableList(result);
     }
 
-    private static Object identityOf(IBigFluidHandler handler) {
-        if (handler instanceof StorageIdentityProvider) {
-            Object identity = ((StorageIdentityProvider) handler).getStorageIdentity();
-            if (identity != null) {
-                return identity;
+    @Nonnull
+    public List<Integer> getOccupiedIndices() {
+        return index.getOccupiedIndices();
+    }
+
+    @Nonnull
+    public List<Integer> getOccupiedTanks() {
+        return getOccupiedIndices();
+    }
+
+    @Nonnull
+    public List<Integer> getEmptyIndices() {
+        return index.getEmptyIndices();
+    }
+
+    @Nonnull
+    public List<Integer> getEmptyTanks() {
+        return getEmptyIndices();
+    }
+
+    @Nonnull
+    public Set<Integer> getIndicesForKey(@Nullable StorageKey key) {
+        return index.getIndicesForKey(key);
+    }
+
+    @Nonnull
+    public Set<Integer> getExactIndices(@Nullable StorageKey key) {
+        return getIndicesForKey(key);
+    }
+
+    @Nonnull
+    public Set<Integer> getIndicesForAlias(@Nullable StorageKey alias) {
+        return index.getIndicesForAlias(alias);
+    }
+
+    @Nonnull
+    public Set<Integer> getAliasIndices(@Nullable StorageKey alias) {
+        return getIndicesForAlias(alias);
+    }
+
+    @Nonnull
+    public Set<Integer> getCandidateIndices(@Nullable StorageKey key) {
+        return index.getCandidateIndices(key);
+    }
+
+    @Nonnull
+    public Set<Integer> getCandidateIndices(@Nullable BigFluidStack request) {
+        return index.getCandidateIndices(request);
+    }
+
+    @Nullable
+    public ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey>
+    getIndexedTank(int globalIndex) {
+        return index.getIndexedStorage(globalIndex);
+    }
+
+    @Nonnull
+    public List<ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey>>
+    getIndexedTanks() {
+        return index.getIndexedStorages();
+    }
+
+    public int getGlobalIndex(@Nonnull IBigFluidHandler handler, int localIndex) {
+        return index.getGlobalIndex(handler, localIndex);
+    }
+
+    @Nonnull
+    public ControllerStorageIndex<BigFluidStack, FluidStorageKey> getIndex() {
+        return index;
+    }
+
+    @Override
+    public void onChange(@Nonnull StorageChange<BigFluidStack, FluidStorageKey> change) {
+        index.onChange(change);
+    }
+
+    @Nonnull
+    @Override
+    public StorageSubscription subscribe(
+            @Nonnull Consumer<? super StorageChange<BigFluidStack, FluidStorageKey>> listener) {
+        return index.subscribe(listener);
+    }
+
+    private void addConfigured(
+            List<Candidate> result,
+            List<ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey>> supplied,
+            BigFluidStack request) {
+        for (ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> candidate
+                : supplied) {
+            IBigFluidHandler child = fluidHandler(candidate);
+            int local = candidate.getLocalIndex();
+            if (!child.supportsFill(local) || !child.supportsFluid(local, request)) {
+                continue;
+            }
+            int priority = policy.getCandidatePriority(
+                    child, local, candidate.getSnapshot(), request);
+            if (priority >= 0) {
+                result.add(new Candidate(candidate, priority));
             }
         }
-        return handler;
     }
 
-    private long fillCandidates(
-            List<HandlerTankMapping> candidates,
-            BigFluidStack request,
-            StorageAction action,
-            long alreadyProcessed) {
-        long processed = alreadyProcessed;
-        for (HandlerTankMapping mapping : candidates) {
-            if (processed >= request.getAmount()) {
-                break;
-            }
-            long remaining = request.getAmount() - processed;
-            TransferResult<BigFluidStack> result = mapping.handler.fillTank(
-                    mapping.localTank, request.withAmount(remaining), action);
-            long filled = result == null ? 0L
-                    : Math.min(remaining, Math.max(0L, result.getProcessedAmount()));
-            processed = saturatedAdd(processed, filled);
-        }
-        return processed;
+    private static IBigFluidHandler fluidHandler(
+            ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> storage) {
+        return (IBigFluidHandler) storage.getHandler();
     }
 
-    private HandlerTankMapping mappingAt(int tank) {
-        return tank < 0 || tank >= tankMappings.size() ? null : tankMappings.get(tank);
+    private static long amountOf(@Nullable BigFluidStack request) {
+        return request == null || request.isEmpty() ? 0L : request.getAmount();
     }
 
-    private static TransferResult<BigFluidStack> emptyResult(
+    private static long bounded(
+            @Nullable TransferResult<BigFluidStack, FluidStorageKey> result, long remaining) {
+        return result == null ? 0L
+                : Math.min(remaining, Math.max(0L, result.getProcessedAmount()));
+    }
+
+    private static long saturatedAdd(long left, long right) {
+        return left > Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
+    }
+
+    private static TransferResult<BigFluidStack, FluidStorageKey> aggregate(
+            BigFluidStack request, long processed, StorageAction action) {
+        long amount = Math.min(request.getAmount(), Math.max(0L, processed));
+        return new TransferResult<>(request.getAmount(), amount == 0L
+                ? BigFluidStack.empty() : request.withAmount(amount), action);
+    }
+
+    private static TransferResult<BigFluidStack, FluidStorageKey> emptyResult(
             long requested, StorageAction action) {
         return new TransferResult<>(requested, BigFluidStack.empty(), action);
     }
 
-    private static TransferResult<BigFluidStack> aggregateResult(
-            BigFluidStack request, long processed, StorageAction action) {
-        return new TransferResult<>(
-                request.getAmount(),
-                processed == 0L ? BigFluidStack.empty() : request.withAmount(processed),
-                action);
-    }
+    private static final class Candidate {
+        private final ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> storage;
+        private final int priority;
 
-    private static long saturatedAdd(long left, long right) {
-        return left >= Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
-    }
-
-    private static final class HandlerTankMapping {
-        private final IBigFluidHandler handler;
-        private final int localTank;
-
-        private HandlerTankMapping(IBigFluidHandler handler, int localTank) {
-            this.handler = handler;
-            this.localTank = localTank;
+        private Candidate(
+                ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> storage,
+                int priority) {
+            this.storage = storage;
+            this.priority = priority;
         }
     }
 }

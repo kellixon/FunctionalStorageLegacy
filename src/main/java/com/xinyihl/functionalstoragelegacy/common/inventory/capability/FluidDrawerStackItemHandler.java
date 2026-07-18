@@ -30,12 +30,7 @@ public class FluidDrawerStackItemHandler extends BigFluidHandler implements IFlu
         );
         this.locked = DrawerStackDataHelper.isLocked(tileData);
         deserializeNBT(tileData);
-    }
-
-    @Override
-    public void onChange() {
-        NBTTagCompound tileData = DrawerStackDataHelper.getOrCreateTileData(drawerStack);
-        tileData.setTag("StorageV2", serializeNBT().getCompoundTag("StorageV2"));
+        subscribe(change -> persistStorage());
     }
 
     @Override
@@ -73,5 +68,10 @@ public class FluidDrawerStackItemHandler extends BigFluidHandler implements IFlu
     @Override
     public ItemStack getContainer() {
         return drawerStack;
+    }
+
+    private void persistStorage() {
+        NBTTagCompound tileData = DrawerStackDataHelper.getOrCreateTileData(drawerStack);
+        tileData.setTag("StorageV2", serializeNBT().getCompoundTag("StorageV2"));
     }
 }

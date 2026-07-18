@@ -30,15 +30,11 @@ public class FramedDrawerTileTest {
         long amount = (long) Integer.MAX_VALUE + 8_765L;
         BigInventoryHandler seededStorage = new BigInventoryHandler(1) {
             @Override
-            public void onChange() {
-            }
-
-            @Override
             public double getMultiplier() {
                 return Double.POSITIVE_INFINITY;
             }
         };
-        seededStorage.insertIntoSlot(
+        seededStorage.insert(
                 0,
                 new BigItemStack(new ItemStack(Items.DIAMOND), amount),
                 StorageAction.EXECUTE);
@@ -60,14 +56,14 @@ public class FramedDrawerTileTest {
         assertTrue(serialized.hasKey("StorageV2", Constants.NBT.TAG_COMPOUND));
         assertTrue(serialized.hasKey(
                 FramedDrawerStyle.NBT_KEY, Constants.NBT.TAG_COMPOUND));
-        assertEquals(amount, source.getItemHandler().getSlotSnapshot(0).getAmount());
+        assertEquals(amount, source.getItemHandler().getSnapshot(0).getAmount());
         assertEquals(style, source.getStyle());
 
         FramedDrawerTile restored = new FramedDrawerTile();
         restored.loadTileFromNBT(serialized);
 
-        assertEquals(amount, restored.getItemHandler().getSlotSnapshot(0).getAmount());
-        assertTrue(restored.getItemHandler().getSlotSnapshot(0)
+        assertEquals(amount, restored.getItemHandler().getSnapshot(0).getAmount());
+        assertTrue(restored.getItemHandler().getSnapshot(0)
                 .isSameType(new ItemStack(Items.DIAMOND)));
         assertEquals(style, restored.getStyle());
         assertEquals(2, restored.getStyle().getFront().getMetadata());
@@ -94,11 +90,11 @@ public class FramedDrawerTileTest {
                 new StorageUpgradeItem(StorageUpgradeItem.StorageTier.MAX)));
         long amount = (long) Integer.MAX_VALUE + 99_999L;
 
-        assertEquals(Long.MAX_VALUE, tile.getItemHandler().getSlotCapacity(0));
-        assertEquals(amount, tile.getItemHandler().insertIntoSlot(
+        assertEquals(Long.MAX_VALUE, tile.getItemHandler().getCapacity(0));
+        assertEquals(amount, tile.getItemHandler().insert(
                 0,
                 new BigItemStack(new ItemStack(Items.DIAMOND), amount),
                 StorageAction.EXECUTE).getProcessedAmount());
-        assertEquals(amount, tile.getItemHandler().getSlotSnapshot(0).getAmount());
+        assertEquals(amount, tile.getItemHandler().getSnapshot(0).getAmount());
     }
 }

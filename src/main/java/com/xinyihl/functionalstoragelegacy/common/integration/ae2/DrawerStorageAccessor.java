@@ -15,10 +15,11 @@ import javax.annotation.Nullable;
  * IStorageMonitorableAccessor implementation for drawers.
  * Provides item and/or fluid ME monitors to AE2 storage bus.
  */
-public class DrawerStorageAccessor implements IStorageMonitorableAccessor {
+public class DrawerStorageAccessor implements IStorageMonitorableAccessor, AutoCloseable {
 
     private final DrawerMEMonitor<IAEItemStack> itemMonitor;
     private final DrawerMEMonitor<IAEFluidStack> fluidMonitor;
+    private boolean closed;
 
     public DrawerStorageAccessor(@Nullable DrawerMEMonitor<IAEItemStack> itemMonitor,
                                  @Nullable DrawerMEMonitor<IAEFluidStack> fluidMonitor) {
@@ -27,7 +28,10 @@ public class DrawerStorageAccessor implements IStorageMonitorableAccessor {
     }
 
     @Override
-    public IStorageMonitorable getInventory(IActionSource src) {
+    public synchronized IStorageMonitorable getInventory(IActionSource src) {
+        if (closed) {
+            return null;
+        }
         return new IStorageMonitorable() {
             @SuppressWarnings("unchecked")
             @Override
@@ -41,5 +45,29 @@ public class DrawerStorageAccessor implements IStorageMonitorableAccessor {
                 return null;
             }
         };
+    }
+
+    /** Releases both monitor subscriptions; repeated invalidation is harmless. */
+    @Override
+    public synchronized void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        if (itemMonitor != null) {
+            itemMonitor.close();
+        }
+        if (fluidMonitor != null) {
+            fluidMonitor.close();
+        }
+    }
+
+    /** Alias used by capability providers when a tile is invalidated. */
+    public void invalidate() {
+        close();
+    }
+
+    public synchronized boolean isClosed() {
+        return closed;
     }
 }

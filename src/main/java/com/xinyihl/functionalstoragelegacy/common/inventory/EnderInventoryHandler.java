@@ -3,6 +3,8 @@ package com.xinyihl.functionalstoragelegacy.common.inventory;
 import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigInventoryHandler;
 import net.minecraft.nbt.NBTTagCompound;
 
+import java.util.Objects;
+
 /**
  * Ender inventory handler - extends BigInventoryHandler with a frequency UUID for cross-dimensional sharing.
  */
@@ -13,23 +15,8 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
     private boolean voidsOverflow = false;
     private boolean isCreative = false;
     private double multiplier = 64D * 4D;
-    public boolean needUpdate = true;
-
     public EnderInventoryHandler() {
-        super(1); // Ender drawer has 1 slot, base 32 slot amount
-    }
-
-    @Override
-    public void onChange() {
-        needUpdate = true;
-    }
-
-    public boolean needUpdate() {
-        return needUpdate;
-    }
-
-    public void setUpdate() {
-        needUpdate = false;
+        super(1); // Ender drawer has one shared slot.
     }
 
     @Override
@@ -38,7 +25,11 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
     }
 
     public void setMultiplier(double multiplier) {
+        if (Double.compare(this.multiplier, multiplier) == 0) {
+            return;
+        }
         this.multiplier = multiplier;
+        notifyConfigurationChanged();
     }
 
     @Override
@@ -47,7 +38,11 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
     }
 
     public void setVoidsOverflow(boolean voidsOverflow) {
+        if (this.voidsOverflow == voidsOverflow) {
+            return;
+        }
         this.voidsOverflow = voidsOverflow;
+        notifyConfigurationChanged();
     }
 
     @Override
@@ -56,8 +51,12 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
     }
 
     public void setLocked(boolean locked) {
+        if (this.locked == locked) {
+            return;
+        }
         this.locked = locked;
-        setLockFilters(locked);
+        // This inherited entry clears empty filters silently and emits one RESET.
+        applyLockConfiguration(locked);
     }
 
     @Override
@@ -66,7 +65,11 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
     }
 
     public void setCreative(boolean isCreative) {
+        if (this.isCreative == isCreative) {
+            return;
+        }
         this.isCreative = isCreative;
+        notifyConfigurationChanged();
     }
 
     public String getFrequency() {
@@ -74,7 +77,11 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
     }
 
     public void setFrequency(String frequency) {
+        if (Objects.equals(this.frequency, frequency)) {
+            return;
+        }
         this.frequency = frequency;
+        notifyConfigurationChanged();
     }
 
     public NBTTagCompound serializeNBTFull() {
@@ -88,12 +95,33 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
     }
 
     public void deserializeNBTFull(NBTTagCompound nbt) {
-        frequency = nbt.getString("Frequency");
-        setLocked(nbt.getBoolean("Locked"));
-        voidsOverflow = nbt.getBoolean("VoidOverflow");
-        isCreative = nbt.getBoolean("IsCreative");
-        multiplier = nbt.getDouble("Multiplier");
-        if (multiplier == 0D) multiplier = 1D;
+        NBTTagCompound beforeStorage = serializeNBT();
+        String nextFrequency = nbt == null ? "" : nbt.getString("Frequency");
+        boolean nextLocked = nbt != null && nbt.getBoolean("Locked");
+        boolean nextVoidsOverflow = nbt != null && nbt.getBoolean("VoidOverflow");
+        boolean nextCreative = nbt != null && nbt.getBoolean("IsCreative");
+        double nextMultiplier = nbt == null ? 1D : nbt.getDouble("Multiplier");
+        if (nextMultiplier == 0D) {
+            nextMultiplier = 1D;
+        }
+
+        boolean configurationChanged = !Objects.equals(frequency, nextFrequency)
+                || locked != nextLocked
+                || voidsOverflow != nextVoidsOverflow
+                || isCreative != nextCreative
+                || Double.compare(multiplier, nextMultiplier) != 0;
+        // Set all virtual properties before loading slots so unlock/creative
+        // filtering is applied against the final configuration.
+        frequency = nextFrequency;
+        locked = nextLocked;
+        voidsOverflow = nextVoidsOverflow;
+        isCreative = nextCreative;
+        multiplier = nextMultiplier;
         deserializeNBT(nbt);
+
+        boolean storageChanged = !beforeStorage.equals(serializeNBT());
+        if (configurationChanged && !storageChanged) {
+            notifyConfigurationChanged();
+        }
     }
 }

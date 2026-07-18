@@ -120,8 +120,8 @@ public class DrawerItemBlock extends ItemBlock {
         if (handler == null) {
             return lines;
         }
-        for (int slot = 0; slot < handler.getSlotCount(); slot++) {
-            BigItemStack snapshot = handler.getSlotSnapshot(slot);
+        for (int slot = 0; slot < handler.getStorageCount(); slot++) {
+            BigItemStack snapshot = handler.getSnapshot(slot);
             if (snapshot == null || snapshot.isEmpty()) {
                 continue;
             }

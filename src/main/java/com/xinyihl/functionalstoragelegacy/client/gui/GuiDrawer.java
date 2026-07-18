@@ -60,13 +60,13 @@ public class GuiDrawer extends GuiContainer {
                     frontTexture,
                     layout.getSlotCount(),
                     DrawerGuiLayout.slotPositions(layout),
-                    handler::getSlotSnapshot,
-                    handler::getSlotCapacity
+                    handler::getSnapshot,
+                    handler::getCapacity
             );
         } else if (tile instanceof CompactingDrawerTile) {
             CompactingDrawerTile compactingTile = (CompactingDrawerTile) tile;
             IBigItemHandler handler = compactingTile.getItemHandler();
-            int slots = handler.getSlotCount();
+            int slots = handler.getStorageCount();
             final int slotCount = slots;
             Function<Integer, Pair<Integer, Integer>> positions = getCompactingPositions(slotCount);
             ResourceLocation frontTexture;
@@ -80,8 +80,8 @@ public class GuiDrawer extends GuiContainer {
                     frontTexture,
                     slotCount,
                     positions,
-                    handler::getSlotSnapshot,
-                    handler::getSlotCapacity
+                    handler::getSnapshot,
+                    handler::getCapacity
             );
         } else if (tile instanceof FluidDrawerTile) {
             FluidDrawerTile fluidTile = (FluidDrawerTile) tile;
@@ -96,7 +96,7 @@ public class GuiDrawer extends GuiContainer {
                     layout.getSlotCount(),
                     DrawerGuiLayout.slotPositions(layout),
                     () -> handler,
-                    handler::getTankCapacity
+                    handler::getCapacity
             );
         } else if (tile instanceof EnderDrawerTile) {
             EnderDrawerTile enderTile = (EnderDrawerTile) tile;
@@ -108,10 +108,10 @@ public class GuiDrawer extends GuiContainer {
                     DrawerGuiLayout.slotPositions(DrawerLayout.X_1),
                     i -> enderTile.getItemHandler() == null
                             ? BigItemStack.empty()
-                            : enderTile.getItemHandler().getSlotSnapshot(0),
+                            : enderTile.getItemHandler().getSnapshot(0),
                     i -> {
                         if (enderTile.getItemHandler() != null) {
-                            return enderTile.getItemHandler().getSlotCapacity(0);
+                            return enderTile.getItemHandler().getCapacity(0);
                         }
                         return 0L;
                     }

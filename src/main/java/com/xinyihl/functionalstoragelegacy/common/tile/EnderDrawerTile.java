@@ -2,7 +2,11 @@ package com.xinyihl.functionalstoragelegacy.common.tile;
 
 import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.ItemStorageKey;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageChangeDispatcher;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
 import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
 import com.xinyihl.functionalstoragelegacy.common.inventory.EnderInventoryHandler;
 import com.xinyihl.functionalstoragelegacy.common.inventory.controller.StorageIdentityProvider;
@@ -26,24 +30,22 @@ import javax.annotation.Nullable;
 import java.util.HashMap;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Consumer;
 
-/**
- * TileEntity for ender drawers.
- * Shares inventory across all ender drawers with the same frequency.
- * Uses EnderSavedData for cross-dimensional persistence.
- */
+/** TileEntity for an inventory shared by all drawers on one frequency. */
 public class EnderDrawerTile extends ControllableDrawerTile {
 
     private static final HashMap<UUID, Long> INTERACTION_LOGGER = new HashMap<>();
 
     private String frequency;
     private EnderInventoryHandler storage;
-    private final IBigItemHandler itemHandlerFacade = new ForwardingItemHandler();
-    private int removeTicks = 0;
+    private final ForwardingItemHandler itemHandlerFacade = new ForwardingItemHandler();
+    private int removeTicks;
 
     public EnderDrawerTile() {
         super();
         this.frequency = UUID.randomUUID().toString();
+        bindStorageHandler(itemHandlerFacade, itemHandlerFacade::emitReset);
     }
 
     @Override
@@ -51,26 +53,28 @@ public class EnderDrawerTile extends ControllableDrawerTile {
         super.update();
         if (world != null && !world.isRemote) {
             removeTicks = Math.max(removeTicks - 1, 0);
-
-            if (world.getTotalWorldTime() % 10 == 0 && storage != null) {
-                if (storage.isLocked() != isLocked()) {
-                    super.setLocked(storage.isLocked());
-                }
-            }
-
-            if (storage != null && storage.needUpdate()) {
-                sendUpdatePacket();
-                storage.setUpdate();
-            }
         }
     }
 
     @Override
     public void onLoad() {
         super.onLoad();
-        if (!world.isRemote && storage == null) {
-            replaceStorage(EnderSavedData.getInstance(world).getFrequency(this.frequency));
+        itemHandlerFacade.rebindTarget();
+        if (world != null && !world.isRemote && storage == null) {
+            replaceStorage(EnderSavedData.getInstance(world).getFrequency(frequency));
         }
+    }
+
+    @Override
+    public void invalidate() {
+        itemHandlerFacade.closeTarget();
+        super.invalidate();
+    }
+
+    @Override
+    public void onChunkUnload() {
+        itemHandlerFacade.closeTarget();
+        super.onChunkUnload();
     }
 
     @Override
@@ -82,61 +86,107 @@ public class EnderDrawerTile extends ControllableDrawerTile {
             return true;
         }
 
-        if (slot != -1 && !world.isRemote && storage != null) {
+        if (slot != -1 && world != null && !world.isRemote && storage != null) {
             boolean changed = false;
-            // Insert held item
             if (!heldStack.isEmpty()) {
-                ItemStack result = storage.insertItem(0, heldStack, true);
-                if (result.getCount() != heldStack.getCount()) {
-                    player.setHeldItem(hand, storage.insertItem(0, heldStack, false));
-                    changed = true;
+                BigItemStack request = new BigItemStack(heldStack, heldStack.getCount());
+                TransferResult<BigItemStack, ItemStorageKey> simulated = storage.insert(
+                        0, request, StorageAction.SIMULATE);
+                if (simulated.getProcessedAmount() > 0L) {
+                    TransferResult<BigItemStack, ItemStorageKey> result = storage.insert(
+                            0, request, StorageAction.EXECUTE);
+                    long processed = Math.min((long) heldStack.getCount(),
+                            Math.max(0L, result.getProcessedAmount()));
+                    if (processed > 0L) {
+                        ItemStack remaining = heldStack.copy();
+                        remaining.shrink((int) processed);
+                        player.setHeldItem(hand, remaining);
+                        changed = true;
+                    }
                 }
             }
 
-            // Double-click fast insert
-            if (System.currentTimeMillis() - INTERACTION_LOGGER.getOrDefault(player.getUniqueID(), System.currentTimeMillis()) < 300 && (isLocked() || !storage.getStackInSlot(slot).isEmpty())) {
+            long lastInteraction = INTERACTION_LOGGER.getOrDefault(
+                    player.getUniqueID(), System.currentTimeMillis());
+            if (System.currentTimeMillis() - lastInteraction < 300
+                    && (isLocked() || !storage.getSnapshot(0).isEmpty())) {
                 for (int i = 0; i < player.inventory.getSizeInventory(); i++) {
                     ItemStack invStack = player.inventory.getStackInSlot(i);
-                    if (!invStack.isEmpty()) {
-                        ItemStack testResult = storage.insertItem(0, invStack, true);
-                        if (testResult.getCount() != invStack.getCount()) {
-                            ItemStack leftover = storage.insertItem(0, invStack.copy(), false);
+                    if (invStack.isEmpty()) {
+                        continue;
+                    }
+                    BigItemStack request = new BigItemStack(invStack, invStack.getCount());
+                    TransferResult<BigItemStack, ItemStorageKey> simulated = storage.insert(
+                            0, request, StorageAction.SIMULATE);
+                    if (simulated.getProcessedAmount() > 0L) {
+                        TransferResult<BigItemStack, ItemStorageKey> result = storage.insert(
+                                0, request, StorageAction.EXECUTE);
+                        long processed = Math.min((long) invStack.getCount(),
+                                Math.max(0L, result.getProcessedAmount()));
+                        if (processed > 0L) {
+                            ItemStack leftover = invStack.copy();
+                            leftover.shrink((int) processed);
                             player.inventory.setInventorySlotContents(i, leftover);
                             changed = true;
                         }
                     }
                 }
             }
-
             INTERACTION_LOGGER.put(player.getUniqueID(), System.currentTimeMillis());
-
             if (changed) {
-                sendUpdatePacket();
+                requestUpdatePacket();
             }
         }
-
         return true;
     }
 
     @Override
     public void onClicked(EntityPlayer player, int slot) {
-        if (!world.isRemote && slot != -1 && removeTicks == 0 && storage != null) {
-            removeTicks = 3;
-            int amount = player.isSneaking() ? storage.getStackInSlot(0).getMaxStackSize() : 1;
-            ItemStack extracted = storage.extractItem(0, amount, false);
-            if (!extracted.isEmpty()) {
-                ItemHandlerHelper.giveItemToPlayer(player, extracted);
-                sendUpdatePacket();
-            }
+        if (world == null || world.isRemote || slot == -1 || removeTicks != 0
+                || storage == null) {
+            return;
+        }
+        removeTicks = 3;
+        BigItemStack snapshot = storage.getSnapshot(0);
+        int amount = player.isSneaking() && snapshot.hasTemplate()
+                ? snapshot.getTemplate().getMaxStackSize() : 1;
+        TransferResult<BigItemStack, ItemStorageKey> result = storage.extract(
+                0, amount, StorageAction.EXECUTE);
+        if (result.getProcessedAmount() > 0L && !result.getProcessed().isEmpty()) {
+            ItemHandlerHelper.giveItemToPlayer(player, result.getProcessed().toItemStack());
+        }
+    }
+
+    /** Updates the shared lock exactly once; all peers receive the handler RESET. */
+    @Override
+    public void setLocked(boolean locked) {
+        if (this.isLocked() == locked && (storage == null || storage.isLocked() == locked)) {
+            return;
+        }
+        this.isLocked = locked;
+        this.needsUpgradeCache = true;
+        EnderInventoryHandler target = storage;
+        if (target == null && world != null && !world.isRemote) {
+            target = EnderSavedData.getInstance(world).getFrequency(frequency);
+            replaceStorage(target);
+        }
+        if (target != null && (world == null || !world.isRemote)) {
+            target.setLocked(locked);
+        } else {
+            markDirty();
+            requestUpdatePacket();
         }
     }
 
     @Override
-    public void setLocked(boolean locked) {
-        super.setLocked(locked);
-        if (world != null && !world.isRemote) {
-            EnderSavedData.getInstance(world).getFrequency(frequency).setLocked(locked);
-        }
+    public boolean isLocked() {
+        EnderInventoryHandler target = storage;
+        return target == null ? super.isLocked() : target.isLocked();
+    }
+
+    @Override
+    protected void onLockStateChanged(boolean locked) {
+        // Shared EnderInventoryHandler owns lock filtering and the single RESET.
     }
 
     @Override
@@ -147,17 +197,24 @@ public class EnderDrawerTile extends ControllableDrawerTile {
     @Override
     protected void readCustomData(NBTTagCompound nbt) {
         if (nbt.hasKey("Frequency")) {
-            String oldFreq = this.frequency;
-            this.frequency = nbt.getString("Frequency");
-            if (world != null && !world.isRemote && !this.frequency.equals(oldFreq)) {
-                replaceStorage(EnderSavedData.getInstance(world).getFrequency(this.frequency));
-            }
+            frequency = normalizeFrequency(nbt.getString("Frequency"));
+        }
+        boolean replaced = false;
+        if (world != null && !world.isRemote) {
+            replaced = replaceStorage(EnderSavedData.getInstance(world).getFrequency(frequency));
+        }
+        finishStorageRead(itemHandlerFacade, null);
+        if (world != null && !world.isRemote && !replaced) {
+            itemHandlerFacade.emitReset();
         }
     }
 
     @Nonnull
     @Override
     public NBTTagCompound writeToNBT(@Nonnull NBTTagCompound compound) {
+        if (storage != null) {
+            this.isLocked = storage.isLocked();
+        }
         compound = super.writeToNBT(compound);
         compound.setString("Frequency", frequency);
         return compound;
@@ -191,20 +248,34 @@ public class EnderDrawerTile extends ControllableDrawerTile {
 
     @Override
     public void readFromNBT(@Nonnull NBTTagCompound compound) {
+        beginStorageRead();
         if (compound.hasKey("Frequency")) {
-            this.frequency = compound.getString("Frequency");
+            frequency = normalizeFrequency(compound.getString("Frequency"));
         }
         super.readFromNBT(compound);
+        // Server storage is loaded from EnderSavedData in readCustomData/item load;
+        // client packets carry the full shared inventory separately.
+        boolean replaced = false;
+        if (world != null && !world.isRemote) {
+            replaced = replaceStorage(EnderSavedData.getInstance(world).getFrequency(frequency));
+        }
+        finishStorageRead(itemHandlerFacade, null);
+        if (world != null && !world.isRemote && !replaced) {
+            itemHandlerFacade.emitReset();
+        }
     }
 
     void readSyncedInventory(NBTTagCompound nbt) {
-        if (nbt.hasKey("EnderInventory")) {
-            if (this.storage == null) {
-                replaceStorage(new EnderInventoryHandler() {
-                });
-            }
-            this.storage.deserializeNBTFull(nbt.getCompoundTag("EnderInventory"));
+        if (!nbt.hasKey("EnderInventory")) {
+            return;
         }
+        EnderInventoryHandler replacement = new EnderInventoryHandler() { };
+        replacement.deserializeNBTFull(nbt.getCompoundTag("EnderInventory"));
+        String syncedFrequency = replacement.getFrequency();
+        if (syncedFrequency != null && !syncedFrequency.isEmpty()) {
+            frequency = syncedFrequency;
+        }
+        replaceStorage(replacement);
     }
 
     @Override
@@ -214,7 +285,9 @@ public class EnderDrawerTile extends ControllableDrawerTile {
 
     @Override
     public boolean hasCapability(@Nonnull Capability<?> capability, @Nullable EnumFacing facing) {
-        if (capability == CapabilityItemHandler.ITEM_HANDLER_CAPABILITY) return true;
+        if (capability == CapabilityItemHandler.ITEM_HANDLER_CAPABILITY) {
+            return true;
+        }
         return super.hasCapability(capability, facing);
     }
 
@@ -229,15 +302,17 @@ public class EnderDrawerTile extends ControllableDrawerTile {
 
     @Override
     public int getStorageUpgradesAmount() {
-        return 0; // No storage upgrades for ender drawers
+        return 0;
     }
 
     @Override
     public boolean isEverythingEmpty() {
-        if (!super.isEverythingEmpty()) return false;
-        if (storage != null) {
-            for (int i = 0; i < storage.getSlots(); i++) {
-                if (!storage.getStackInSlot(i).isEmpty()) return false;
+        if (!super.isEverythingEmpty()) {
+            return false;
+        }
+        for (int i = 0; i < itemHandlerFacade.getStorageCount(); i++) {
+            if (itemHandlerFacade.getSnapshot(i).hasTemplate()) {
+                return false;
             }
         }
         return true;
@@ -247,23 +322,41 @@ public class EnderDrawerTile extends ControllableDrawerTile {
         return frequency;
     }
 
-    public void setFrequency(String frequency) {
-        if (frequency == null) return;
-        this.frequency = frequency;
+    public void setFrequency(String nextFrequency) {
+        nextFrequency = normalizeFrequency(nextFrequency);
+        if (Objects.equals(this.frequency, nextFrequency)) {
+            return;
+        }
+        this.frequency = nextFrequency;
         if (world != null && !world.isRemote) {
-            replaceStorage(EnderSavedData.getInstance(world).getFrequency(this.frequency));
+            replaceStorage(EnderSavedData.getInstance(world).getFrequency(nextFrequency));
+        } else {
             markDirty();
-            sendUpdatePacket();
+            requestUpdatePacket();
         }
     }
 
-    void replaceStorage(@Nullable EnderInventoryHandler replacement) {
+    /**
+     * Replaces the shared target in the required order: close old target
+     * listener, bind target, subscribe, facade RESET, accessor invalidation.
+     */
+    boolean replaceStorage(@Nullable EnderInventoryHandler replacement) {
         if (storage == replacement) {
-            return;
+            return false;
         }
+        itemHandlerFacade.closeTarget();
         storage = replacement;
+        if (replacement != null) {
+            this.isLocked = replacement.isLocked();
+            this.needsUpgradeCache = true;
+        }
+        itemHandlerFacade.bindTarget(replacement);
+        itemHandlerFacade.emitReset();
         invalidateAE2Accessor();
+        markDirty();
+        requestUpdatePacket();
         requestControllerHandlerRefresh();
+        return true;
     }
 
     protected void requestControllerHandlerRefresh() {
@@ -276,54 +369,59 @@ public class EnderDrawerTile extends ControllableDrawerTile {
         }
     }
 
+    private static String normalizeFrequency(String value) {
+        return value == null ? "" : value;
+    }
+
     private final class ForwardingItemHandler
             implements IBigItemHandler, StorageIdentityProvider {
 
+        private final StorageChangeDispatcher<BigItemStack, ItemStorageKey> dispatcher =
+                new StorageChangeDispatcher<>();
+        private StorageSubscription targetSubscription = StorageSubscription.CLOSED;
+
         @Override
-        public int getSlotCount() {
+        public int getStorageCount() {
             EnderInventoryHandler target = storage;
-            return target == null ? 1 : target.getSlotCount();
+            return target == null ? 1 : target.getStorageCount();
         }
 
         @Nonnull
         @Override
-        public BigItemStack getSlotSnapshot(int slot) {
+        public BigItemStack getSnapshot(int slot) {
             EnderInventoryHandler target = storage;
-            return target == null
-                    ? BigItemStack.empty() : target.getSlotSnapshot(slot);
+            return target == null ? BigItemStack.empty() : target.getSnapshot(slot);
         }
 
         @Override
-        public long getSlotCapacity(int slot) {
+        public long getCapacity(int slot) {
             EnderInventoryHandler target = storage;
-            return target == null ? 0L : target.getSlotCapacity(slot);
+            return target == null ? 0L : target.getCapacity(slot);
         }
 
         @Nonnull
         @Override
-        public TransferResult<BigItemStack> insertIntoSlot(
+        public TransferResult<BigItemStack, ItemStorageKey> insert(
                 int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action) {
             Objects.requireNonNull(action, "action");
             EnderInventoryHandler target = storage;
             if (target != null) {
-                return target.insertIntoSlot(slot, request, action);
+                return target.insert(slot, request, action);
             }
-            long requested = request == null || request.isEmpty()
-                    ? 0L : request.getAmount();
+            long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
             return new TransferResult<>(requested, BigItemStack.empty(), action);
         }
 
         @Nonnull
         @Override
-        public TransferResult<BigItemStack> extractFromSlot(
+        public TransferResult<BigItemStack, ItemStorageKey> extract(
                 int slot, long amount, @Nonnull StorageAction action) {
             Objects.requireNonNull(action, "action");
             EnderInventoryHandler target = storage;
             if (target != null) {
-                return target.extractFromSlot(slot, amount, action);
+                return target.extract(slot, amount, action);
             }
-            long requested = Math.max(0L, amount);
-            return new TransferResult<>(requested, BigItemStack.empty(), action);
+            return new TransferResult<>(Math.max(0L, amount), BigItemStack.empty(), action);
         }
 
         @Override
@@ -344,11 +442,55 @@ public class EnderDrawerTile extends ControllableDrawerTile {
             return target != null && target.isCreative();
         }
 
+        @Override
+        public double getMultiplier() {
+            EnderInventoryHandler target = storage;
+            return target == null ? 1D : target.getMultiplier();
+        }
+
         @Nonnull
         @Override
         public Object getStorageIdentity() {
             EnderInventoryHandler target = storage;
             return target == null ? this : target;
+        }
+
+        @Override
+        public void onChange(@Nonnull StorageChange<BigItemStack, ItemStorageKey> change) {
+            dispatcher.dispatch(change);
+        }
+
+        @Nonnull
+        @Override
+        public StorageSubscription subscribe(
+                @Nonnull Consumer<? super StorageChange<BigItemStack, ItemStorageKey>> listener) {
+            return dispatcher.subscribe(listener);
+        }
+
+        private void bindTarget(@Nullable EnderInventoryHandler target) {
+            closeTarget();
+            if (target != null) {
+                targetSubscription = target.subscribe(dispatcher::dispatch);
+            }
+        }
+
+        private void rebindTarget() {
+            EnderInventoryHandler target = storage;
+            if (target != null && (targetSubscription == null || targetSubscription.isClosed())) {
+                targetSubscription = target.subscribe(dispatcher::dispatch);
+            }
+        }
+
+        private void closeTarget() {
+            StorageSubscription current = targetSubscription;
+            targetSubscription = StorageSubscription.CLOSED;
+            if (current != null) {
+                current.close();
+            }
+        }
+
+        private void emitReset() {
+            dispatcher.dispatch(StorageChange.<BigItemStack, ItemStorageKey>reset());
         }
     }
 }

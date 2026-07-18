@@ -26,4 +26,18 @@ public class AE2Compat {
     public static Object createAccessor(ControllableDrawerTile tile) {
         return AE2CapabilityHelper.createAccessor(tile);
     }
+
+    /** Releases a lazily-created accessor when its owning tile unloads. */
+    public static void closeAccessor(Object accessor) {
+        if (!(accessor instanceof AutoCloseable)) {
+            return;
+        }
+        try {
+            ((AutoCloseable) accessor).close();
+        } catch (RuntimeException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IllegalStateException("failed to close AE2 storage accessor", exception);
+        }
+    }
 }

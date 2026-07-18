@@ -17,7 +17,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-public class BigFluidHandlerDefaultsTest {
+public class BigFluidHandlerForgeBridgeTest {
 
     @BeforeClass
     public static void bootstrapMinecraft() {
@@ -33,18 +33,18 @@ public class BigFluidHandlerDefaultsTest {
 
         assertEquals(12, handler.fill(request, false));
         assertEquals(Arrays.asList(1, 2, 0), handler.fillOrder);
-        assertEquals(0L, handler.getTankSnapshot(0).getAmount());
-        assertEquals(4L, handler.getTankSnapshot(1).getAmount());
-        assertEquals(0L, handler.getTankSnapshot(2).getAmount());
+        assertEquals(0L, handler.getSnapshot(0).getAmount());
+        assertEquals(4L, handler.getSnapshot(1).getAmount());
+        assertEquals(0L, handler.getSnapshot(2).getAmount());
         assertEquals(0, handler.changeCount);
         assertEquals(StorageAction.SIMULATE, handler.lastFillAction);
 
         handler.fillOrder.clear();
         assertEquals(12, handler.fill(request, true));
         assertEquals(Arrays.asList(1, 2, 0), handler.fillOrder);
-        assertEquals(3L, handler.getTankSnapshot(0).getAmount());
-        assertEquals(10L, handler.getTankSnapshot(1).getAmount());
-        assertEquals(3L, handler.getTankSnapshot(2).getAmount());
+        assertEquals(3L, handler.getSnapshot(0).getAmount());
+        assertEquals(10L, handler.getSnapshot(1).getAmount());
+        assertEquals(3L, handler.getSnapshot(2).getAmount());
         assertEquals(3, handler.changeCount);
         assertEquals(StorageAction.EXECUTE, handler.lastFillAction);
 
@@ -63,17 +63,17 @@ public class BigFluidHandlerDefaultsTest {
         assertNotNull(simulated);
         assertTrue(simulated.isFluidEqual(new FluidStack(FluidRegistry.WATER, 1)));
         assertEquals(6, simulated.amount);
-        assertEquals(3L, handler.getTankSnapshot(0).getAmount());
-        assertEquals(4L, handler.getTankSnapshot(1).getAmount());
+        assertEquals(3L, handler.getSnapshot(0).getAmount());
+        assertEquals(4L, handler.getSnapshot(1).getAmount());
         assertEquals(0, handler.changeCount);
         assertEquals(StorageAction.SIMULATE, handler.lastDrainAction);
 
         FluidStack executed = handler.drain(new FluidStack(FluidRegistry.WATER, 6), true);
         assertNotNull(executed);
         assertEquals(6, executed.amount);
-        assertEquals(0L, handler.getTankSnapshot(0).getAmount());
-        assertEquals(1L, handler.getTankSnapshot(1).getAmount());
-        assertEquals(8L, handler.getTankSnapshot(2).getAmount());
+        assertEquals(0L, handler.getSnapshot(0).getAmount());
+        assertEquals(1L, handler.getSnapshot(1).getAmount());
+        assertEquals(8L, handler.getSnapshot(2).getAmount());
         assertEquals(StorageAction.EXECUTE, handler.lastDrainAction);
 
         assertNull(handler.drain((FluidStack) null, true));
@@ -92,9 +92,9 @@ public class BigFluidHandlerDefaultsTest {
         assertNotNull(drained);
         assertTrue(drained.isFluidEqual(new FluidStack(FluidRegistry.LAVA, 1)));
         assertEquals(5, drained.amount);
-        assertEquals(0L, handler.getTankSnapshot(0).getAmount());
-        assertEquals(10L, handler.getTankSnapshot(1).getAmount());
-        assertEquals(1L, handler.getTankSnapshot(2).getAmount());
+        assertEquals(0L, handler.getSnapshot(0).getAmount());
+        assertEquals(10L, handler.getSnapshot(1).getAmount());
+        assertEquals(1L, handler.getSnapshot(2).getAmount());
         assertNull(handler.drain(0, true));
     }
 
@@ -127,13 +127,13 @@ public class BigFluidHandlerDefaultsTest {
         MinimalFluidHandler handler = new MinimalFluidHandler(Long.MAX_VALUE, Long.MAX_VALUE);
         handler.setTank(0, water(Long.MAX_VALUE - 2L));
 
-        TransferResult<BigFluidStack> result = handler.fillRouted(
+        TransferResult<BigFluidStack, FluidStorageKey> result = handler.fillRouted(
                 water(Long.MAX_VALUE), StorageAction.SIMULATE);
 
         assertEquals(Long.MAX_VALUE, result.getProcessedAmount());
         assertTrue(result.isComplete());
-        assertEquals(Long.MAX_VALUE - 2L, handler.getTankSnapshot(0).getAmount());
-        assertEquals(0L, handler.getTankSnapshot(1).getAmount());
+        assertEquals(Long.MAX_VALUE - 2L, handler.getSnapshot(0).getAmount());
+        assertEquals(0L, handler.getSnapshot(1).getAmount());
         assertEquals(0, handler.changeCount);
     }
 
@@ -142,14 +142,14 @@ public class BigFluidHandlerDefaultsTest {
         MinimalFluidHandler handler = new MinimalFluidHandler(5L);
         BigFluidStack request = water(4L);
 
-        TransferResult<BigFluidStack> invalidFill = handler.fillTank(
+        TransferResult<BigFluidStack, FluidStorageKey> invalidFill = handler.insert(
                 -1, request, StorageAction.EXECUTE);
         assertEquals(4L, invalidFill.getRequestedAmount());
         assertEquals(0L, invalidFill.getProcessedAmount());
-        assertEquals(0L, handler.drainTank(2, 4L, StorageAction.EXECUTE).getProcessedAmount());
-        assertEquals(0L, handler.drainTank(0, -4L, StorageAction.EXECUTE).getRequestedAmount());
-        assertTrue(handler.getTankSnapshot(-1).isEmpty());
-        assertEquals(0L, handler.getTankCapacity(1));
+        assertEquals(0L, handler.extract(2, 4L, StorageAction.EXECUTE).getProcessedAmount());
+        assertEquals(0L, handler.extract(0, -4L, StorageAction.EXECUTE).getRequestedAmount());
+        assertTrue(handler.getSnapshot(-1).isEmpty());
+        assertEquals(0L, handler.getCapacity(1));
     }
 
     private static BigFluidStack water(long amount) {
@@ -175,24 +175,24 @@ public class BigFluidHandlerDefaultsTest {
         }
 
         @Override
-        public int getTankCount() {
+        public int getStorageCount() {
             return tanks.length;
         }
 
         @Nonnull
         @Override
-        public BigFluidStack getTankSnapshot(int tank) {
+        public BigFluidStack getSnapshot(int tank) {
             return valid(tank) ? tanks[tank] : BigFluidStack.empty();
         }
 
         @Override
-        public long getTankCapacity(int tank) {
+        public long getCapacity(int tank) {
             return valid(tank) ? Math.max(0L, capacities[tank]) : 0L;
         }
 
         @Nonnull
         @Override
-        public TransferResult<BigFluidStack> fillTank(
+        public TransferResult<BigFluidStack, FluidStorageKey> insert(
                 int tank, @Nonnull BigFluidStack request, @Nonnull StorageAction action) {
             long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
             lastFillAction = action;
@@ -204,7 +204,7 @@ public class BigFluidHandlerDefaultsTest {
             if (current.hasTemplate() && !current.isSameType(request)) {
                 return new TransferResult<>(requested, BigFluidStack.empty(), action);
             }
-            long capacity = getTankCapacity(tank);
+            long capacity = getCapacity(tank);
             long space = current.getAmount() >= capacity ? 0L : capacity - current.getAmount();
             long accepted = Math.min(requested, space);
             if (accepted > 0L && action == StorageAction.EXECUTE) {
@@ -220,7 +220,7 @@ public class BigFluidHandlerDefaultsTest {
 
         @Nonnull
         @Override
-        public TransferResult<BigFluidStack> drainTank(
+        public TransferResult<BigFluidStack, FluidStorageKey> extract(
                 int tank, long amount, @Nonnull StorageAction action) {
             long requested = Math.max(0L, amount);
             lastDrainAction = action;

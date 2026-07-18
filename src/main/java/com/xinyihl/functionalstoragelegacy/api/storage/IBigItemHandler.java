@@ -7,110 +7,44 @@ import javax.annotation.Nonnull;
 import java.util.Objects;
 
 /**
- * Long-capacity item handler whose implementers provide only slot snapshots,
- * capacities, and explicit transactions. Forge's int-based API and routed
- * operations are supplied as side-effect-safe defaults. Like Forge handlers,
- * instances are not implicitly thread-safe.
+ * Forge item capability bridge for a generic long-capacity storage handler.
+ * Business state is exposed only through {@link IStorageHandler}; the methods
+ * below adapt that state to Forge's int-count API and retain item routing
+ * semantics needed by the capability.
  */
-public interface IBigItemHandler extends IItemHandler, IStorageHandler {
+public interface IBigItemHandler extends IItemHandler,
+        IStorageHandler<BigItemStack, ItemStorageKey> {
 
-    /**
-     * @return number of real storage slots; virtual overflow slots are forbidden
-     */
-    int getSlotCount();
-
-    /**
-     * Returns a detached snapshot. Implementations must return an empty snapshot
-     * for an invalid index and must not expose mutable internal state.
-     *
-     * @param slot slot index
-     * @return immutable slot snapshot
-     */
-    @Nonnull
-    BigItemStack getSlotSnapshot(int slot);
-
-    /**
-     * Returns the long slot capacity. Implementations must return zero for an
-     * invalid index and must saturate capacity calculations at {@link Long#MAX_VALUE}.
-     *
-     * @param slot slot index
-     * @return non-negative slot capacity
-     */
-    long getSlotCapacity(int slot);
-
-    /**
-     * Inserts into exactly one slot. Empty requests, non-positive amounts, and
-     * invalid indices must return a zero-processed result. Simulation must not
-     * mutate contents, filters, NBT, or notification state.
-     *
-     * @param slot target slot
-     * @param request immutable requested item and amount
-     * @param action operation mode
-     * @return validated result whose request amount equals {@code request.getAmount()}
-     */
-    @Nonnull
-    TransferResult<BigItemStack> insertIntoSlot(
-            int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action);
-
-    /**
-     * Extracts from exactly one slot. Non-positive amounts and invalid indices
-     * must return a zero-processed result. Simulation must be side-effect free.
-     *
-     * @param slot source slot
-     * @param amount maximum amount to extract
-     * @param action operation mode
-     * @return validated result whose request amount is {@code max(0, amount)}
-     */
-    @Nonnull
-    TransferResult<BigItemStack> extractFromSlot(
-            int slot, long amount, @Nonnull StorageAction action);
-
-    /**
-     * Adapts the real slot count to Forge.
-     *
-     * @return a non-negative slot count
-     */
+    /** Adapts the generic index count to Forge. */
     @Override
     default int getSlots() {
-        return Math.max(0, getSlotCount());
+        return Math.max(0, getStorageCount());
     }
 
-    /**
-     * Adapts a long snapshot to a fresh Forge stack, saturating its count at
-     * {@link Integer#MAX_VALUE}.
-     *
-     * @param slot slot index
-     * @return detached Forge stack or {@link ItemStack#EMPTY}
-     */
+    /** Adapts a long snapshot to a fresh Forge stack. */
     @Nonnull
     @Override
     default ItemStack getStackInSlot(int slot) {
         if (slot < 0 || slot >= getSlots()) {
             return ItemStack.EMPTY;
         }
-        BigItemStack snapshot = getSlotSnapshot(slot);
+        BigItemStack snapshot = getSnapshot(slot);
         return snapshot == null ? ItemStack.EMPTY : snapshot.toItemStack();
     }
 
-    /**
-     * Bridges Forge insertion to an explicit transaction and returns a fresh
-     * remainder without mutating the input stack.
-     *
-     * @param slot target slot
-     * @param stack Forge request
-     * @param simulate Forge simulation flag
-     * @return detached unprocessed remainder
-     */
+    /** Bridges Forge insertion to the generic indexed transaction. */
     @Nonnull
     @Override
     default ItemStack insertItem(int slot, @Nonnull ItemStack stack, boolean simulate) {
-        if (slot < 0 || slot >= getSlots() || stack == null || stack.isEmpty() || stack.getCount() <= 0) {
+        if (slot < 0 || slot >= getSlots() || stack == null
+                || stack.isEmpty() || stack.getCount() <= 0) {
             return stack == null || stack.isEmpty() ? ItemStack.EMPTY : stack.copy();
         }
         BigItemStack request = new BigItemStack(stack, stack.getCount());
-        TransferResult<BigItemStack> result = insertIntoSlot(
+        TransferResult<BigItemStack, ItemStorageKey> result = insert(
                 slot, request, StorageAction.fromSimulation(simulate));
-        long processed = result == null ? 0L : Math.min(request.getAmount(), Math.max(0L, result.getProcessedAmount()));
+        long processed = result == null ? 0L
+                : Math.min(request.getAmount(), Math.max(0L, result.getProcessedAmount()));
         long remaining = request.getAmount() - processed;
         if (remaining == 0L) {
             return ItemStack.EMPTY;
@@ -120,22 +54,14 @@ public interface IBigItemHandler extends IItemHandler, IStorageHandler {
         return remainder;
     }
 
-    /**
-     * Bridges Forge extraction while enforcing both its requested int amount
-     * and the extracted item's maximum stack size.
-     *
-     * @param slot source slot
-     * @param amount Forge maximum amount
-     * @param simulate Forge simulation flag
-     * @return detached extracted stack
-     */
+    /** Bridges Forge extraction to the generic indexed transaction. */
     @Nonnull
     @Override
     default ItemStack extractItem(int slot, int amount, boolean simulate) {
         if (slot < 0 || slot >= getSlots() || amount <= 0) {
             return ItemStack.EMPTY;
         }
-        BigItemStack stored = getSlotSnapshot(slot);
+        BigItemStack stored = getSnapshot(slot);
         if (stored == null || stored.isEmpty()) {
             return ItemStack.EMPTY;
         }
@@ -144,7 +70,7 @@ public interface IBigItemHandler extends IItemHandler, IStorageHandler {
         if (requested <= 0L) {
             return ItemStack.EMPTY;
         }
-        TransferResult<BigItemStack> result = extractFromSlot(
+        TransferResult<BigItemStack, ItemStorageKey> result = extract(
                 slot, requested, StorageAction.fromSimulation(simulate));
         if (result == null || result.getProcessed().isEmpty()) {
             return ItemStack.EMPTY;
@@ -156,52 +82,33 @@ public interface IBigItemHandler extends IItemHandler, IStorageHandler {
         return result.getProcessed().withAmount(processed).toItemStack();
     }
 
-    /**
-     * Adapts long capacity to Forge using a non-negative saturated conversion.
-     *
-     * @param slot slot index
-     * @return capacity clamped to the int range
-     */
+    /** Adapts long capacity to Forge's saturated int limit. */
     @Override
     default int getSlotLimit(int slot) {
         if (slot < 0 || slot >= getSlots()) {
             return 0;
         }
-        long capacity = Math.max(0L, getSlotCapacity(slot));
+        long capacity = Math.max(0L, getCapacity(slot));
         return capacity >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) capacity;
     }
 
-    /**
-     * Checks insertion validity through a one-item simulation. Correct handler
-     * implementations therefore keep this Forge query side-effect free.
-     *
-     * @param slot slot index
-     * @param stack item type to test
-     * @return whether the slot can currently accept at least one item
-     */
+    /** Checks insertion validity through a side-effect-free generic simulation. */
     @Override
     default boolean isItemValid(int slot, @Nonnull ItemStack stack) {
         if (slot < 0 || slot >= getSlots() || stack == null || stack.isEmpty()) {
             return false;
         }
-        TransferResult<BigItemStack> result = insertIntoSlot(
+        TransferResult<BigItemStack, ItemStorageKey> result = insert(
                 slot, new BigItemStack(stack, 1L), StorageAction.SIMULATE);
         return result != null && result.getProcessedAmount() > 0L;
     }
 
     /**
-     * Routes insertion through exact templated slots, compatible templated
-     * slots, and unfiltered empty slots in that order. Non-exact compatibility
-     * is determined with a side-effect-free one-item simulation. Each slot is
-     * visited at most once for insertion and processed amounts are accumulated
-     * without long overflow.
-     *
-     * @param request item type and total amount
-     * @param action operation mode
-     * @return aggregate transaction result
+     * Routes insertion through matching configured indices and then empty
+     * indices. The generic index methods are the only state operations used.
      */
     @Nonnull
-    default TransferResult<BigItemStack> insertRouted(
+    default TransferResult<BigItemStack, ItemStorageKey> insertRouted(
             @Nonnull BigItemStack request, @Nonnull StorageAction action) {
         Objects.requireNonNull(action, "action");
         long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
@@ -210,10 +117,10 @@ public interface IBigItemHandler extends IItemHandler, IStorageHandler {
         }
         long processedTotal = 0L;
         BigItemStack compatibilityProbe = request.withAmount(1L);
+        int count = Math.max(0, getStorageCount());
         for (int pass = 0; pass < 3 && processedTotal < requested; pass++) {
-            int slots = getSlots();
-            for (int slot = 0; slot < slots && processedTotal < requested; slot++) {
-                BigItemStack current = getSlotSnapshot(slot);
+            for (int index = 0; index < count && processedTotal < requested; index++) {
+                BigItemStack current = getSnapshot(index);
                 boolean hasTemplate = current != null && current.hasTemplate();
                 boolean exact = hasTemplate && current.isSameType(request);
                 if (pass == 0 && !exact) {
@@ -223,8 +130,8 @@ public interface IBigItemHandler extends IItemHandler, IStorageHandler {
                     if (!hasTemplate || exact) {
                         continue;
                     }
-                    TransferResult<BigItemStack> probe = insertIntoSlot(
-                            slot, compatibilityProbe, StorageAction.SIMULATE);
+                    TransferResult<BigItemStack, ItemStorageKey> probe = insert(
+                            index, compatibilityProbe, StorageAction.SIMULATE);
                     if (probe == null || probe.getProcessedAmount() <= 0L) {
                         continue;
                     }
@@ -233,8 +140,8 @@ public interface IBigItemHandler extends IItemHandler, IStorageHandler {
                     continue;
                 }
                 long remaining = requested - processedTotal;
-                TransferResult<BigItemStack> result = insertIntoSlot(
-                        slot, request.withAmount(remaining), action);
+                TransferResult<BigItemStack, ItemStorageKey> result = insert(
+                        index, request.withAmount(remaining), action);
                 long processed = result == null ? 0L
                         : Math.min(remaining, Math.max(0L, result.getProcessedAmount()));
                 processedTotal = processedTotal > Long.MAX_VALUE - processed
@@ -244,17 +151,9 @@ public interface IBigItemHandler extends IItemHandler, IStorageHandler {
         return new TransferResult<>(requested, request.withAmount(processedTotal), action);
     }
 
-    /**
-     * Routes a type-sensitive extraction across every matching occupied slot.
-     * Each slot is visited at most once and processed amounts are accumulated
-     * without long overflow.
-     *
-     * @param request item type and maximum total amount
-     * @param action operation mode
-     * @return aggregate transaction result
-     */
+    /** Routes type-sensitive extraction through matching generic indices. */
     @Nonnull
-    default TransferResult<BigItemStack> extractRouted(
+    default TransferResult<BigItemStack, ItemStorageKey> extractRouted(
             @Nonnull BigItemStack request, @Nonnull StorageAction action) {
         Objects.requireNonNull(action, "action");
         long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
@@ -262,14 +161,15 @@ public interface IBigItemHandler extends IItemHandler, IStorageHandler {
             return new TransferResult<>(0L, BigItemStack.empty(), action);
         }
         long processedTotal = 0L;
-        int slots = getSlots();
-        for (int slot = 0; slot < slots && processedTotal < requested; slot++) {
-            BigItemStack current = getSlotSnapshot(slot);
+        int count = Math.max(0, getStorageCount());
+        for (int index = 0; index < count && processedTotal < requested; index++) {
+            BigItemStack current = getSnapshot(index);
             if (current == null || current.isEmpty() || !current.isSameType(request)) {
                 continue;
             }
             long remaining = requested - processedTotal;
-            TransferResult<BigItemStack> result = extractFromSlot(slot, remaining, action);
+            TransferResult<BigItemStack, ItemStorageKey> result = extract(
+                    index, remaining, action);
             long processed = result == null ? 0L
                     : Math.min(remaining, Math.max(0L, result.getProcessedAmount()));
             processedTotal = processedTotal > Long.MAX_VALUE - processed

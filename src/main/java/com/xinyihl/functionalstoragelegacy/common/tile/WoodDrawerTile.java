@@ -45,16 +45,11 @@ public class WoodDrawerTile extends ControllableDrawerTile {
         this.drawerLayout = drawerLayout;
         this.woodType = woodType;
         this.handler = createHandler();
+        bindStorageHandler(this.handler, this.handler::notifyConfigurationChanged);
     }
 
     private BigInventoryHandler createHandler() {
-        return new BigInventoryHandler(drawerLayout.getSlotCount()) {
-            @Override
-            public void onChange() {
-                WoodDrawerTile.this.markDirty();
-                WoodDrawerTile.this.sendUpdatePacket();
-            }
-
+        BigInventoryHandler created = new BigInventoryHandler(drawerLayout.getSlotCount()) {
             @Override
             public double getMultiplier() {
                 return WoodDrawerTile.this.getStorageMultiplier(WoodDrawerTile.this.drawerLayout.getBaseCapacity());
@@ -85,6 +80,7 @@ public class WoodDrawerTile extends ControllableDrawerTile {
                 return WoodDrawerTile.this.isCreative();
             }
         };
+        return created;
     }
 
     @Override
@@ -107,8 +103,8 @@ public class WoodDrawerTile extends ControllableDrawerTile {
 
         if (slot != -1 && !world.isRemote) {
             // Set the type filter if empty slot and holding item
-            if (!heldStack.isEmpty() && isLocked() && slot < handler.getSlotCount()
-                    && !handler.getSlotSnapshot(slot).hasTemplate()) {
+            if (!heldStack.isEmpty() && isLocked() && slot < handler.getStorageCount()
+                    && !handler.getSnapshot(slot).hasTemplate()) {
                 handler.setSlotFilter(slot, heldStack);
             }
 
@@ -170,6 +166,7 @@ public class WoodDrawerTile extends ControllableDrawerTile {
         }
         handler = createHandler();
         handler.deserializeNBT(nbt);
+        finishStorageRead(handler, handler::notifyConfigurationChanged);
     }
 
     @Nonnull
@@ -184,15 +181,17 @@ public class WoodDrawerTile extends ControllableDrawerTile {
 
     @Override
     public void readFromNBT(@Nonnull NBTTagCompound compound) {
+        beginStorageRead();
         if (compound.hasKey("DrawerLayout")) {
             drawerLayout = DrawerLayout.fromId(compound.getString("DrawerLayout"));
         }
         if (compound.hasKey("DrawerWood")) {
             woodType = DrawerWoodType.fromId(compound.getString("DrawerWood"));
         }
-        handler = createHandler();
         super.readFromNBT(compound);
+        handler = createHandler();
         handler.deserializeNBT(compound);
+        finishStorageRead(handler, handler::notifyConfigurationChanged);
     }
 
     @Override
@@ -202,7 +201,7 @@ public class WoodDrawerTile extends ControllableDrawerTile {
 
     @Override
     protected void onLockStateChanged(boolean locked) {
-        handler.setLockFilters(locked);
+        handler.applyLockConfiguration(locked);
     }
 
     @Override
@@ -223,8 +222,8 @@ public class WoodDrawerTile extends ControllableDrawerTile {
     @Override
     public boolean isEverythingEmpty() {
         if (!super.isEverythingEmpty()) return false;
-        for (int i = 0; i < handler.getSlotCount(); i++) {
-            BigItemStack snapshot = handler.getSlotSnapshot(i);
+        for (int i = 0; i < handler.getStorageCount(); i++) {
+            BigItemStack snapshot = handler.getSnapshot(i);
             if (snapshot.hasTemplate()) return false;
         }
         return true;
@@ -234,9 +233,9 @@ public class WoodDrawerTile extends ControllableDrawerTile {
     protected int calculateRedstoneSignal() {
         long totalCapacity = 0;
         long totalStored = 0;
-        for (int i = 0; i < handler.getSlotCount(); i++) {
-            totalCapacity = saturatedAdd(totalCapacity, handler.getSlotCapacity(i));
-            totalStored = saturatedAdd(totalStored, handler.getSlotSnapshot(i).getAmount());
+        for (int i = 0; i < handler.getStorageCount(); i++) {
+            totalCapacity = saturatedAdd(totalCapacity, handler.getCapacity(i));
+            totalStored = saturatedAdd(totalStored, handler.getSnapshot(i).getAmount());
         }
         if (totalCapacity == 0) return 0;
         return (int) ((totalStored / (double) totalCapacity) * 15);
@@ -249,8 +248,8 @@ public class WoodDrawerTile extends ControllableDrawerTile {
             return true;
         }
         double calculated = state.calculate(UpgradeAttribute.ITEM_CAPACITY, drawerLayout.getBaseCapacity());
-        for (int i = 0; i < handler.getSlotCount(); i++) {
-            BigItemStack snapshot = handler.getSlotSnapshot(i);
+        for (int i = 0; i < handler.getStorageCount(); i++) {
+            BigItemStack snapshot = handler.getSnapshot(i);
             if (snapshot.getAmount() <= 0L) {
                 continue;
             }

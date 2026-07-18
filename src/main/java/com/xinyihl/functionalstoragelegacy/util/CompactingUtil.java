@@ -259,20 +259,20 @@ public class CompactingUtil {
     }
 
     public static boolean CompressionDrawertrEatment(ControllableDrawerTile tile, ItemStack itemToGenerate, CompactingInventoryHandler compactingHandler) {
-        int anchorSlot = compactingHandler.getSlotCount() - 1;
+        int anchorSlot = compactingHandler.getStorageCount() - 1;
         List<CompactingInventoryHandler.Tier> results = CompactingUtil.getCompactingResults(
                 tile.getWorld(),
                 itemToGenerate,
-                compactingHandler.getSlotCount(),
+                compactingHandler.getStorageCount(),
                 anchorSlot
         );
 
         if (!results.isEmpty()) {
-            while (results.size() < compactingHandler.getSlotCount()) {
+            while (results.size() < compactingHandler.getStorageCount()) {
                 results.add(CompactingInventoryHandler.Tier.empty());
             }
-            if (results.size() > compactingHandler.getSlotCount()) {
-                results = results.subList(0, compactingHandler.getSlotCount());
+            if (results.size() > compactingHandler.getStorageCount()) {
+                results = results.subList(0, compactingHandler.getStorageCount());
             }
             compactingHandler.configureTiers(results);
         } else {

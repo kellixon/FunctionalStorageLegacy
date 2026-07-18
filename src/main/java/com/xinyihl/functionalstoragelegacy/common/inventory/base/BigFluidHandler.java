@@ -2,7 +2,11 @@ package com.xinyihl.functionalstoragelegacy.common.inventory.base;
 
 import com.xinyihl.functionalstoragelegacy.api.storage.BigFluidStack;
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigFluidHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.FluidStorageKey;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageChangeDispatcher;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
 import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
@@ -11,7 +15,10 @@ import net.minecraftforge.fluids.FluidStack;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 /**
  * Fixed-size large fluid storage backed by independent immutable tank state.
@@ -30,6 +37,8 @@ public abstract class BigFluidHandler implements IBigFluidHandler {
     private static final String FILTER = "Filter";
 
     private final TankState[] states;
+    private final StorageChangeDispatcher<BigFluidStack, FluidStorageKey> changeDispatcher =
+            new StorageChangeDispatcher<>();
 
     protected BigFluidHandler(int tankCount) {
         states = new TankState[Math.max(0, tankCount)];
@@ -37,13 +46,13 @@ public abstract class BigFluidHandler implements IBigFluidHandler {
     }
 
     @Override
-    public final int getTankCount() {
+    public final int getStorageCount() {
         return states.length;
     }
 
     @Nonnull
     @Override
-    public final BigFluidStack getTankSnapshot(int tank) {
+    public final BigFluidStack getSnapshot(int tank) {
         if (!isValidTank(tank)) {
             return BigFluidStack.empty();
         }
@@ -57,7 +66,7 @@ public abstract class BigFluidHandler implements IBigFluidHandler {
     }
 
     @Override
-    public final long getTankCapacity(int tank) {
+    public final long getCapacity(int tank) {
         return isValidTank(tank) ? capacityPerTank() : 0L;
     }
 
@@ -86,7 +95,7 @@ public abstract class BigFluidHandler implements IBigFluidHandler {
 
     @Nonnull
     @Override
-    public final TransferResult<BigFluidStack> fillTank(
+    public final TransferResult<BigFluidStack, FluidStorageKey> insert(
             int tank, @Nonnull BigFluidStack request, @Nonnull StorageAction action) {
         Objects.requireNonNull(action, "action");
         long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
@@ -109,12 +118,10 @@ public abstract class BigFluidHandler implements IBigFluidHandler {
         }
 
         if (isCreative()) {
-            if (action == StorageAction.EXECUTE
-                    && (current.template == null
-                    || current.amount != Long.MAX_VALUE
-                    || !sameFluid(current.filter, selectedFilter))) {
+            if (action == StorageAction.EXECUTE && current.template == null) {
+                BigFluidStack before = getSnapshot(tank);
                 states[tank] = new TankState(selectedTemplate, Long.MAX_VALUE, selectedFilter);
-                onChange();
+                publish(StorageChange.delta(tank, before, getSnapshot(tank)));
             }
             return processedResult(request, requested, action);
         }
@@ -125,18 +132,19 @@ public abstract class BigFluidHandler implements IBigFluidHandler {
         long processed = voidsOverflow() ? requested : inserted;
 
         if (action == StorageAction.EXECUTE && inserted > 0L) {
+            BigFluidStack before = getSnapshot(tank);
             states[tank] = new TankState(
                     selectedTemplate,
                     saturatedAdd(current.amount, inserted),
                     selectedFilter);
-            onChange();
+            publish(StorageChange.delta(tank, before, getSnapshot(tank)));
         }
         return processedResult(request, processed, action);
     }
 
     @Nonnull
     @Override
-    public final TransferResult<BigFluidStack> drainTank(
+    public final TransferResult<BigFluidStack, FluidStorageKey> extract(
             int tank, long amount, @Nonnull StorageAction action) {
         Objects.requireNonNull(action, "action");
         long requested = Math.max(0L, amount);
@@ -155,6 +163,7 @@ public abstract class BigFluidHandler implements IBigFluidHandler {
         }
 
         if (action == StorageAction.EXECUTE && !isCreative()) {
+            BigFluidStack before = getSnapshot(tank);
             long remaining = current.amount - drained;
             FluidStack retainedFilter = isLocked()
                     ? (current.filter == null ? current.template : current.filter)
@@ -162,7 +171,7 @@ public abstract class BigFluidHandler implements IBigFluidHandler {
             states[tank] = remaining == 0L
                     ? new TankState(null, 0L, retainedFilter)
                     : new TankState(current.template, remaining, retainedFilter);
-            onChange();
+            publish(StorageChange.delta(tank, before, getSnapshot(tank)));
         }
         return new TransferResult<>(
                 requested, new BigFluidStack(current.template, drained), action);
@@ -176,20 +185,37 @@ public abstract class BigFluidHandler implements IBigFluidHandler {
      * @param locked desired lock state
      */
     public final void setLockFilters(boolean locked) {
-        boolean changed = false;
+        if (locked) {
+            updateLockFiltersSilently(true);
+            return;
+        }
+        List<StorageChange.Entry<BigFluidStack, FluidStorageKey>> entries = new ArrayList<>();
         for (int tank = 0; tank < states.length; tank++) {
             TankState current = states[tank];
             FluidStack replacement = locked
                     ? (current.template == null ? current.filter : current.template)
                     : null;
             if (!sameFluid(current.filter, replacement)) {
+                BigFluidStack before = getSnapshot(tank);
                 states[tank] = new TankState(current.template, current.amount, replacement);
-                changed = true;
+                entries.add(new StorageChange.Entry<>(
+                        tank, before, getSnapshot(tank)));
             }
         }
-        if (changed) {
-            onChange();
+        if (!entries.isEmpty()) {
+            publish(StorageChange.delta(entries));
         }
+    }
+
+    /** Applies lock-owned filters and emits exactly one reset for the lock transition. */
+    public final void applyLockConfiguration(boolean locked) {
+        updateLockFiltersSilently(locked);
+        publish(StorageChange.<BigFluidStack, FluidStorageKey>reset());
+    }
+
+    /** Emits one explicit reset after an actual creative or upgrade change. */
+    public final void notifyConfigurationChanged() {
+        publish(StorageChange.<BigFluidStack, FluidStorageKey>reset());
     }
 
     /**
@@ -246,41 +272,54 @@ public abstract class BigFluidHandler implements IBigFluidHandler {
      * @param root serialized root, or {@code null} to clear
      */
     public final void deserializeNBT(@Nullable NBTTagCompound root) {
+        TankState[] before = states.clone();
         clearStates();
-        if (root == null || !root.hasKey(STORAGE_V2, Constants.NBT.TAG_COMPOUND)) {
-            return;
+        if (root != null && root.hasKey(STORAGE_V2, Constants.NBT.TAG_COMPOUND)) {
+            NBTTagList tanks = root.getCompoundTag(STORAGE_V2)
+                    .getTagList(TANKS, Constants.NBT.TAG_COMPOUND);
+            for (int i = 0; i < tanks.tagCount(); i++) {
+                NBTTagCompound entry = tanks.getCompoundTagAt(i);
+                int tank = entry.getInteger(INDEX);
+                if (!isValidTank(tank)) {
+                    continue;
+                }
+                long amount = Math.max(0L, entry.getLong(AMOUNT));
+                FluidStack template = entry.hasKey(FLUID, Constants.NBT.TAG_COMPOUND)
+                        ? normalize(FluidStack.loadFluidStackFromNBT(entry.getCompoundTag(FLUID)))
+                        : null;
+                if (template == null || amount == 0L) {
+                    template = null;
+                    amount = 0L;
+                }
+                FluidStack filter = entry.hasKey(FILTER, Constants.NBT.TAG_COMPOUND)
+                        ? normalize(FluidStack.loadFluidStackFromNBT(entry.getCompoundTag(FILTER)))
+                        : null;
+                if (!isLocked()) {
+                    filter = null;
+                } else if (template != null
+                        && (filter == null || !template.isFluidEqual(filter))) {
+                    filter = template;
+                }
+                states[tank] = new TankState(template, amount, filter);
+            }
         }
-        NBTTagList tanks = root.getCompoundTag(STORAGE_V2)
-                .getTagList(TANKS, Constants.NBT.TAG_COMPOUND);
-        for (int i = 0; i < tanks.tagCount(); i++) {
-            NBTTagCompound entry = tanks.getCompoundTagAt(i);
-            int tank = entry.getInteger(INDEX);
-            if (!isValidTank(tank)) {
-                continue;
-            }
-            long amount = Math.max(0L, entry.getLong(AMOUNT));
-            FluidStack template = entry.hasKey(FLUID, Constants.NBT.TAG_COMPOUND)
-                    ? normalize(FluidStack.loadFluidStackFromNBT(entry.getCompoundTag(FLUID)))
-                    : null;
-            if (template == null || amount == 0L) {
-                template = null;
-                amount = 0L;
-            }
-            FluidStack filter = entry.hasKey(FILTER, Constants.NBT.TAG_COMPOUND)
-                    ? normalize(FluidStack.loadFluidStackFromNBT(entry.getCompoundTag(FILTER)))
-                    : null;
-            if (!isLocked()) {
-                filter = null;
-            } else if (template != null
-                    && (filter == null || !template.isFluidEqual(filter))) {
-                filter = template;
-            }
-            states[tank] = new TankState(template, amount, filter);
+        if (changeDispatcher.hasSubscribers() && !sameStates(before, states)) {
+            publish(StorageChange.<BigFluidStack, FluidStorageKey>reset());
         }
     }
 
-    /** Called once after an executed operation changes observable state. */
-    public abstract void onChange();
+    @Override
+    public final void onChange(
+            @Nonnull StorageChange<BigFluidStack, FluidStorageKey> change) {
+        changeDispatcher.dispatch(change);
+    }
+
+    @Nonnull
+    @Override
+    public final StorageSubscription subscribe(
+            @Nonnull Consumer<? super StorageChange<BigFluidStack, FluidStorageKey>> listener) {
+        return changeDispatcher.subscribe(listener);
+    }
 
     /** @return current per-tank capacity in buckets before conversion to mB */
     public abstract double getMultiplier();
@@ -320,6 +359,36 @@ public abstract class BigFluidHandler implements IBigFluidHandler {
         }
     }
 
+    private void updateLockFiltersSilently(boolean locked) {
+        for (int tank = 0; tank < states.length; tank++) {
+            TankState current = states[tank];
+            FluidStack replacement = locked
+                    ? (current.template == null ? current.filter : current.template)
+                    : null;
+            if (!sameFluid(current.filter, replacement)) {
+                states[tank] = new TankState(current.template, current.amount, replacement);
+            }
+        }
+    }
+
+    private void publish(StorageChange<BigFluidStack, FluidStorageKey> change) {
+        onChange(change);
+    }
+
+    private static boolean sameStates(TankState[] left, TankState[] right) {
+        if (left.length != right.length) {
+            return false;
+        }
+        for (int tank = 0; tank < left.length; tank++) {
+            if (left[tank].amount != right[tank].amount
+                    || !sameFluid(left[tank].template, right[tank].template)
+                    || !sameFluid(left[tank].filter, right[tank].filter)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     @Nullable
     private static FluidStack normalize(@Nullable FluidStack stack) {
         if (stack == null) {
@@ -339,12 +408,12 @@ public abstract class BigFluidHandler implements IBigFluidHandler {
         return left >= Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
     }
 
-    private static TransferResult<BigFluidStack> emptyResult(
+    private static TransferResult<BigFluidStack, FluidStorageKey> emptyResult(
             long requested, StorageAction action) {
         return new TransferResult<>(requested, BigFluidStack.empty(), action);
     }
 
-    private static TransferResult<BigFluidStack> processedResult(
+    private static TransferResult<BigFluidStack, FluidStorageKey> processedResult(
             BigFluidStack request, long processed, StorageAction action) {
         return new TransferResult<>(
                 request.getAmount(),

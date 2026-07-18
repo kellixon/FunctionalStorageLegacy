@@ -9,12 +9,18 @@ import appeng.api.storage.data.IAEItemStack;
 import appeng.api.storage.data.IItemList;
 import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.ItemStorageKey;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
 import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
+import com.xinyihl.functionalstoragelegacy.common.inventory.controller.ControllerItemHandler;
 import net.minecraft.item.ItemStack;
 
+import java.util.function.Consumer;
+
 /** AE2 adapter shared by individual drawers and aggregate controller storage. */
-public class DrawerMEItemHandler implements IDrawerMEInventoryHandler<IAEItemStack> {
+public class DrawerMEItemHandler implements IDrawerMEInventoryHandler<IAEItemStack>,
+        AE2StorageChangeSource<IAEItemStack> {
 
     private final IBigItemHandler handler;
     private final IItemStorageChannel channel;
@@ -25,12 +31,44 @@ public class DrawerMEItemHandler implements IDrawerMEInventoryHandler<IAEItemSta
     }
 
     @Override
+    public int getStorageCount() {
+        return handler.getStorageCount();
+    }
+
+    @Override
+    public Object getSnapshot(int index) {
+        return handler.getSnapshot(index);
+    }
+
+    @Override
+    public IAEItemStack createStack(Object rawSnapshot, long amount) {
+        if (!(rawSnapshot instanceof BigItemStack)) {
+            return null;
+        }
+        BigItemStack snapshot = (BigItemStack) rawSnapshot;
+        if (!snapshot.hasTemplate()) {
+            return null;
+        }
+        IAEItemStack result = channel.createStack(snapshot.getTemplate());
+        if (result != null) {
+            result.setStackSize(amount);
+        }
+        return result;
+    }
+
+    @Override
+    public StorageSubscription subscribe(Consumer<Object> listener) {
+        return handler.subscribe(change -> listener.accept(change));
+    }
+
+    @Override
     public IAEItemStack injectItems(IAEItemStack input, Actionable type, IActionSource src) {
         BigItemStack request = requestOf(input);
         if (request.isEmpty()) {
             return null;
         }
-        TransferResult<BigItemStack> result = handler.insertRouted(request, actionOf(type));
+        TransferResult<BigItemStack, ItemStorageKey> result = insertRouted(
+                request, actionOf(type));
         long remaining = result.getRemainingAmount();
         if (remaining == 0L) {
             return null;
@@ -44,12 +82,14 @@ public class DrawerMEItemHandler implements IDrawerMEInventoryHandler<IAEItemSta
     }
 
     @Override
-    public IAEItemStack extractItems(IAEItemStack requestStack, Actionable mode, IActionSource src) {
+    public IAEItemStack extractItems(IAEItemStack requestStack, Actionable mode,
+                                     IActionSource src) {
         BigItemStack request = requestOf(requestStack);
         if (request.isEmpty()) {
             return null;
         }
-        TransferResult<BigItemStack> result = handler.extractRouted(request, actionOf(mode));
+        TransferResult<BigItemStack, ItemStorageKey> result = extractRouted(
+                request, actionOf(mode));
         if (result.getProcessedAmount() == 0L) {
             return null;
         }
@@ -60,8 +100,8 @@ public class DrawerMEItemHandler implements IDrawerMEInventoryHandler<IAEItemSta
 
     @Override
     public IItemList<IAEItemStack> getAvailableItems(IItemList<IAEItemStack> out) {
-        for (int slot = 0; slot < handler.getSlotCount(); slot++) {
-            BigItemStack snapshot = handler.getSlotSnapshot(slot);
+        for (int slot = 0; slot < handler.getStorageCount(); slot++) {
+            BigItemStack snapshot = handler.getSnapshot(slot);
             if (snapshot == null || snapshot.isEmpty()) {
                 continue;
             }
@@ -90,8 +130,21 @@ public class DrawerMEItemHandler implements IDrawerMEInventoryHandler<IAEItemSta
         if (request.isEmpty()) {
             return false;
         }
-        for (int slot = 0; slot < handler.getSlotCount(); slot++) {
-            BigItemStack snapshot = handler.getSlotSnapshot(slot);
+        ControllerItemHandler controller = controller();
+        if (controller != null) {
+            /* The request-aware overload includes exact and policy aliases;
+             * indexed snapshots avoid touching unrelated child slots. */
+            for (Integer index : controller.getCandidateIndices(request)) {
+                BigItemStack snapshot = controller.getIndexedSnapshot(index);
+                if (snapshot != null && snapshot.hasTemplate()
+                        && snapshot.isSameType(request)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        for (int slot = 0; slot < handler.getStorageCount(); slot++) {
+            BigItemStack snapshot = handler.getSnapshot(slot);
             if (snapshot != null && snapshot.hasTemplate() && snapshot.isSameType(request)) {
                 return true;
             }
@@ -103,7 +156,7 @@ public class DrawerMEItemHandler implements IDrawerMEInventoryHandler<IAEItemSta
     public boolean canAccept(IAEItemStack input) {
         BigItemStack request = requestOf(input);
         return !request.isEmpty()
-                && handler.insertRouted(request.withAmount(1L), StorageAction.SIMULATE)
+                && insertRouted(request.withAmount(1L), StorageAction.SIMULATE)
                 .getProcessedAmount() == 1L;
     }
 
@@ -122,6 +175,11 @@ public class DrawerMEItemHandler implements IDrawerMEInventoryHandler<IAEItemSta
         return true;
     }
 
+    private ControllerItemHandler controller() {
+        return handler instanceof ControllerItemHandler
+                ? (ControllerItemHandler) handler : null;
+    }
+
     private static BigItemStack requestOf(IAEItemStack stack) {
         if (stack == null || stack.getStackSize() <= 0L) {
             return BigItemStack.empty();
@@ -134,5 +192,21 @@ public class DrawerMEItemHandler implements IDrawerMEInventoryHandler<IAEItemSta
 
     private static StorageAction actionOf(Actionable actionable) {
         return actionable == Actionable.SIMULATE ? StorageAction.SIMULATE : StorageAction.EXECUTE;
+    }
+
+    private TransferResult<BigItemStack, ItemStorageKey> insertRouted(
+            BigItemStack request, StorageAction action) {
+        ControllerItemHandler controller = controller();
+        return controller == null
+                ? handler.insertRouted(request, action)
+                : controller.insertRouted(request, action);
+    }
+
+    private TransferResult<BigItemStack, ItemStorageKey> extractRouted(
+            BigItemStack request, StorageAction action) {
+        ControllerItemHandler controller = controller();
+        return controller == null
+                ? handler.extractRouted(request, action)
+                : controller.extractRouted(request, action);
     }
 }

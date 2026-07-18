@@ -4,6 +4,7 @@ import com.xinyihl.functionalstoragelegacy.FunctionalStorageLegacy;
 import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigFluidHandler;
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.ItemStorageKey;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
 import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
 import com.xinyihl.functionalstoragelegacy.client.render.DrawerOptions;
@@ -169,6 +170,20 @@ public class DrawerControllerTile extends ControllableDrawerTile {
     }
 
     @Override
+    public void invalidate() {
+        inventoryHandler.closeSubscriptions();
+        fluidHandler.closeSubscriptions();
+        super.invalidate();
+    }
+
+    @Override
+    public void onChunkUnload() {
+        inventoryHandler.closeSubscriptions();
+        fluidHandler.closeSubscriptions();
+        super.onChunkUnload();
+    }
+
+    @Override
     public boolean onSlotActivated(EntityPlayer player, EnumHand hand, EnumFacing facing, float hitX, float hitY, float hitZ, int slot) {
         ItemStack heldStack = player.getHeldItem(hand);
 
@@ -184,10 +199,10 @@ public class DrawerControllerTile extends ControllableDrawerTile {
 
             if (!heldStack.isEmpty()) {
                 BigItemStack request = new BigItemStack(heldStack, heldStack.getCount());
-                TransferResult<BigItemStack> simulated = inventoryHandler.insertRouted(
+                TransferResult<BigItemStack, ItemStorageKey> simulated = inventoryHandler.insertRouted(
                         request, StorageAction.SIMULATE);
                 if (simulated.getProcessedAmount() > 0L) {
-                    TransferResult<BigItemStack> inserted = inventoryHandler.insertRouted(
+                    TransferResult<BigItemStack, ItemStorageKey> inserted = inventoryHandler.insertRouted(
                             request, StorageAction.EXECUTE);
                     player.setHeldItem(hand, remainderOf(heldStack, inserted.getRemainingAmount()));
                     INTERACTION_LOGGER.put(player.getUniqueID(), System.currentTimeMillis());
@@ -205,7 +220,7 @@ public class DrawerControllerTile extends ControllableDrawerTile {
                     }
                     BigItemStack request = new BigItemStack(
                             inventoryStack, inventoryStack.getCount());
-                    TransferResult<BigItemStack> inserted = inventoryHandler.insertRouted(
+                    TransferResult<BigItemStack, ItemStorageKey> inserted = inventoryHandler.insertRouted(
                             request, StorageAction.EXECUTE);
                     inventoryStack.setCount((int) inserted.getRemainingAmount());
                 }

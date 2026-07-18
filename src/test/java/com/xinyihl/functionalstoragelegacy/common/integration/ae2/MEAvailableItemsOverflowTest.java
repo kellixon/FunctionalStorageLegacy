@@ -16,7 +16,12 @@ import com.xinyihl.functionalstoragelegacy.api.storage.BigFluidStack;
 import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigFluidHandler;
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.FluidStorageKey;
+import com.xinyihl.functionalstoragelegacy.api.storage.ItemStorageKey;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageChangeDispatcher;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
 import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
 import com.xinyihl.functionalstoragelegacy.util.ItemUtil;
 import net.minecraft.init.Bootstrap;
@@ -38,7 +43,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.BiPredicate;
+import java.util.function.Consumer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -212,6 +219,54 @@ public class MEAvailableItemsOverflowTest {
 
         assertEquals(4L, storage.stored);
         assertEquals(Arrays.asList(5L, -3L), receiver.amounts);
+    }
+
+    @Test
+    public void monitorTicksAndCloseNeverRescanStorage() {
+        MonitorItemHandler storage = MonitorItemHandler.normal(64L);
+        IItemStorageChannel channel = itemChannel();
+        CountingMEItemHandler adapter = new CountingMEItemHandler(storage, channel);
+        DrawerMEMonitor<IAEItemStack> monitor = new DrawerMEMonitor<>(adapter, channel);
+        int readsAfterInitialization = storage.snapshotReads;
+
+        for (int i = 0; i < 8; i++) {
+            assertEquals(TickRateModulation.SLOWER, monitor.onTick());
+        }
+        assertEquals(readsAfterInitialization, storage.snapshotReads);
+        assertEquals(0, adapter.availableItemsCalls);
+
+        monitor.close();
+        monitor.close();
+        for (int i = 0; i < 3; i++) {
+            assertEquals(TickRateModulation.SLOWER, monitor.onTick());
+        }
+        assertEquals(readsAfterInitialization, storage.snapshotReads);
+        assertEquals(0, adapter.availableItemsCalls);
+        assertEquals(1, storage.subscriptionCloses);
+    }
+
+    @Test
+    public void accessorCloseReleasesMonitorSubscriptionIdempotently() {
+        MonitorItemHandler storage = MonitorItemHandler.normal(64L);
+        IItemStorageChannel channel = itemChannel();
+        DrawerMEMonitor<IAEItemStack> monitor = new DrawerMEMonitor<>(
+                new DrawerMEItemHandler(storage, channel), channel);
+        DrawerStorageAccessor accessor = new DrawerStorageAccessor(monitor, null);
+
+        accessor.close();
+        accessor.invalidate();
+
+        assertTrue(accessor.isClosed());
+        assertTrue(monitor.isClosed());
+        assertEquals(1, storage.subscriptionCloses);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void monitorRejectsStorageWithoutActiveSubscription() {
+        Item item = new Item();
+        IItemStorageChannel channel = itemChannel();
+        new DrawerMEMonitor<>(new DrawerMEItemHandler(
+                new SnapshotItemHandler(item(item, 1L)), channel), channel);
     }
 
     private static BigItemStack item(Item item, long amount) {
@@ -444,32 +499,32 @@ public class MEAvailableItemsOverflowTest {
         }
 
         @Override
-        public int getSlotCount() {
+        public int getStorageCount() {
             return snapshots.length;
         }
 
         @Nonnull
         @Override
-        public BigItemStack getSlotSnapshot(int slot) {
+        public BigItemStack getSnapshot(int slot) {
             return slot < 0 || slot >= snapshots.length
                     ? BigItemStack.empty() : snapshots[slot];
         }
 
         @Override
-        public long getSlotCapacity(int slot) {
+        public long getCapacity(int slot) {
             return slot < 0 || slot >= snapshots.length ? 0L : Long.MAX_VALUE;
         }
 
         @Nonnull
         @Override
-        public TransferResult<BigItemStack> insertIntoSlot(
+        public TransferResult<BigItemStack, ItemStorageKey> insert(
                 int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action) {
             return new TransferResult<>(request.getAmount(), BigItemStack.empty(), action);
         }
 
         @Nonnull
         @Override
-        public TransferResult<BigItemStack> extractFromSlot(
+        public TransferResult<BigItemStack, ItemStorageKey> extract(
                 int slot, long amount, @Nonnull StorageAction action) {
             return new TransferResult<>(Math.max(0L, amount), BigItemStack.empty(), action);
         }
@@ -483,32 +538,32 @@ public class MEAvailableItemsOverflowTest {
         }
 
         @Override
-        public int getTankCount() {
+        public int getStorageCount() {
             return snapshots.length;
         }
 
         @Nonnull
         @Override
-        public BigFluidStack getTankSnapshot(int tank) {
+        public BigFluidStack getSnapshot(int tank) {
             return tank < 0 || tank >= snapshots.length
                     ? BigFluidStack.empty() : snapshots[tank];
         }
 
         @Override
-        public long getTankCapacity(int tank) {
+        public long getCapacity(int tank) {
             return tank < 0 || tank >= snapshots.length ? 0L : Long.MAX_VALUE;
         }
 
         @Nonnull
         @Override
-        public TransferResult<BigFluidStack> fillTank(
+        public TransferResult<BigFluidStack, FluidStorageKey> insert(
                 int tank, @Nonnull BigFluidStack request, @Nonnull StorageAction action) {
             return new TransferResult<>(request.getAmount(), BigFluidStack.empty(), action);
         }
 
         @Nonnull
         @Override
-        public TransferResult<BigFluidStack> drainTank(
+        public TransferResult<BigFluidStack, FluidStorageKey> extract(
                 int tank, long amount, @Nonnull StorageAction action) {
             return new TransferResult<>(Math.max(0L, amount), BigFluidStack.empty(), action);
         }
@@ -538,12 +593,31 @@ public class MEAvailableItemsOverflowTest {
         }
     }
 
+    private static final class CountingMEItemHandler extends DrawerMEItemHandler {
+        private int availableItemsCalls;
+
+        private CountingMEItemHandler(
+                IBigItemHandler handler, IItemStorageChannel channel) {
+            super(handler, channel);
+        }
+
+        @Override
+        public IItemList<IAEItemStack> getAvailableItems(IItemList<IAEItemStack> out) {
+            availableItemsCalls++;
+            return super.getAvailableItems(out);
+        }
+    }
+
     private static final class MonitorItemHandler implements IBigItemHandler {
         private final long capacity;
         private final boolean voidOverflow;
         private final boolean creative;
+        private final StorageChangeDispatcher<BigItemStack, ItemStorageKey> dispatcher =
+                new StorageChangeDispatcher<>();
         private Item item;
         private long stored;
+        private int snapshotReads;
+        private int subscriptionCloses;
 
         private MonitorItemHandler(
                 long capacity, boolean voidOverflow, boolean creative,
@@ -573,57 +647,89 @@ public class MEAvailableItemsOverflowTest {
         }
 
         private void setPhysical(Item item, long stored) {
+            BigItemStack before = currentSnapshot();
             this.item = item;
             this.stored = stored;
+            publishIfChanged(before);
         }
 
         @Override
-        public int getSlotCount() {
+        public int getStorageCount() {
             return 1;
         }
 
         @Nonnull
         @Override
-        public BigItemStack getSlotSnapshot(int slot) {
-            return slot == 0 && item != null && stored > 0L
-                    ? new BigItemStack(new ItemStack(item), stored)
-                    : BigItemStack.empty();
+        public BigItemStack getSnapshot(int slot) {
+            snapshotReads++;
+            return slot == 0 ? currentSnapshot() : BigItemStack.empty();
         }
 
         @Override
-        public long getSlotCapacity(int slot) {
+        public long getCapacity(int slot) {
             return slot == 0 ? capacity : 0L;
         }
 
         @Nonnull
         @Override
-        public TransferResult<BigItemStack> insertIntoSlot(
+        public StorageSubscription subscribe(
+                @Nonnull Consumer<? super StorageChange<BigItemStack, ItemStorageKey>> listener) {
+            StorageSubscription delegate = dispatcher.subscribe(listener);
+            return new StorageSubscription() {
+                private boolean closed;
+
+                @Override
+                public void close() {
+                    if (closed) {
+                        return;
+                    }
+                    closed = true;
+                    subscriptionCloses++;
+                    delegate.close();
+                }
+
+                @Override
+                public boolean isClosed() {
+                    return closed || delegate.isClosed();
+                }
+            };
+        }
+
+        @Nonnull
+        @Override
+        public TransferResult<BigItemStack, ItemStorageKey> insert(
                 int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action) {
             long requested = request.isEmpty() ? 0L : request.getAmount();
             if (slot != 0 || requested == 0L || !accepts(request)) {
                 return new TransferResult<>(requested, BigItemStack.empty(), action);
             }
             if (creative) {
+                BigItemStack before = currentSnapshot();
                 if (item == null && action == StorageAction.EXECUTE) {
                     item = request.getTemplate().getItem();
                     stored = Long.MAX_VALUE;
+                }
+                if (action == StorageAction.EXECUTE) {
+                    publishIfChanged(before);
                 }
                 return result(request, requested, action);
             }
 
             long physical = Math.min(requested, Math.max(0L, capacity - stored));
             if (action == StorageAction.EXECUTE && physical > 0L) {
+                BigItemStack before = currentSnapshot();
                 if (item == null) {
                     item = request.getTemplate().getItem();
                 }
                 stored += physical;
+                publishIfChanged(before);
             }
             return result(request, voidOverflow ? requested : physical, action);
         }
 
         @Nonnull
         @Override
-        public TransferResult<BigItemStack> extractFromSlot(
+        public TransferResult<BigItemStack, ItemStorageKey> extract(
                 int slot, long amount, @Nonnull StorageAction action) {
             long requested = Math.max(0L, amount);
             if (slot != 0 || item == null || requested == 0L) {
@@ -632,19 +738,35 @@ public class MEAvailableItemsOverflowTest {
             long extracted = Math.min(requested, stored);
             BigItemStack result = new BigItemStack(new ItemStack(item), extracted);
             if (!creative && action == StorageAction.EXECUTE) {
+                BigItemStack before = currentSnapshot();
                 stored -= extracted;
                 if (stored == 0L) {
                     item = null;
                 }
+                publishIfChanged(before);
             }
             return new TransferResult<>(requested, result, action);
+        }
+
+        private BigItemStack currentSnapshot() {
+            return item != null && stored > 0L
+                    ? new BigItemStack(new ItemStack(item), stored)
+                    : BigItemStack.empty();
+        }
+
+        private void publishIfChanged(BigItemStack before) {
+            BigItemStack after = currentSnapshot();
+            if (before.getAmount() != after.getAmount()
+                    || !Objects.equals(before.getKey(), after.getKey())) {
+                dispatcher.dispatch(StorageChange.delta(0, before, after));
+            }
         }
 
         private boolean accepts(BigItemStack request) {
             return item == null || request.isSameType(new ItemStack(item));
         }
 
-        private static TransferResult<BigItemStack> result(
+        private static TransferResult<BigItemStack, ItemStorageKey> result(
                 BigItemStack request, long processed, StorageAction action) {
             return new TransferResult<>(
                     request.getAmount(),

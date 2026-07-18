@@ -213,10 +213,10 @@ public class FluidDrawerInfoGuiAddon {
 
     private BigFluidStack safeSnapshot(int tank) {
         IBigFluidHandler handler = fluidHandlerSupplier.get();
-        if (handler == null || tank < 0 || tank >= handler.getTankCount()) {
+        if (handler == null || tank < 0 || tank >= handler.getStorageCount()) {
             return BigFluidStack.empty();
         }
-        BigFluidStack snapshot = handler.getTankSnapshot(tank);
+        BigFluidStack snapshot = handler.getSnapshot(tank);
         return snapshot == null ? BigFluidStack.empty() : snapshot;
     }
 

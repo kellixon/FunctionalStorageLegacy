@@ -2,241 +2,318 @@ package com.xinyihl.functionalstoragelegacy.common.inventory.controller;
 
 import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.IStorageHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.ItemStorageKey;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageKey;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageRoutingPolicy;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
 import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.IdentityHashMap;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 
-/**
- * Flat aggregate of connected item handlers. Slot-addressed operations perform
- * one bounds check and delegate to exactly one child slot; global routing is
- * only performed by the explicit routed methods.
- */
+/** Item-specific routing facade over the generic controller index. */
 public final class ControllerItemHandler implements IBigItemHandler {
 
-    private List<IBigItemHandler> handlers = Collections.emptyList();
-    private List<HandlerSlotMapping> slotMappings = Collections.emptyList();
+    private final StorageRoutingPolicy<BigItemStack, ItemStorageKey> policy;
+    private final ControllerStorageIndex<BigItemStack, ItemStorageKey> index;
+
+    public ControllerItemHandler() {
+        this(new ItemStorageRoutingPolicy());
+    }
+
+    public ControllerItemHandler(
+            @Nonnull StorageRoutingPolicy<BigItemStack, ItemStorageKey> policy) {
+        this.policy = Objects.requireNonNull(policy, "policy");
+        this.index = new ControllerStorageIndex<>(BigItemStack.empty(), policy);
+    }
 
     @Override
-    public int getSlotCount() {
-        return slotMappings.size();
+    public int getStorageCount() {
+        return index.getStorageCount();
     }
 
     @Nonnull
     @Override
-    public BigItemStack getSlotSnapshot(int slot) {
-        HandlerSlotMapping mapping = mappingAt(slot);
-        return mapping == null
-                ? BigItemStack.empty()
-                : mapping.handler.getSlotSnapshot(mapping.localSlot);
+    public BigItemStack getSnapshot(int slot) {
+        return index.getSnapshot(slot);
+    }
+
+    @Nonnull
+    public BigItemStack getIndexedSnapshot(int globalIndex) {
+        return index.getIndexedSnapshot(globalIndex);
     }
 
     @Override
-    public long getSlotCapacity(int slot) {
-        HandlerSlotMapping mapping = mappingAt(slot);
-        return mapping == null ? 0L : mapping.handler.getSlotCapacity(mapping.localSlot);
+    public long getCapacity(int slot) {
+        return index.getCapacity(slot);
     }
 
     @Nonnull
     @Override
-    public TransferResult<BigItemStack> insertIntoSlot(
+    public TransferResult<BigItemStack, ItemStorageKey> insert(
             int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action) {
-        Objects.requireNonNull(action, "action");
-        long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
-        if (requested == 0L) {
-            return new TransferResult<>(0L, BigItemStack.empty(), action);
-        }
-        HandlerSlotMapping mapping = mappingAt(slot);
-        if (mapping == null) {
-            return new TransferResult<>(requested, BigItemStack.empty(), action);
-        }
-        return mapping.handler.insertIntoSlot(mapping.localSlot, request, action);
+        return index.insert(slot, request, action);
     }
 
     @Nonnull
     @Override
-    public TransferResult<BigItemStack> extractFromSlot(
+    public TransferResult<BigItemStack, ItemStorageKey> extract(
             int slot, long amount, @Nonnull StorageAction action) {
-        Objects.requireNonNull(action, "action");
-        long requested = Math.max(0L, amount);
-        if (requested == 0L) {
-            return new TransferResult<>(0L, BigItemStack.empty(), action);
-        }
-        HandlerSlotMapping mapping = mappingAt(slot);
-        if (mapping == null) {
-            return new TransferResult<>(requested, BigItemStack.empty(), action);
-        }
-        return mapping.handler.extractFromSlot(mapping.localSlot, amount, action);
+        return index.extract(slot, amount, action);
     }
 
-    /**
-     * Performs one classification scan and then drains candidates in the
-     * required order: locked matching slots, unlocked matching slots, and
-     * finally unconfigured slots in unlocked handlers.
-     */
     @Nonnull
     @Override
-    public TransferResult<BigItemStack> insertRouted(
+    public TransferResult<BigItemStack, ItemStorageKey> insertRouted(
             @Nonnull BigItemStack request, @Nonnull StorageAction action) {
         Objects.requireNonNull(action, "action");
-        long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
+        long requested = amountOf(request);
         if (requested == 0L) {
-            return new TransferResult<>(0L, BigItemStack.empty(), action);
+            return emptyResult(0L, action);
         }
 
-        List<HandlerSlotMapping> lockedMatches = new ArrayList<>();
-        List<HandlerSlotMapping> unlockedMatches = new ArrayList<>();
-        List<HandlerSlotMapping> unlockedEmpty = new ArrayList<>();
-        BigItemStack compatibilityProbe = request.withAmount(1L);
+        ControllerStorageIndex.CandidateSnapshot<BigItemStack, ItemStorageKey> snapshot =
+                index.snapshotCandidates(request);
+        List<Candidate> candidates = new ArrayList<>();
+        for (ControllerStorageIndex.IndexedStorage<BigItemStack, ItemStorageKey> candidate
+                : snapshot.getExact()) {
+            addConfiguredCandidate(candidates, candidate, request, false);
+        }
 
-        for (HandlerSlotMapping mapping : slotMappings) {
-            BigItemStack current = mapping.handler.getSlotSnapshot(mapping.localSlot);
-            boolean hasTemplate = current != null && current.hasTemplate();
-            if (!hasTemplate) {
-                if (!mapping.handler.isLocked()) {
-                    unlockedEmpty.add(mapping);
-                }
-                continue;
-            }
-
-            boolean compatible = current.isSameType(request);
-            if (!compatible) {
-                TransferResult<BigItemStack> probe = mapping.handler.insertIntoSlot(
-                        mapping.localSlot, compatibilityProbe, StorageAction.SIMULATE);
-                compatible = probe != null && probe.getProcessedAmount() > 0L;
-            }
-            if (!compatible) {
-                continue;
-            }
-            if (mapping.handler.isLocked()) {
-                lockedMatches.add(mapping);
-            } else {
-                unlockedMatches.add(mapping);
+        BigItemStack probe = request.withAmount(1L);
+        for (ControllerStorageIndex.IndexedStorage<BigItemStack, ItemStorageKey> candidate
+                : snapshot.getAliases()) {
+            IBigItemHandler child = itemHandler(candidate);
+            TransferResult<BigItemStack, ItemStorageKey> simulated = child.insert(
+                    candidate.getLocalIndex(), probe, StorageAction.SIMULATE);
+            if (simulated != null && simulated.getProcessedAmount() > 0L) {
+                addConfiguredCandidate(candidates, candidate, request, true);
             }
         }
+
+        for (ControllerStorageIndex.IndexedStorage<BigItemStack, ItemStorageKey> candidate
+                : snapshot.getEmpty()) {
+            IBigItemHandler child = itemHandler(candidate);
+            if (!child.isLocked() && policy.isEmptySlotEligible(
+                    child, candidate.getLocalIndex(), request)) {
+                candidates.add(new Candidate(candidate, 2));
+            }
+        }
+        Collections.sort(candidates, Comparator
+                .comparingInt((Candidate candidate) -> candidate.priority)
+                .thenComparingInt(candidate -> candidate.storage.getGlobalIndex()));
 
         long processed = 0L;
-        processed = insertCandidates(lockedMatches, request, action, processed);
-        processed = insertCandidates(unlockedMatches, request, action, processed);
-        processed = insertCandidates(unlockedEmpty, request, action, processed);
-        return aggregateResult(request, processed, action);
-    }
-
-    /** Routes type-sensitive extraction across matching slots in flat order. */
-    @Nonnull
-    @Override
-    public TransferResult<BigItemStack> extractRouted(
-            @Nonnull BigItemStack request, @Nonnull StorageAction action) {
-        Objects.requireNonNull(action, "action");
-        long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
-        if (requested == 0L) {
-            return new TransferResult<>(0L, BigItemStack.empty(), action);
-        }
-
-        long processed = 0L;
-        for (HandlerSlotMapping mapping : slotMappings) {
+        // Candidate membership is detached from the live generic index.
+        for (Candidate candidate : new ArrayList<>(candidates)) {
             if (processed >= requested) {
                 break;
             }
-            BigItemStack current = mapping.handler.getSlotSnapshot(mapping.localSlot);
-            if (current == null || !current.hasTemplate() || !current.isSameType(request)) {
+            long remaining = requested - processed;
+            TransferResult<BigItemStack, ItemStorageKey> inserted = itemHandler(
+                    candidate.storage).insert(candidate.storage.getLocalIndex(),
+                    request.withAmount(remaining), action);
+            processed = saturatedAdd(processed, bounded(inserted, remaining));
+        }
+        return aggregate(request, processed, action);
+    }
+
+    @Nonnull
+    @Override
+    public TransferResult<BigItemStack, ItemStorageKey> extractRouted(
+            @Nonnull BigItemStack request, @Nonnull StorageAction action) {
+        Objects.requireNonNull(action, "action");
+        long requested = amountOf(request);
+        if (requested == 0L) {
+            return emptyResult(0L, action);
+        }
+        List<ControllerStorageIndex.IndexedStorage<BigItemStack, ItemStorageKey>> candidates =
+                index.snapshotCandidates(request).getExact();
+        long processed = 0L;
+        for (ControllerStorageIndex.IndexedStorage<BigItemStack, ItemStorageKey> candidate
+                : candidates) {
+            if (processed >= requested) {
+                break;
+            }
+            BigItemStack current = candidate.getSnapshot();
+            if (current.getAmount() <= 0L || !current.isSameType(request)) {
                 continue;
             }
             long remaining = requested - processed;
-            TransferResult<BigItemStack> result = mapping.handler.extractFromSlot(
-                    mapping.localSlot, remaining, action);
-            long extracted = result == null ? 0L
-                    : Math.min(remaining, Math.max(0L, result.getProcessedAmount()));
-            processed += extracted;
+            TransferResult<BigItemStack, ItemStorageKey> extracted = itemHandler(candidate).extract(
+                    candidate.getLocalIndex(), remaining, action);
+            processed = saturatedAdd(processed, bounded(extracted, remaining));
         }
-        return aggregateResult(request, processed, action);
+        return aggregate(request, processed, action);
     }
 
-    /**
-     * Atomically replaces the child list and its flattened O(1) slot index.
-     * Later mutations of the caller's list cannot leave stale mappings behind.
-     */
-    public void setHandlers(@Nonnull List<? extends IBigItemHandler> newHandlers) {
-        Objects.requireNonNull(newHandlers, "newHandlers");
-        List<IBigItemHandler> handlerCopy = new ArrayList<>(newHandlers.size());
-        List<HandlerSlotMapping> mappings = new ArrayList<>();
-        Set<Object> seen = Collections.newSetFromMap(
-                new IdentityHashMap<Object, Boolean>());
-        for (IBigItemHandler handler : newHandlers) {
-            if (handler == null || !seen.add(identityOf(handler))) {
-                continue;
-            }
-            handlerCopy.add(handler);
-            int slots = Math.max(0, handler.getSlotCount());
-            for (int slot = 0; slot < slots; slot++) {
-                mappings.add(new HandlerSlotMapping(handler, slot));
-            }
-        }
-        handlers = Collections.unmodifiableList(handlerCopy);
-        slotMappings = Collections.unmodifiableList(mappings);
+    public void setHandlers(@Nonnull List<? extends IBigItemHandler> handlers) {
+        index.setHandlers(handlers);
     }
 
-    /** @return an immutable snapshot of the current child handler order */
+    public void closeSubscriptions() {
+        index.closeSubscriptions();
+    }
+
     @Nonnull
     public List<IBigItemHandler> getHandlers() {
-        return handlers;
-    }
-
-    private static Object identityOf(IBigItemHandler handler) {
-        if (handler instanceof StorageIdentityProvider) {
-            Object identity = ((StorageIdentityProvider) handler).getStorageIdentity();
-            if (identity != null) {
-                return identity;
-            }
+        List<IBigItemHandler> result = new ArrayList<>();
+        for (IStorageHandler<BigItemStack, ItemStorageKey> handler : index.getHandlers()) {
+            result.add((IBigItemHandler) handler);
         }
-        return handler;
+        return Collections.unmodifiableList(result);
     }
 
-    private long insertCandidates(
-            List<HandlerSlotMapping> candidates,
+    @Nonnull
+    public List<Integer> getOccupiedIndices() {
+        return index.getOccupiedIndices();
+    }
+
+    @Nonnull
+    public List<Integer> getOccupiedSlots() {
+        return getOccupiedIndices();
+    }
+
+    @Nonnull
+    public List<Integer> getEmptyIndices() {
+        return index.getEmptyIndices();
+    }
+
+    @Nonnull
+    public List<Integer> getEmptySlots() {
+        return getEmptyIndices();
+    }
+
+    @Nonnull
+    public Set<Integer> getIndicesForKey(@Nullable StorageKey key) {
+        return index.getIndicesForKey(key);
+    }
+
+    @Nonnull
+    public Set<Integer> getExactIndices(@Nullable StorageKey key) {
+        return getIndicesForKey(key);
+    }
+
+    @Nonnull
+    public Set<Integer> getIndicesForAlias(@Nullable StorageKey alias) {
+        return index.getIndicesForAlias(alias);
+    }
+
+    @Nonnull
+    public Set<Integer> getAliasIndices(@Nullable StorageKey alias) {
+        return getIndicesForAlias(alias);
+    }
+
+    @Nonnull
+    public Set<Integer> getCandidateIndices(@Nullable StorageKey key) {
+        return index.getCandidateIndices(key);
+    }
+
+    @Nonnull
+    public Set<Integer> getCandidateIndices(@Nullable BigItemStack request) {
+        return index.getCandidateIndices(request);
+    }
+
+    @Nullable
+    public ControllerStorageIndex.IndexedStorage<BigItemStack, ItemStorageKey>
+    getIndexedSlot(int globalIndex) {
+        return index.getIndexedStorage(globalIndex);
+    }
+
+    @Nonnull
+    public List<ControllerStorageIndex.IndexedStorage<BigItemStack, ItemStorageKey>>
+    getIndexedSlots() {
+        return index.getIndexedStorages();
+    }
+
+    public int getGlobalIndex(@Nonnull IBigItemHandler handler, int localIndex) {
+        return index.getGlobalIndex(handler, localIndex);
+    }
+
+    @Nonnull
+    public ControllerStorageIndex<BigItemStack, ItemStorageKey> getIndex() {
+        return index;
+    }
+
+    @Override
+    public void onChange(@Nonnull StorageChange<BigItemStack, ItemStorageKey> change) {
+        index.onChange(change);
+    }
+
+    @Nonnull
+    @Override
+    public StorageSubscription subscribe(
+            @Nonnull Consumer<? super StorageChange<BigItemStack, ItemStorageKey>> listener) {
+        return index.subscribe(listener);
+    }
+
+    private void addConfiguredCandidate(
+            List<Candidate> result,
+            ControllerStorageIndex.IndexedStorage<BigItemStack, ItemStorageKey> candidate,
             BigItemStack request,
-            StorageAction action,
-            long alreadyProcessed) {
-        long processed = alreadyProcessed;
-        for (HandlerSlotMapping mapping : candidates) {
-            if (processed >= request.getAmount()) {
-                break;
+            boolean aliasConfirmed) {
+        IBigItemHandler child = itemHandler(candidate);
+        int priority = policy.getCandidatePriority(
+                child, candidate.getLocalIndex(), candidate.getSnapshot(), request);
+        if (priority < 0) {
+            if (!aliasConfirmed) {
+                return;
             }
-            long remaining = request.getAmount() - processed;
-            TransferResult<BigItemStack> result = mapping.handler.insertIntoSlot(
-                    mapping.localSlot, request.withAmount(remaining), action);
-            long inserted = result == null ? 0L
-                    : Math.min(remaining, Math.max(0L, result.getProcessedAmount()));
-            processed += inserted;
+            priority = child.isLocked() ? 0 : 1;
         }
-        return processed;
+        result.add(new Candidate(candidate, priority));
     }
 
-    private HandlerSlotMapping mappingAt(int slot) {
-        return slot < 0 || slot >= slotMappings.size() ? null : slotMappings.get(slot);
+    private static IBigItemHandler itemHandler(
+            ControllerStorageIndex.IndexedStorage<BigItemStack, ItemStorageKey> storage) {
+        return (IBigItemHandler) storage.getHandler();
     }
 
-    private static TransferResult<BigItemStack> aggregateResult(
+    private static long amountOf(@Nullable BigItemStack request) {
+        return request == null || request.isEmpty() ? 0L : request.getAmount();
+    }
+
+    private static long bounded(
+            @Nullable TransferResult<BigItemStack, ItemStorageKey> result, long remaining) {
+        return result == null ? 0L
+                : Math.min(remaining, Math.max(0L, result.getProcessedAmount()));
+    }
+
+    private static long saturatedAdd(long left, long right) {
+        return left > Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
+    }
+
+    private static TransferResult<BigItemStack, ItemStorageKey> aggregate(
             BigItemStack request, long processed, StorageAction action) {
-        return new TransferResult<>(
-                request.getAmount(),
-                processed == 0L ? BigItemStack.empty() : request.withAmount(processed),
-                action);
+        long amount = Math.min(request.getAmount(), Math.max(0L, processed));
+        return new TransferResult<>(request.getAmount(), amount == 0L
+                ? BigItemStack.empty() : request.withAmount(amount), action);
     }
 
-    private static final class HandlerSlotMapping {
-        private final IBigItemHandler handler;
-        private final int localSlot;
+    private static TransferResult<BigItemStack, ItemStorageKey> emptyResult(
+            long requested, StorageAction action) {
+        return new TransferResult<>(requested, BigItemStack.empty(), action);
+    }
 
-        private HandlerSlotMapping(IBigItemHandler handler, int localSlot) {
-            this.handler = handler;
-            this.localSlot = localSlot;
+    private static final class Candidate {
+        private final ControllerStorageIndex.IndexedStorage<BigItemStack, ItemStorageKey> storage;
+        private final int priority;
+
+        private Candidate(
+                ControllerStorageIndex.IndexedStorage<BigItemStack, ItemStorageKey> storage,
+                int priority) {
+            this.storage = storage;
+            this.priority = priority;
         }
     }
 }
