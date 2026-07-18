@@ -6,13 +6,10 @@ import net.minecraft.item.ItemStack;
 
 import javax.annotation.Nonnull;
 
-/** Internal installation and active-behavior contract for the mod's own upgrades. */
+/**
+ * Internal installation and active-behavior contract for the mod's own upgrades.
+ */
 public interface DrawerUpgradeBehavior extends IStorageUpgrade {
-
-    enum SlotType {
-        STORAGE,
-        UTILITY
-    }
 
     SlotType getSlotType();
 
@@ -27,8 +24,14 @@ public interface DrawerUpgradeBehavior extends IStorageUpgrade {
         return false;
     }
 
-    /** Higher values may automatically replace lower values in storage upgrade slots. */
+    /**
+     * Higher values may automatically replace lower values in storage upgrade slots.
+     */
     default int getReplacementPriority(@Nonnull ItemStack stack) {
         return Integer.MIN_VALUE;
+    }
+
+    enum SlotType {
+        STORAGE, UTILITY
     }
 }

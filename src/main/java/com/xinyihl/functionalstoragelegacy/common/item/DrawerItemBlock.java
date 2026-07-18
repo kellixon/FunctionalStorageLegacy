@@ -42,10 +42,25 @@ public class DrawerItemBlock extends ItemBlock {
         super(block);
     }
 
+    static List<String> collectStoredItemLines(IBigItemHandler handler) {
+        List<String> lines = new ArrayList<>();
+        if (handler == null) {
+            return lines;
+        }
+        for (int slot = 0; slot < handler.getStorageCount(); slot++) {
+            BigItemStack snapshot = handler.getSnapshot(slot);
+            if (snapshot.isEmpty()) {
+                continue;
+            }
+            ItemStack template = snapshot.getTemplate();
+            lines.add(template.getDisplayName() + "x" + NumberUtils.formatCompact(snapshot.getAmount()));
+        }
+        return lines;
+    }
+
     @Override
     public int getItemStackLimit(@Nonnull ItemStack stack) {
-        if (stack.hasTagCompound()
-                && stack.getTagCompound().hasKey("TileData", Constants.NBT.TAG_COMPOUND)) {
+        if (stack.hasTagCompound() && stack.getTagCompound().hasKey("TileData", Constants.NBT.TAG_COMPOUND)) {
             return 1;
         }
         return super.getItemStackLimit(stack);
@@ -68,8 +83,7 @@ public class DrawerItemBlock extends ItemBlock {
         super.addInformation(stack, worldIn, tooltip, flagIn);
 
         if (block instanceof FramedDrawerBlock) {
-            tooltip.add(TextFormatting.GRAY + new TextComponentTranslation(
-                    "frameddrawer.use").getUnformattedText());
+            tooltip.add(TextFormatting.GRAY + new TextComponentTranslation("frameddrawer.use").getUnformattedText());
         }
 
         List<String> stored = collectStoredLines(stack);
@@ -98,37 +112,18 @@ public class DrawerItemBlock extends ItemBlock {
         NBTTagCompound tileData = stack.getTagCompound().getCompoundTag("TileData");
 
         if (tileData.hasKey("StorageV2", Constants.NBT.TAG_COMPOUND)) {
-            NBTTagList tanks = tileData.getCompoundTag("StorageV2")
-                    .getTagList("Tanks", Constants.NBT.TAG_COMPOUND);
+            NBTTagList tanks = tileData.getCompoundTag("StorageV2").getTagList("Tanks", Constants.NBT.TAG_COMPOUND);
             for (int i = 0; i < tanks.tagCount(); i++) {
                 NBTTagCompound entry = tanks.getCompoundTagAt(i);
                 if (!entry.hasKey("Fluid", Constants.NBT.TAG_COMPOUND)) continue;
                 long amount = Math.max(0L, entry.getLong("Amount"));
                 if (amount == 0L) continue;
-                FluidStack fluid = FluidStack.loadFluidStackFromNBT(
-                        entry.getCompoundTag("Fluid"));
+                FluidStack fluid = FluidStack.loadFluidStackFromNBT(entry.getCompoundTag("Fluid"));
                 if (fluid == null) continue;
                 lines.add(fluid.getLocalizedName() + "x" + NumberUtils.formatCompact(amount));
             }
         }
 
-        return lines;
-    }
-
-    static List<String> collectStoredItemLines(IBigItemHandler handler) {
-        List<String> lines = new ArrayList<>();
-        if (handler == null) {
-            return lines;
-        }
-        for (int slot = 0; slot < handler.getStorageCount(); slot++) {
-            BigItemStack snapshot = handler.getSnapshot(slot);
-            if (snapshot == null || snapshot.isEmpty()) {
-                continue;
-            }
-            ItemStack template = snapshot.getTemplate();
-            lines.add(template.getDisplayName()
-                    + "x" + NumberUtils.formatCompact(snapshot.getAmount()));
-        }
         return lines;
     }
 

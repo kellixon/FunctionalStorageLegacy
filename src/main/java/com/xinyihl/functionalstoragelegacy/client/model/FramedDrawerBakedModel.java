@@ -5,12 +5,7 @@ import com.xinyihl.functionalstoragelegacy.common.storage.FramedDrawerStyle;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.block.model.BakedQuad;
-import net.minecraft.client.renderer.block.model.BakedQuadRetextured;
-import net.minecraft.client.renderer.block.model.IBakedModel;
-import net.minecraft.client.renderer.block.model.ItemCameraTransforms;
-import net.minecraft.client.renderer.block.model.ItemOverride;
-import net.minecraft.client.renderer.block.model.ItemOverrideList;
+import net.minecraft.client.renderer.block.model.*;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.renderer.vertex.VertexFormat;
 import net.minecraft.entity.EntityLivingBase;
@@ -28,7 +23,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Retextures the framed model's marked quads from tile or item style NBT. */
+/**
+ * Retextures the framed model's marked quads from tile or item style NBT.
+ */
 public final class FramedDrawerBakedModel implements IBakedModel {
 
     private static final String SIDE_MARKER = "functionalstoragelegacy:blocks/framed_side";
@@ -50,86 +47,13 @@ public final class FramedDrawerBakedModel implements IBakedModel {
         this.overrides = new FramedOverrides(this);
     }
 
-    private FramedDrawerBakedModel(IBakedModel parent, FramedDrawerStyle itemStyle,
-                                   FramedDrawerBakedModel root) {
+    private FramedDrawerBakedModel(IBakedModel parent, FramedDrawerStyle itemStyle, FramedDrawerBakedModel root) {
         this.parent = parent;
         this.itemStyle = itemStyle;
         this.root = root;
         this.itemModels = root.itemModels;
         this.textureCache = root.textureCache;
         this.overrides = root.overrides;
-    }
-
-    @Nonnull
-    @Override
-    public List<BakedQuad> getQuads(@Nullable IBlockState state,
-                                    @Nullable EnumFacing side, long rand) {
-        List<BakedQuad> original = parent.getQuads(state, side, rand);
-        FramedDrawerStyle style = styleFrom(state);
-        if (!style.isConfigured() || original.isEmpty()) {
-            return original;
-        }
-
-        PartSprites sprites = textureCache.computeIfAbsent(
-                style.getCacheKey(), key -> PartSprites.from(style));
-        List<BakedQuad> retextured = new ArrayList<>(original.size());
-        for (BakedQuad quad : original) {
-            TextureAtlasSprite replacement = replacementFor(quad, sprites);
-            retextured.add(replacement == null
-                    ? quad : new BakedQuadRetextured(quad, replacement));
-        }
-        return retextured;
-    }
-
-    @Override
-    public boolean isAmbientOcclusion() {
-        return parent.isAmbientOcclusion();
-    }
-
-    @Override
-    public boolean isGui3d() {
-        return parent.isGui3d();
-    }
-
-    @Override
-    public boolean isBuiltInRenderer() {
-        return parent.isBuiltInRenderer();
-    }
-
-    @Nonnull
-    @Override
-    public TextureAtlasSprite getParticleTexture() {
-        if (itemStyle.isConfigured()) {
-            PartSprites sprites = textureCache.computeIfAbsent(
-                    itemStyle.getCacheKey(), key -> PartSprites.from(itemStyle));
-            if (sprites.exterior != null) {
-                return sprites.exterior;
-            }
-        }
-        return parent.getParticleTexture();
-    }
-
-    @Nonnull
-    @Override
-    public ItemCameraTransforms getItemCameraTransforms() {
-        return parent.getItemCameraTransforms();
-    }
-
-    @Nonnull
-    @Override
-    public ItemOverrideList getOverrides() {
-        return overrides;
-    }
-
-    private FramedDrawerStyle styleFrom(@Nullable IBlockState state) {
-        if (state instanceof IExtendedBlockState) {
-            FramedDrawerStyle style = ((IExtendedBlockState) state)
-                    .getValue(FramedDrawerBlock.STYLE);
-            if (style != null) {
-                return style;
-            }
-        }
-        return itemStyle;
     }
 
     @Nullable
@@ -144,7 +68,9 @@ public final class FramedDrawerBakedModel implements IBakedModel {
         return null;
     }
 
-    /** Divider UVs occupy the 7..9 center strip in the source 16x16 drawer model. */
+    /**
+     * Divider UVs occupy the 7..9 center strip in the source 16x16 drawer model.
+     */
     private static boolean isDividerQuad(BakedQuad quad) {
         VertexFormat format = quad.getFormat();
         if (!format.hasUvOffset(0)) {
@@ -184,20 +110,84 @@ public final class FramedDrawerBakedModel implements IBakedModel {
         Block block = ((ItemBlock) material.getItem()).getBlock();
         try {
             IBlockState state = block.getStateFromMeta(material.getMetadata());
-            return Minecraft.getMinecraft().getBlockRendererDispatcher()
-                    .getBlockModelShapes().getTexture(state);
+            return Minecraft.getMinecraft().getBlockRendererDispatcher().getBlockModelShapes().getTexture(state);
         } catch (RuntimeException ignored) {
-            return Minecraft.getMinecraft().getBlockRendererDispatcher()
-                    .getBlockModelShapes().getTexture(block.getDefaultState());
+            return Minecraft.getMinecraft().getBlockRendererDispatcher().getBlockModelShapes().getTexture(block.getDefaultState());
         }
+    }
+
+    @Nonnull
+    @Override
+    public List<BakedQuad> getQuads(@Nullable IBlockState state, @Nullable EnumFacing side, long rand) {
+        List<BakedQuad> original = parent.getQuads(state, side, rand);
+        FramedDrawerStyle style = styleFrom(state);
+        if (!style.isConfigured() || original.isEmpty()) {
+            return original;
+        }
+
+        PartSprites sprites = textureCache.computeIfAbsent(style.getCacheKey(), key -> PartSprites.from(style));
+        List<BakedQuad> retextured = new ArrayList<>(original.size());
+        for (BakedQuad quad : original) {
+            TextureAtlasSprite replacement = replacementFor(quad, sprites);
+            retextured.add(replacement == null ? quad : new BakedQuadRetextured(quad, replacement));
+        }
+        return retextured;
+    }
+
+    @Override
+    public boolean isAmbientOcclusion() {
+        return parent.isAmbientOcclusion();
+    }
+
+    @Override
+    public boolean isGui3d() {
+        return parent.isGui3d();
+    }
+
+    @Override
+    public boolean isBuiltInRenderer() {
+        return parent.isBuiltInRenderer();
+    }
+
+    @Nonnull
+    @Override
+    public TextureAtlasSprite getParticleTexture() {
+        if (itemStyle.isConfigured()) {
+            PartSprites sprites = textureCache.computeIfAbsent(itemStyle.getCacheKey(), key -> PartSprites.from(itemStyle));
+            if (sprites.exterior != null) {
+                return sprites.exterior;
+            }
+        }
+        return parent.getParticleTexture();
+    }
+
+    @Nonnull
+    @Override
+    public ItemCameraTransforms getItemCameraTransforms() {
+        return parent.getItemCameraTransforms();
+    }
+
+    @Nonnull
+    @Override
+    public ItemOverrideList getOverrides() {
+        return overrides;
+    }
+
+    private FramedDrawerStyle styleFrom(@Nullable IBlockState state) {
+        if (state instanceof IExtendedBlockState) {
+            FramedDrawerStyle style = ((IExtendedBlockState) state).getValue(FramedDrawerBlock.STYLE);
+            if (style != null) {
+                return style;
+            }
+        }
+        return itemStyle;
     }
 
     private IBakedModel itemModel(FramedDrawerStyle style) {
         if (!style.isConfigured()) {
             return this;
         }
-        return itemModels.computeIfAbsent(style.getCacheKey(),
-                key -> new FramedDrawerBakedModel(parent, style, root));
+        return itemModels.computeIfAbsent(style.getCacheKey(), key -> new FramedDrawerBakedModel(parent, style, root));
     }
 
     private static final class PartSprites {
@@ -205,18 +195,14 @@ public final class FramedDrawerBakedModel implements IBakedModel {
         private final TextureAtlasSprite front;
         private final TextureAtlasSprite divider;
 
-        private PartSprites(TextureAtlasSprite exterior, TextureAtlasSprite front,
-                            TextureAtlasSprite divider) {
+        private PartSprites(TextureAtlasSprite exterior, TextureAtlasSprite front, TextureAtlasSprite divider) {
             this.exterior = exterior;
             this.front = front;
             this.divider = divider;
         }
 
         private static PartSprites from(FramedDrawerStyle style) {
-            return new PartSprites(
-                    spriteFor(style.getExterior()),
-                    spriteFor(style.getFront()),
-                    spriteFor(style.getDivider()));
+            return new PartSprites(spriteFor(style.getExterior()), spriteFor(style.getFront()), spriteFor(style.getDivider()));
         }
     }
 
@@ -224,16 +210,13 @@ public final class FramedDrawerBakedModel implements IBakedModel {
         private final FramedDrawerBakedModel model;
 
         private FramedOverrides(FramedDrawerBakedModel model) {
-            super(Collections.<ItemOverride>emptyList());
+            super(Collections.emptyList());
             this.model = model;
         }
 
         @Nonnull
         @Override
-        public IBakedModel handleItemState(@Nonnull IBakedModel originalModel,
-                                           @Nonnull ItemStack stack,
-                                           @Nullable World world,
-                                           @Nullable EntityLivingBase entity) {
+        public IBakedModel handleItemState(@Nonnull IBakedModel originalModel, @Nonnull ItemStack stack, @Nullable World world, @Nullable EntityLivingBase entity) {
             return model.itemModel(FramedDrawerStyle.fromDrawerStack(stack));
         }
     }

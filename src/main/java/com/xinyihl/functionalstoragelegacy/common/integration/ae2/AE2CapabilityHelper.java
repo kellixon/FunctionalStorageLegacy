@@ -25,7 +25,7 @@ public class AE2CapabilityHelper {
 
     @SuppressWarnings("unchecked")
     public static <T> T castAccessor(IStorageMonitorableAccessor accessor) {
-        return (T) Capabilities.STORAGE_MONITORABLE_ACCESSOR.cast(accessor);
+        return Capabilities.STORAGE_MONITORABLE_ACCESSOR.cast(accessor);
     }
 
     public static Object createAccessor(ControllableDrawerTile tile) {
@@ -34,32 +34,19 @@ public class AE2CapabilityHelper {
 
         if (tile instanceof DrawerControllerTile) {
             DrawerControllerTile controller = (DrawerControllerTile) tile;
-            return new DrawerStorageAccessor(
-                    new DrawerMEMonitor<>(new DrawerMEItemHandler(controller.getItemHandler(), itemChannel), itemChannel),
-                    new DrawerMEMonitor<>(new DrawerMEFluidHandler(controller.getFluidHandler(), fluidChannel), fluidChannel)
-            );
+            return new DrawerStorageAccessor(new DrawerMEMonitor<>(new DrawerMEItemHandler(controller.getItemHandler(), itemChannel), itemChannel), new DrawerMEMonitor<>(new DrawerMEFluidHandler(controller.getFluidHandler(), fluidChannel), fluidChannel));
         }
 
         if (tile instanceof FluidDrawerTile) {
-            IBigFluidHandler fluidHandler = ((FluidDrawerTile) tile).getFluidHandler();
-            return new DrawerStorageAccessor(
-                    null,
-                    new DrawerMEMonitor<>(new DrawerMEFluidHandler(fluidHandler, fluidChannel), fluidChannel)
-            );
+            IBigFluidHandler fluidHandler = tile.getFluidHandler();
+            return new DrawerStorageAccessor(null, new DrawerMEMonitor<>(new DrawerMEFluidHandler(fluidHandler, fluidChannel), fluidChannel));
         }
 
         if (tile instanceof CompactingDrawerTile) {
-            return new DrawerStorageAccessor(
-                    new DrawerMEMonitor<>(new CompactingMEItemHandler(
-                            tile.getItemHandler(), itemChannel), itemChannel),
-                    null
-            );
+            return new DrawerStorageAccessor(new DrawerMEMonitor<>(new CompactingMEItemHandler(tile.getItemHandler(), itemChannel), itemChannel), null);
         }
 
         IBigItemHandler itemHandler = tile.getItemHandler();
-        return itemHandler == null ? null : new DrawerStorageAccessor(
-                new DrawerMEMonitor<>(new DrawerMEItemHandler(itemHandler, itemChannel), itemChannel),
-                null
-        );
+        return itemHandler == null ? null : new DrawerStorageAccessor(new DrawerMEMonitor<>(new DrawerMEItemHandler(itemHandler, itemChannel), itemChannel), null);
     }
 }

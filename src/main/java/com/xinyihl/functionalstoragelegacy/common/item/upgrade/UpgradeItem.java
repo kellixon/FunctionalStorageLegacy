@@ -48,7 +48,9 @@ public abstract class UpgradeItem extends Item implements DrawerUpgradeBehavior 
         return !otherStack.isEmpty() && incompatibleUpgrades.contains(otherStack.getItem());
     }
 
-    /** Returns the configured directional conflict declarations for registration diagnostics. */
+    /**
+     * Returns the configured directional conflict declarations for registration diagnostics.
+     */
     public Set<Item> getIncompatibleUpgrades() {
         return Collections.unmodifiableSet(incompatibleUpgrades);
     }

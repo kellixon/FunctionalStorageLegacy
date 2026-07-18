@@ -33,7 +33,7 @@ public final class BigFluidStack implements StorageSnapshot<BigFluidStack, Fluid
      * immediately and are never retained by reference.
      *
      * @param template fluid type and NBT to represent; {@code null} is empty
-     * @param amount represented amount; negative values are clamped to zero
+     * @param amount   represented amount; negative values are clamped to zero
      */
     public BigFluidStack(@Nullable FluidStack template, long amount) {
         if (template == null) {
@@ -67,7 +67,9 @@ public final class BigFluidStack implements StorageSnapshot<BigFluidStack, Fluid
         return template == null ? null : template.copy();
     }
 
-    /** @return immutable exact fluid key, or {@code null} when unconfigured */
+    /**
+     * @return immutable exact fluid key, or {@code null} when unconfigured
+     */
     @Nullable
     @Override
     public FluidStorageKey getKey() {

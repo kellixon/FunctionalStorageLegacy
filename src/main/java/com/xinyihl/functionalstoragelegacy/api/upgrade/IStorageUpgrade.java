@@ -15,7 +15,9 @@ import javax.annotation.Nonnull;
  */
 public interface IStorageUpgrade {
 
-    /** Adds this stack's numeric and feature contributions to the supplied builder. */
+    /**
+     * Adds this stack's numeric and feature contributions to the supplied builder.
+     */
     void applyUpgrade(@Nonnull ItemStack stack, @Nonnull UpgradeState.Builder builder);
 
     /**

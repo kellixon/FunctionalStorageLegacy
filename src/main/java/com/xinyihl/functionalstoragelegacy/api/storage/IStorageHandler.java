@@ -10,45 +10,60 @@ import java.util.function.Consumer;
  * @param <S> immutable snapshot self type
  * @param <K> immutable exact resource key type
  */
-public interface IStorageHandler<
-        S extends StorageSnapshot<S, K>, K extends StorageKey> {
+public interface IStorageHandler<S extends StorageSnapshot<S, K>, K extends StorageKey> {
 
-    /** @return number of real indexed storage positions */
+    /**
+     * @return number of real indexed storage positions
+     */
     int getStorageCount();
 
-    /** @return detached immutable snapshot, or an unconfigured empty snapshot for an invalid index */
+    /**
+     * @return detached immutable snapshot, or an unconfigured empty snapshot for an invalid index
+     */
     @Nonnull
     S getSnapshot(int index);
 
-    /** @return non-negative long capacity, or zero for an invalid index */
+    /**
+     * @return non-negative long capacity, or zero for an invalid index
+     */
     long getCapacity(int index);
 
-    /** Inserts into exactly one index. */
+    /**
+     * Inserts into exactly one index.
+     */
     @Nonnull
-    TransferResult<S, K> insert(
-            int index, @Nonnull S request, @Nonnull StorageAction action);
+    TransferResult<S, K> insert(int index, @Nonnull S request, @Nonnull StorageAction action);
 
-    /** Extracts from exactly one index. */
+    /**
+     * Extracts from exactly one index.
+     */
     @Nonnull
-    TransferResult<S, K> extract(
-            int index, long amount, @Nonnull StorageAction action);
+    TransferResult<S, K> extract(int index, long amount, @Nonnull StorageAction action);
 
-    /** @return whether empty storage retains and enforces a resource filter */
+    /**
+     * @return whether empty storage retains and enforces a resource filter
+     */
     default boolean isLocked() {
         return false;
     }
 
-    /** @return whether compatible overflow is consumed instead of returned */
+    /**
+     * @return whether compatible overflow is consumed instead of returned
+     */
     default boolean voidsOverflow() {
         return false;
     }
 
-    /** @return whether extraction can report resources without consuming storage */
+    /**
+     * @return whether extraction can report resources without consuming storage
+     */
     default boolean isCreative() {
         return false;
     }
 
-    /** @return current storage capacity multiplier */
+    /**
+     * @return current storage capacity multiplier
+     */
     default double getMultiplier() {
         return 1.0D;
     }
@@ -75,8 +90,7 @@ public interface IStorageHandler<
      * source return an already-closed subscription.
      */
     @Nonnull
-    default StorageSubscription subscribe(
-            @Nonnull Consumer<? super StorageChange<S, K>> listener) {
+    default StorageSubscription subscribe(@Nonnull Consumer<? super StorageChange<S, K>> listener) {
         return StorageSubscription.CLOSED;
     }
 }

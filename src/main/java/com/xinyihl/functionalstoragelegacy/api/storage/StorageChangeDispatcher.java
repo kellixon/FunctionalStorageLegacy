@@ -1,11 +1,7 @@
 package com.xinyihl.functionalstoragelegacy.api.storage;
 
 import javax.annotation.Nonnull;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.Queue;
+import java.util.*;
 import java.util.function.Consumer;
 
 /**
@@ -13,23 +9,38 @@ import java.util.function.Consumer;
  * callback are queued until the current event finishes, so callback-driven
  * mutation cannot recurse through a partially dispatched listener list.
  */
-public final class StorageChangeDispatcher<
-        S extends StorageSnapshot<S, K>, K extends StorageKey> {
+public final class StorageChangeDispatcher<S extends StorageSnapshot<S, K>, K extends StorageKey> {
 
     private final List<Registration> registrations = new ArrayList<>();
     private final Queue<StorageChange<S, K>> pending = new ArrayDeque<>();
     private boolean dispatching;
 
-    /** Registers a listener. A listener added mid-dispatch sees only later events. */
+    private static void rethrow(Throwable failure) {
+        if (failure == null) {
+            return;
+        }
+        if (failure instanceof RuntimeException) {
+            throw (RuntimeException) failure;
+        }
+        if (failure instanceof Error) {
+            throw (Error) failure;
+        }
+        throw new IllegalStateException("storage change listener failed", failure);
+    }
+
+    /**
+     * Registers a listener. A listener added mid-dispatch sees only later events.
+     */
     @Nonnull
-    public synchronized StorageSubscription subscribe(
-            @Nonnull Consumer<? super StorageChange<S, K>> listener) {
+    public synchronized StorageSubscription subscribe(@Nonnull Consumer<? super StorageChange<S, K>> listener) {
         Registration registration = new Registration(Objects.requireNonNull(listener, "listener"));
         registrations.add(registration);
         return registration;
     }
 
-    /** @return whether at least one active listener is registered */
+    /**
+     * @return whether at least one active listener is registered
+     */
     public synchronized boolean hasSubscribers() {
         return !registrations.isEmpty();
     }
@@ -70,19 +81,6 @@ public final class StorageChangeDispatcher<
         if (failure != null) {
             rethrow(failure);
         }
-    }
-
-    private static void rethrow(Throwable failure) {
-        if (failure == null) {
-            return;
-        }
-        if (failure instanceof RuntimeException) {
-            throw (RuntimeException) failure;
-        }
-        if (failure instanceof Error) {
-            throw (Error) failure;
-        }
-        throw new IllegalStateException("storage change listener failed", failure);
     }
 
     private final class Registration implements StorageSubscription {

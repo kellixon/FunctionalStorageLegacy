@@ -17,13 +17,7 @@ import com.xinyihl.functionalstoragelegacy.api.storage.StorageSnapshot;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
 
 import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Event-driven AE2 monitor for drawer storage.
@@ -34,8 +28,7 @@ import java.util.Set;
  * active subscription is mandatory: ticks never rebuild or poll inventory
  * state.</p>
  */
-public class DrawerMEMonitor<T extends IAEStack<T>>
-        implements IMEMonitor<T>, ITickingMonitor, AutoCloseable {
+public class DrawerMEMonitor<T extends IAEStack<T>> implements IMEMonitor<T>, ITickingMonitor, AutoCloseable {
 
     private static final BigInteger LONG_MAX = BigInteger.valueOf(Long.MAX_VALUE);
 
@@ -43,27 +36,30 @@ public class DrawerMEMonitor<T extends IAEStack<T>>
     private final IStorageChannel<T> channel;
     private final AE2StorageChangeSource<T> source;
 
-    /** Exact (unsaturated) amount by immutable generic storage key. */
+    /**
+     * Exact (unsaturated) amount by immutable generic storage key.
+     */
     private final Map<StorageKey, BigInteger> totals = new HashMap<>();
-    /** Latest typed snapshot for each key, retained long enough for removals. */
+    /**
+     * Latest typed snapshot for each key, retained long enough for removals.
+     */
     private final Map<StorageKey, Object> templates = new HashMap<>();
-    /** Saturated amount most recently published to AE2. */
+    /**
+     * Saturated amount most recently published to AE2.
+     */
     private final Map<StorageKey, Long> published = new HashMap<>();
     private final Set<StorageKey> dirtyKeys = new LinkedHashSet<>();
-    private final Map<IMEMonitorHandlerReceiver<T>, Object> listeners =
-            new LinkedHashMap<>();
+    private final Map<IMEMonitorHandlerReceiver<T>, Object> listeners = new LinkedHashMap<>();
 
-    private StorageSubscription subscription = StorageSubscription.CLOSED;
+    private StorageSubscription subscription;
     private IActionSource mySource;
     private boolean closed;
 
-    public DrawerMEMonitor(IMEInventoryHandler<T> handler,
-                           IStorageChannel<T> channel) {
+    public DrawerMEMonitor(IMEInventoryHandler<T> handler, IStorageChannel<T> channel) {
         this.handler = handler;
         this.channel = channel;
         if (!(handler instanceof AE2StorageChangeSource)) {
-            throw new IllegalArgumentException(
-                    "DrawerMEMonitor requires a typed storage change source");
+            throw new IllegalArgumentException("DrawerMEMonitor requires a typed storage change source");
         }
         this.source = castSource(handler);
         scanSource(false);
@@ -72,36 +68,39 @@ public class DrawerMEMonitor<T extends IAEStack<T>>
             if (created != null) {
                 created.close();
             }
-            throw new IllegalStateException(
-                    "DrawerMEMonitor requires an active storage subscription");
+            throw new IllegalStateException("DrawerMEMonitor requires an active storage subscription");
         }
         subscription = created;
     }
 
     @SuppressWarnings("unchecked")
-    private static <T extends IAEStack<T>> AE2StorageChangeSource<T> castSource(
-            IMEInventoryHandler<T> handler) {
+    private static <T extends IAEStack<T>> AE2StorageChangeSource<T> castSource(IMEInventoryHandler<T> handler) {
         return (AE2StorageChangeSource<T>) handler;
     }
 
     // ---- ITickingMonitor ----
+
+    private static long saturate(BigInteger amount) {
+        if (amount == null || amount.signum() <= 0) {
+            return 0L;
+        }
+        return amount.compareTo(LONG_MAX) > 0 ? Long.MAX_VALUE : amount.longValue();
+    }
 
     @Override
     public TickRateModulation onTick() {
         if (closed) {
             return TickRateModulation.SLOWER;
         }
-        return flushDirty()
-                ? TickRateModulation.URGENT
-                : TickRateModulation.SLOWER;
+        return flushDirty() ? TickRateModulation.URGENT : TickRateModulation.SLOWER;
     }
+
+    // ---- IMEInventory ----
 
     @Override
     public void setActionSource(IActionSource source) {
         this.mySource = source;
     }
-
-    // ---- IMEInventory ----
 
     @Override
     public T injectItems(T input, Actionable type, IActionSource src) {
@@ -145,12 +144,12 @@ public class DrawerMEMonitor<T extends IAEStack<T>>
         return getAvailableItems(list);
     }
 
+    // ---- IMEInventoryHandler delegated ----
+
     @Override
     public IStorageChannel<T> getChannel() {
         return channel;
     }
-
-    // ---- IMEInventoryHandler delegated ----
 
     @Override
     public AccessRestriction getAccess() {
@@ -177,16 +176,15 @@ public class DrawerMEMonitor<T extends IAEStack<T>>
         return handler.getSlot();
     }
 
+    // ---- IBaseMonitor ----
+
     @Override
     public boolean validForPass(int pass) {
         return handler.validForPass(pass);
     }
 
-    // ---- IBaseMonitor ----
-
     @Override
-    public synchronized void addListener(IMEMonitorHandlerReceiver<T> listener,
-                                          Object verificationToken) {
+    public synchronized void addListener(IMEMonitorHandlerReceiver<T> listener, Object verificationToken) {
         if (!closed && listener != null) {
             listeners.put(listener, verificationToken);
         }
@@ -197,7 +195,9 @@ public class DrawerMEMonitor<T extends IAEStack<T>>
         listeners.remove(listener);
     }
 
-    /** Idempotently releases the source subscription and AE2 receivers. */
+    /**
+     * Idempotently releases the source subscription and AE2 receivers.
+     */
     @Override
     public synchronized void close() {
         if (closed) {
@@ -213,24 +213,22 @@ public class DrawerMEMonitor<T extends IAEStack<T>>
         }
     }
 
+    // ---- Typed change processing ----
+
     public synchronized boolean isClosed() {
         return closed;
     }
-
-    // ---- Typed change processing ----
 
     private void acceptChange(Object rawChange) {
         if (closed || !(rawChange instanceof StorageChange)) {
             return;
         }
-        @SuppressWarnings("rawtypes")
-        StorageChange change = (StorageChange) rawChange;
+        @SuppressWarnings("rawtypes") StorageChange change = (StorageChange) rawChange;
         if (change.isReset()) {
             applyReset();
             return;
         }
-        @SuppressWarnings("rawtypes")
-        List entries = change.getEntries();
+        @SuppressWarnings("rawtypes") List entries = change.getEntries();
         for (Object rawEntry : entries) {
             if (!(rawEntry instanceof StorageChange.Entry)) {
                 continue;
@@ -249,7 +247,6 @@ public class DrawerMEMonitor<T extends IAEStack<T>>
         dirtyKeys.addAll(oldKeys);
     }
 
-    @SuppressWarnings("unchecked")
     private void applySnapshot(Object rawSnapshot, int sign) {
         if (!(rawSnapshot instanceof StorageSnapshot)) {
             return;
@@ -295,8 +292,7 @@ public class DrawerMEMonitor<T extends IAEStack<T>>
             }
             templates.put(key, snapshot);
             BigInteger amount = BigInteger.valueOf(Math.max(0L, typed.getAmount()));
-            BigInteger previous = totals.get(key);
-            totals.put(key, (previous == null ? BigInteger.ZERO : previous).add(amount));
+            totals.compute(key, (k, previous) -> (previous == null ? BigInteger.ZERO : previous).add(amount));
             if (markDirty) {
                 dirtyKeys.add(key);
             }
@@ -324,7 +320,7 @@ public class DrawerMEMonitor<T extends IAEStack<T>>
 
         List<T> changes = new ArrayList<>();
         for (StorageKey key : keys) {
-            long before = published.containsKey(key) ? published.get(key) : 0L;
+            long before = published.getOrDefault(key, 0L);
             BigInteger exact = totals.get(key);
             long after = saturate(exact == null ? BigInteger.ZERO : exact);
             if (before != after) {
@@ -334,8 +330,7 @@ public class DrawerMEMonitor<T extends IAEStack<T>>
                     if (after > before) {
                         delta = after - before;
                     } else {
-                        delta = before - after == Long.MIN_VALUE
-                                ? Long.MIN_VALUE : -(before - after);
+                        delta = before - after == Long.MIN_VALUE ? Long.MIN_VALUE : -(before - after);
                     }
                     T change = source.createStack(snapshot, delta);
                     if (change != null && delta != 0L) {
@@ -378,12 +373,5 @@ public class DrawerMEMonitor<T extends IAEStack<T>>
                 }
             }
         }
-    }
-
-    private static long saturate(BigInteger amount) {
-        if (amount == null || amount.signum() <= 0) {
-            return 0L;
-        }
-        return amount.compareTo(LONG_MAX) > 0 ? Long.MAX_VALUE : amount.longValue();
     }
 }

@@ -1,13 +1,6 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory;
 
-import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
-import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
-import com.xinyihl.functionalstoragelegacy.api.storage.ItemStorageKey;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageChangeDispatcher;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
-import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
+import com.xinyihl.functionalstoragelegacy.api.storage.*;
 import com.xinyihl.functionalstoragelegacy.misc.Configurations;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -16,6 +9,7 @@ import net.minecraftforge.common.util.Constants;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.function.Consumer;
 
@@ -33,8 +27,7 @@ public abstract class ArmoryCabinetInventoryHandler implements IBigItemHandler {
     private static final String AMOUNT = "Amount";
 
     private final ItemStack[] stacks;
-    private final StorageChangeDispatcher<BigItemStack, ItemStorageKey> changeDispatcher =
-            new StorageChangeDispatcher<>();
+    private final StorageChangeDispatcher<BigItemStack, ItemStorageKey> changeDispatcher = new StorageChangeDispatcher<>();
 
     public ArmoryCabinetInventoryHandler() {
         this(Configurations.GENERAL.armoryCabinetSize);
@@ -42,7 +35,34 @@ public abstract class ArmoryCabinetInventoryHandler implements IBigItemHandler {
 
     public ArmoryCabinetInventoryHandler(int size) {
         stacks = new ItemStack[Math.max(0, size)];
-        clear();
+        Arrays.fill(stacks, ItemStack.EMPTY);
+    }
+
+    private static boolean isArmoryItem(@Nullable ItemStack stack) {
+        return stack != null && !stack.isEmpty() && (stack.getMaxStackSize() == 1 || stack.isItemStackDamageable());
+    }
+
+    @Nonnull
+    private static ItemStack normalizedCopy(@Nonnull ItemStack stack) {
+        ItemStack copy = stack.copy();
+        copy.setCount(1);
+        return copy;
+    }
+
+    private static TransferResult<BigItemStack, ItemStorageKey> emptyResult(long requested, StorageAction action) {
+        return new TransferResult<>(requested, BigItemStack.empty(), action);
+    }
+
+    private static boolean sameStacks(ItemStack[] left, ItemStack[] right) {
+        if (left.length != right.length) {
+            return false;
+        }
+        for (int slot = 0; slot < left.length; slot++) {
+            if (!ItemStack.areItemStacksEqual(left[slot], right[slot])) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
@@ -66,10 +86,9 @@ public abstract class ArmoryCabinetInventoryHandler implements IBigItemHandler {
 
     @Nonnull
     @Override
-    public final TransferResult<BigItemStack, ItemStorageKey> insert(
-            int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action) {
+    public final TransferResult<BigItemStack, ItemStorageKey> insert(int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action) {
         Objects.requireNonNull(action, "action");
-        long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
+        long requested = request.isEmpty() ? 0L : request.getAmount();
         if (requested == 0L || !isValidSlot(slot) || !stacks[slot].isEmpty()) {
             return emptyResult(requested, action);
         }
@@ -80,15 +99,14 @@ public abstract class ArmoryCabinetInventoryHandler implements IBigItemHandler {
         if (action == StorageAction.EXECUTE) {
             BigItemStack before = getSnapshot(slot);
             stacks[slot] = normalizedCopy(template);
-            publish(StorageChange.delta(slot, before, getSnapshot(slot)));
+            onChange(StorageChange.delta(slot, before, getSnapshot(slot)));
         }
         return new TransferResult<>(requested, request.withAmount(1L), action);
     }
 
     @Nonnull
     @Override
-    public final TransferResult<BigItemStack, ItemStorageKey> extract(
-            int slot, long amount, @Nonnull StorageAction action) {
+    public final TransferResult<BigItemStack, ItemStorageKey> extract(int slot, long amount, @Nonnull StorageAction action) {
         Objects.requireNonNull(action, "action");
         long requested = Math.max(0L, amount);
         if (requested == 0L || !isValidSlot(slot) || stacks[slot].isEmpty()) {
@@ -98,12 +116,14 @@ public abstract class ArmoryCabinetInventoryHandler implements IBigItemHandler {
         if (action == StorageAction.EXECUTE) {
             BigItemStack before = getSnapshot(slot);
             stacks[slot] = ItemStack.EMPTY;
-            publish(StorageChange.delta(slot, before, getSnapshot(slot)));
+            onChange(StorageChange.delta(slot, before, getSnapshot(slot)));
         }
         return new TransferResult<>(requested, processed, action);
     }
 
-    /** Serializes the armory through the shared {@code StorageV2.Items} schema. */
+    /**
+     * Serializes the armory through the shared {@code StorageV2.Items} schema.
+     */
     @Nonnull
     public final NBTTagCompound serializeNBT() {
         NBTTagCompound root = new NBTTagCompound();
@@ -130,15 +150,13 @@ public abstract class ArmoryCabinetInventoryHandler implements IBigItemHandler {
      */
     public final void deserializeNBT(@Nullable NBTTagCompound root) {
         ItemStack[] before = stacks.clone();
-        clear();
+        Arrays.fill(stacks, ItemStack.EMPTY);
         if (root != null && root.hasKey(STORAGE_V2, Constants.NBT.TAG_COMPOUND)) {
-            NBTTagList items = root.getCompoundTag(STORAGE_V2)
-                    .getTagList(ITEMS, Constants.NBT.TAG_COMPOUND);
+            NBTTagList items = root.getCompoundTag(STORAGE_V2).getTagList(ITEMS, Constants.NBT.TAG_COMPOUND);
             for (int i = 0; i < items.tagCount(); i++) {
                 NBTTagCompound entry = items.getCompoundTagAt(i);
                 int slot = entry.getInteger(INDEX);
-                if (!isValidSlot(slot) || entry.getLong(AMOUNT) <= 0L
-                        || !entry.hasKey(STACK, Constants.NBT.TAG_COMPOUND)) {
+                if (!isValidSlot(slot) || entry.getLong(AMOUNT) <= 0L || !entry.hasKey(STACK, Constants.NBT.TAG_COMPOUND)) {
                     continue;
                 }
                 ItemStack stack = new ItemStack(entry.getCompoundTag(STACK));
@@ -149,20 +167,18 @@ public abstract class ArmoryCabinetInventoryHandler implements IBigItemHandler {
             }
         }
         if (changeDispatcher.hasSubscribers() && !sameStacks(before, stacks)) {
-            publish(StorageChange.<BigItemStack, ItemStorageKey>reset());
+            onChange(StorageChange.reset());
         }
     }
 
     @Override
-    public final void onChange(
-            @Nonnull StorageChange<BigItemStack, ItemStorageKey> change) {
+    public final void onChange(@Nonnull StorageChange<BigItemStack, ItemStorageKey> change) {
         changeDispatcher.dispatch(change);
     }
 
     @Nonnull
     @Override
-    public final StorageSubscription subscribe(
-            @Nonnull Consumer<? super StorageChange<BigItemStack, ItemStorageKey>> listener) {
+    public final StorageSubscription subscribe(@Nonnull Consumer<? super StorageChange<BigItemStack, ItemStorageKey>> listener) {
         return changeDispatcher.subscribe(listener);
     }
 
@@ -178,44 +194,5 @@ public abstract class ArmoryCabinetInventoryHandler implements IBigItemHandler {
 
     private boolean isValidSlot(int slot) {
         return slot >= 0 && slot < stacks.length;
-    }
-
-    private static boolean isArmoryItem(@Nullable ItemStack stack) {
-        return stack != null && !stack.isEmpty()
-                && (stack.getMaxStackSize() == 1 || stack.isItemStackDamageable());
-    }
-
-    @Nonnull
-    private static ItemStack normalizedCopy(@Nonnull ItemStack stack) {
-        ItemStack copy = stack.copy();
-        copy.setCount(1);
-        return copy;
-    }
-
-    private static TransferResult<BigItemStack, ItemStorageKey> emptyResult(
-            long requested, StorageAction action) {
-        return new TransferResult<>(requested, BigItemStack.empty(), action);
-    }
-
-    private void clear() {
-        for (int slot = 0; slot < stacks.length; slot++) {
-            stacks[slot] = ItemStack.EMPTY;
-        }
-    }
-
-    private void publish(StorageChange<BigItemStack, ItemStorageKey> change) {
-        onChange(change);
-    }
-
-    private static boolean sameStacks(ItemStack[] left, ItemStack[] right) {
-        if (left.length != right.length) {
-            return false;
-        }
-        for (int slot = 0; slot < left.length; slot++) {
-            if (!ItemStack.areItemStacksEqual(left[slot], right[slot])) {
-                return false;
-            }
-        }
-        return true;
     }
 }

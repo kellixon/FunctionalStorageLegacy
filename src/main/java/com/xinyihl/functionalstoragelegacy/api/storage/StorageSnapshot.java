@@ -18,7 +18,9 @@ public interface StorageSnapshot<S extends StorageSnapshot<S, K>, K extends Stor
     @Nullable
     K getKey();
 
-    /** @return the represented amount, always zero or greater */
+    /**
+     * @return the represented amount, always zero or greater
+     */
     long getAmount();
 
     /**
@@ -28,17 +30,23 @@ public interface StorageSnapshot<S extends StorageSnapshot<S, K>, K extends Stor
     @Nonnull
     S withAmount(long amount);
 
-    /** @return whether this snapshot retains a resource template or filter */
+    /**
+     * @return whether this snapshot retains a resource template or filter
+     */
     default boolean hasTemplate() {
         return getKey() != null;
     }
 
-    /** @return whether the represented physical amount is zero */
+    /**
+     * @return whether the represented physical amount is zero
+     */
     default boolean isEmpty() {
         return getAmount() == 0L;
     }
 
-    /** @return whether both snapshots have equal non-null exact keys */
+    /**
+     * @return whether both snapshots have equal non-null exact keys
+     */
     default boolean isSameType(@Nullable S other) {
         K key = getKey();
         return key != null && other != null && Objects.equals(key, other.getKey());

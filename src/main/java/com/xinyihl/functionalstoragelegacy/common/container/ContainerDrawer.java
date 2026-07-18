@@ -56,18 +56,13 @@ public class ContainerDrawer extends Container {
 
     @Nonnull
     @Override
-    public ItemStack slotClick(int slotId, int dragType, ClickType clickTypeIn, EntityPlayer player) {
-        if (clickTypeIn == ClickType.PICKUP
-                && slotId >= 0
-                && slotId < tile.getStorageUpgrades().getSlots()) {
+    public ItemStack slotClick(int slotId, int dragType, @Nonnull ClickType clickTypeIn, @Nonnull EntityPlayer player) {
+        if (clickTypeIn == ClickType.PICKUP && slotId >= 0 && slotId < tile.getStorageUpgrades().getSlots()) {
             Slot slot = inventorySlots.get(slotId);
             ItemStack heldStack = player.inventory.getItemStack();
-            if (slot instanceof StorageUpgradeSlot
-                    && slot.getHasStack()
-                    && ItemUtil.isStorageUpgradeItem(heldStack)) {
+            if (slot instanceof StorageUpgradeSlot && slot.getHasStack() && ItemUtil.isStorageUpgradeItem(heldStack)) {
                 ItemStack existing = slot.getStack();
-                if (ItemUtil.hasHigherUpgradeReplacementPriority(heldStack, existing)
-                        && tile.canReplaceStorageUpgrade(slotId, heldStack)) {
+                if (ItemUtil.hasHigherUpgradeReplacementPriority(heldStack, existing) && tile.canReplaceStorageUpgrade(slotId, heldStack)) {
                     ItemStack replacement = heldStack.copy();
                     replacement.setCount(1);
                     slot.putStack(replacement);
@@ -138,8 +133,7 @@ public class ContainerDrawer extends Container {
         if (ItemUtil.isStorageUpgradeItem(stackInSlot)) {
             for (int i = 0; i < tile.getStorageUpgrades().getSlots() && !stackInSlot.isEmpty(); i++) {
                 ItemStack existing = tile.getStorageUpgrades().getStackInSlot(i);
-                if (!ItemUtil.hasHigherUpgradeReplacementPriority(stackInSlot, existing)
-                        || !tile.canReplaceStorageUpgrade(i, stackInSlot)) {
+                if (!ItemUtil.hasHigherUpgradeReplacementPriority(stackInSlot, existing) || !tile.canReplaceStorageUpgrade(i, stackInSlot)) {
                     continue;
                 }
 

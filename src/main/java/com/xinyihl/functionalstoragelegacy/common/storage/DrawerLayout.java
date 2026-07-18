@@ -33,21 +33,6 @@ public enum DrawerLayout {
         this.baseCapacity = baseCapacity;
     }
 
-    /** Returns the stable string used in NBT and other persistent data. */
-    public String getId() {
-        return id;
-    }
-
-    /** Returns the number of independent slots or tanks. */
-    public int getSlotCount() {
-        return slotCount;
-    }
-
-    /** Returns the unmodified capacity multiplier of each slot or tank. */
-    public int getBaseCapacity() {
-        return baseCapacity;
-    }
-
     /**
      * Resolves a stable identifier.
      *
@@ -57,5 +42,26 @@ public enum DrawerLayout {
     public static DrawerLayout fromId(String id) {
         DrawerLayout layout = BY_ID.get(Objects.requireNonNull(id, "id"));
         return layout == null ? X_1 : layout;
+    }
+
+    /**
+     * Returns the stable string used in NBT and other persistent data.
+     */
+    public String getId() {
+        return id;
+    }
+
+    /**
+     * Returns the number of independent slots or tanks.
+     */
+    public int getSlotCount() {
+        return slotCount;
+    }
+
+    /**
+     * Returns the unmodified capacity multiplier of each slot or tank.
+     */
+    public int getBaseCapacity() {
+        return baseCapacity;
     }
 }

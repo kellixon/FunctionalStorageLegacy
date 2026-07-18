@@ -6,9 +6,13 @@ package com.xinyihl.functionalstoragelegacy.api.storage;
  * side-effect free, including filters, NBT, and change notifications.
  */
 public enum StorageAction {
-    /** Apply the operation to storage. */
+    /**
+     * Apply the operation to storage.
+     */
     EXECUTE,
-    /** Calculate the result without changing any observable state. */
+    /**
+     * Calculate the result without changing any observable state.
+     */
     SIMULATE;
 
     /**

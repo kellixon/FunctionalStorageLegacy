@@ -35,10 +35,8 @@ public class ControllerRenderer extends TileEntitySpecialRenderer<DrawerControll
 
     @Override
     public void render(@Nonnull DrawerControllerTile te, double x, double y, double z, float partialTicks, int destroyStage, float alpha) {
-        if (te == null || te.getWorld() == null) return;
 
         Minecraft mc = Minecraft.getMinecraft();
-        if (mc.player == null) return;
 
         ItemStack mainHand = mc.player.getHeldItemMainhand();
         if (mainHand.isEmpty() || !(mainHand.getItem() instanceof LinkingToolItem)) return;
@@ -65,14 +63,7 @@ public class ControllerRenderer extends TileEntitySpecialRenderer<DrawerControll
             RayTraceResult rayTrace = mc.player.rayTrace(8, partialTicks);
             if (rayTrace != null && rayTrace.typeOfHit == RayTraceResult.Type.BLOCK) {
                 BlockPos hitPos = rayTrace.getBlockPos();
-                AxisAlignedBB selectionBox = new AxisAlignedBB(
-                        Math.min(firstPos.getX(), hitPos.getX()),
-                        Math.min(firstPos.getY(), hitPos.getY()),
-                        Math.min(firstPos.getZ(), hitPos.getZ()),
-                        Math.max(firstPos.getX(), hitPos.getX()) + 1,
-                        Math.max(firstPos.getY(), hitPos.getY()) + 1,
-                        Math.max(firstPos.getZ(), hitPos.getZ()) + 1
-                ).offset(-te.getPos().getX(), -te.getPos().getY(), -te.getPos().getZ());
+                AxisAlignedBB selectionBox = new AxisAlignedBB(Math.min(firstPos.getX(), hitPos.getX()), Math.min(firstPos.getY(), hitPos.getY()), Math.min(firstPos.getZ(), hitPos.getZ()), Math.max(firstPos.getX(), hitPos.getX()) + 1, Math.max(firstPos.getY(), hitPos.getY()) + 1, Math.max(firstPos.getZ(), hitPos.getZ()) + 1).offset(-te.getPos().getX(), -te.getPos().getY(), -te.getPos().getZ());
                 renderWireframeBox(selectionBox, 1f, 1f, 1f, 1f);
             }
         }
@@ -213,8 +204,7 @@ public class ControllerRenderer extends TileEntitySpecialRenderer<DrawerControll
 
     private void addEdge(Map<EdgeKey, Integer> edgeCounts, int x1, int y1, int z1, int x2, int y2, int z2) {
         EdgeKey key = new EdgeKey(x1, y1, z1, x2, y2, z2);
-        Integer count = edgeCounts.get(key);
-        edgeCounts.put(key, count == null ? 1 : count + 1);
+        edgeCounts.compute(key, (k, count) -> count == null ? 1 : count + 1);
     }
 
     private void renderGridBox(AxisAlignedBB box, float r, float g, float b, float a) {
@@ -410,8 +400,7 @@ public class ControllerRenderer extends TileEntitySpecialRenderer<DrawerControll
             if (this == obj) return true;
             if (!(obj instanceof EdgeKey)) return false;
             EdgeKey other = (EdgeKey) obj;
-            return x1 == other.x1 && y1 == other.y1 && z1 == other.z1
-                    && x2 == other.x2 && y2 == other.y2 && z2 == other.z2;
+            return x1 == other.x1 && y1 == other.y1 && z1 == other.z1 && x2 == other.x2 && y2 == other.y2 && z2 == other.z2;
         }
 
         @Override

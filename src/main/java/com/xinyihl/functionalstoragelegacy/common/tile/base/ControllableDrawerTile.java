@@ -10,9 +10,9 @@ import com.xinyihl.functionalstoragelegacy.api.upgrade.StorageFeature;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeAttribute;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeState;
 import com.xinyihl.functionalstoragelegacy.client.render.DrawerOptions;
+import com.xinyihl.functionalstoragelegacy.common.integration.ae2.AE2Compat;
 import com.xinyihl.functionalstoragelegacy.common.item.ConfigurationToolItem;
 import com.xinyihl.functionalstoragelegacy.common.item.upgrade.DrawerUpgradeBehavior;
-import com.xinyihl.functionalstoragelegacy.common.integration.ae2.AE2Compat;
 import com.xinyihl.functionalstoragelegacy.misc.RegistrationHandler;
 import com.xinyihl.functionalstoragelegacy.util.ItemUtil;
 import net.minecraft.block.state.IBlockState;
@@ -48,13 +48,18 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
     protected boolean needsUpgradeCache = true;
     private UpgradeState cachedUpgradeState = UpgradeState.empty();
 
-    /** The single subscription owned by this tile for its active storage. */
+    /**
+     * The single subscription owned by this tile for its active storage.
+     */
     private StorageSubscription storageSubscription = StorageSubscription.CLOSED;
     private IStorageHandler<?, ?> subscribedStorage;
-    private Runnable storageConfigurationReset = () -> { };
+    private Runnable storageConfigurationReset = () -> {
+    };
     private boolean pendingUpdatePacket;
     private boolean storageReadInProgress;
     private boolean storageReadHadSubscription;
+    // AE2 integration - lazy-initialized accessor (stored as Object to avoid class loading when AE2 absent)
+    private Object ae2Accessor;
 
     public ControllableDrawerTile() {
         this.drawerOptions = new DrawerOptions();
@@ -199,8 +204,7 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
         ItemStack heldStack = player.getHeldItem(hand);
 
         // Skip if using configuration or linking tool
-        if (heldStack.getItem() instanceof ConfigurationToolItem
-                || heldStack.getItem() == RegistrationHandler.LINKING_TOOL) {
+        if (heldStack.getItem() instanceof ConfigurationToolItem || heldStack.getItem() == RegistrationHandler.LINKING_TOOL) {
             return false;
         }
 
@@ -219,11 +223,9 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
                 int newPriority = newUpgrade.getReplacementPriority(heldStack);
                 for (int i = 0; i < storageUpgrades.getSlots(); i++) {
                     ItemStack existing = storageUpgrades.getStackInSlot(i);
-                    if (newPriority != Integer.MIN_VALUE
-                            && existing.getItem() instanceof DrawerUpgradeBehavior) {
+                    if (newPriority != Integer.MIN_VALUE && existing.getItem() instanceof DrawerUpgradeBehavior) {
                         DrawerUpgradeBehavior existingUpgrade = (DrawerUpgradeBehavior) existing.getItem();
-                        if (newPriority > existingUpgrade.getReplacementPriority(existing)
-                                && canReplaceStorageUpgrade(i, heldStack)) {
+                        if (newPriority > existingUpgrade.getReplacementPriority(existing) && canReplaceStorageUpgrade(i, heldStack)) {
                             // Give back old upgrade
                             if (!player.inventory.addItemStackToInventory(existing.copy())) {
                                 player.dropItem(existing.copy(), false);
@@ -356,15 +358,12 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
     }
 
     protected boolean isConflictingUpgrade(ItemStack candidate, ItemStack existing) {
-        if (candidate.isEmpty() || existing.isEmpty()
-                || !(candidate.getItem() instanceof IStorageUpgrade)
-                || !(existing.getItem() instanceof IStorageUpgrade)) {
+        if (candidate.isEmpty() || existing.isEmpty() || !(candidate.getItem() instanceof IStorageUpgrade) || !(existing.getItem() instanceof IStorageUpgrade)) {
             return false;
         }
         IStorageUpgrade candidateUpgrade = (IStorageUpgrade) candidate.getItem();
         IStorageUpgrade existingUpgrade = (IStorageUpgrade) existing.getItem();
-        return candidateUpgrade.conflictsWith(candidate, existing)
-                || existingUpgrade.conflictsWith(existing, candidate);
+        return candidateUpgrade.conflictsWith(candidate, existing) || existingUpgrade.conflictsWith(existing, candidate);
     }
 
     public double calculateModifier(UpgradeAttribute attribute, double defaultBase) {
@@ -492,8 +491,7 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
     public int getRedstoneSignal(EnumFacing side) {
         for (int i = 0; i < utilityUpgrades.getSlots(); i++) {
             ItemStack stack = utilityUpgrades.getStackInSlot(i);
-            if (stack.getItem() instanceof DrawerUpgradeBehavior
-                    && ((DrawerUpgradeBehavior) stack.getItem()).providesRedstoneSignal(stack)) {
+            if (stack.getItem() instanceof DrawerUpgradeBehavior && ((DrawerUpgradeBehavior) stack.getItem()).providesRedstoneSignal(stack)) {
                 return calculateRedstoneSignal();
             }
         }
@@ -526,9 +524,6 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
     public void onDataPacket(@Nonnull NetworkManager net, SPacketUpdateTileEntity pkt) {
         readFromNBT(pkt.getNbtCompound());
     }
-
-    // AE2 integration - lazy-initialized accessor (stored as Object to avoid class loading when AE2 absent)
-    private Object ae2Accessor;
 
     @Override
     public boolean hasCapability(@Nonnull Capability<?> capability, @javax.annotation.Nullable EnumFacing facing) {
@@ -581,9 +576,7 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
      * previous registration first; callers may provide the handler's explicit
      * RESET hook for upgrade/configuration changes.
      */
-    protected final void bindStorageHandler(
-            @Nullable IStorageHandler<?, ?> handler,
-            @Nullable Runnable configurationReset) {
+    protected final void bindStorageHandler(@Nullable IStorageHandler<?, ?> handler, @Nullable Runnable configurationReset) {
         if (subscribedStorage != null && subscribedStorage != handler) {
             /* A deserialized handler is a new physical source.  Any AE2
              * monitor still wrapping the old source must be released before
@@ -592,7 +585,8 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
         }
         closeStorageSubscription();
         subscribedStorage = handler;
-        storageConfigurationReset = configurationReset == null ? () -> { } : configurationReset;
+        storageConfigurationReset = configurationReset == null ? () -> {
+        } : configurationReset;
         if (handler != null) {
             storageSubscription = handler.subscribe(change -> onStorageChange());
         } else {
@@ -600,12 +594,16 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
         }
     }
 
-    /** Binds an event source without a configuration callback. */
+    /**
+     * Binds an event source without a configuration callback.
+     */
     protected final void bindStorageHandler(@Nullable IStorageHandler<?, ?> handler) {
         bindStorageHandler(handler, null);
     }
 
-    /** Closes the tile-owned storage subscription; safe to call repeatedly. */
+    /**
+     * Closes the tile-owned storage subscription; safe to call repeatedly.
+     */
     protected final void closeStorageSubscription() {
         StorageSubscription current = storageSubscription;
         storageSubscription = StorageSubscription.CLOSED;
@@ -626,8 +624,7 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
         storageReadInProgress = true;
         /* Reads may replace the concrete handler in readCustomData. */
         invalidateAE2Accessor();
-        storageReadHadSubscription = world != null && !world.isRemote
-                && storageSubscription != null && !storageSubscription.isClosed();
+        storageReadHadSubscription = world != null && !world.isRemote && storageSubscription != null && !storageSubscription.isClosed();
         closeStorageSubscription();
     }
 
@@ -635,9 +632,7 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
      * Completes a read/rebind after the replacement handler has been fully
      * deserialized. Online replacement emits one explicit RESET only.
      */
-    protected final void finishStorageRead(
-            @Nonnull IStorageHandler<?, ?> handler,
-            @Nullable Runnable configurationReset) {
+    protected final void finishStorageRead(@Nonnull IStorageHandler<?, ?> handler, @Nullable Runnable configurationReset) {
         Objects.requireNonNull(handler, "handler");
         boolean notifyReset = storageReadInProgress && storageReadHadSubscription;
         storageReadInProgress = false;
@@ -648,22 +643,27 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
         }
     }
 
-    /** Re-attaches a closed listener after chunk/tile reload. */
+    /**
+     * Re-attaches a closed listener after chunk/tile reload.
+     */
     protected final void rebuildStorageSubscription() {
-        if (subscribedStorage != null && (storageSubscription == null
-                || storageSubscription.isClosed())) {
+        if (subscribedStorage != null && (storageSubscription == null || storageSubscription.isClosed())) {
             storageSubscription = subscribedStorage.subscribe(change -> onStorageChange());
         }
     }
 
-    /** Emits the handler-owned RESET for an upgrade/configuration transition. */
+    /**
+     * Emits the handler-owned RESET for an upgrade/configuration transition.
+     */
     protected final void notifyStorageConfigurationChanged() {
         if (!storageReadInProgress) {
             storageConfigurationReset.run();
         }
     }
 
-    /** Marks the tile dirty and schedules at most one packet for a later tick. */
+    /**
+     * Marks the tile dirty and schedules at most one packet for a later tick.
+     */
     protected final void onStorageChange() {
         markDirty();
         requestUpdatePacket();

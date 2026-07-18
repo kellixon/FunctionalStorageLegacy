@@ -1,25 +1,14 @@
 package com.xinyihl.functionalstoragelegacy.api.storage;
 
 import javax.annotation.Nonnull;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Immutable batch describing either indexed before/after deltas or an explicit
  * full reset. A reset never carries entries; a delta always carries at least
  * one entry and cannot name the same index twice.
  */
-public final class StorageChange<
-        S extends StorageSnapshot<S, K>, K extends StorageKey> {
-
-    public enum Type {
-        DELTA,
-        RESET
-    }
+public final class StorageChange<S extends StorageSnapshot<S, K>, K extends StorageKey> {
 
     private final Type type;
     private final List<Entry<S, K>> entries;
@@ -29,17 +18,19 @@ public final class StorageChange<
         this.entries = entries;
     }
 
-    /** Creates a one-index delta. */
+    /**
+     * Creates a one-index delta.
+     */
     @Nonnull
-    public static <S extends StorageSnapshot<S, K>, K extends StorageKey>
-    StorageChange<S, K> delta(int index, @Nonnull S before, @Nonnull S after) {
-        return delta(Collections.singletonList(new Entry<S, K>(index, before, after)));
+    public static <S extends StorageSnapshot<S, K>, K extends StorageKey> StorageChange<S, K> delta(int index, @Nonnull S before, @Nonnull S after) {
+        return delta(Collections.singletonList(new Entry<>(index, before, after)));
     }
 
-    /** Creates a validated immutable multi-index delta. */
+    /**
+     * Creates a validated immutable multi-index delta.
+     */
     @Nonnull
-    public static <S extends StorageSnapshot<S, K>, K extends StorageKey>
-    StorageChange<S, K> delta(@Nonnull List<? extends Entry<S, K>> entries) {
+    public static <S extends StorageSnapshot<S, K>, K extends StorageKey> StorageChange<S, K> delta(@Nonnull List<? extends Entry<S, K>> entries) {
         Objects.requireNonNull(entries, "entries");
         if (entries.isEmpty()) {
             throw new IllegalArgumentException("DELTA requires at least one entry");
@@ -56,11 +47,12 @@ public final class StorageChange<
         return new StorageChange<>(Type.DELTA, Collections.unmodifiableList(copy));
     }
 
-    /** Creates an explicit full-resynchronization event. */
+    /**
+     * Creates an explicit full-resynchronization event.
+     */
     @Nonnull
-    public static <S extends StorageSnapshot<S, K>, K extends StorageKey>
-    StorageChange<S, K> reset() {
-        return new StorageChange<>(Type.RESET, Collections.<Entry<S, K>>emptyList());
+    public static <S extends StorageSnapshot<S, K>, K extends StorageKey> StorageChange<S, K> reset() {
+        return new StorageChange<>(Type.RESET, Collections.emptyList());
     }
 
     @Nonnull
@@ -68,7 +60,9 @@ public final class StorageChange<
         return type;
     }
 
-    /** @return immutable ordered delta entries, empty only for RESET */
+    /**
+     * @return immutable ordered delta entries, empty only for RESET
+     */
     @Nonnull
     public List<Entry<S, K>> getEntries() {
         return entries;
@@ -82,9 +76,14 @@ public final class StorageChange<
         return type == Type.RESET;
     }
 
-    /** Immutable before/after transition for one storage index. */
-    public static final class Entry<
-            S extends StorageSnapshot<S, K>, K extends StorageKey> {
+    public enum Type {
+        DELTA, RESET
+    }
+
+    /**
+     * Immutable before/after transition for one storage index.
+     */
+    public static final class Entry<S extends StorageSnapshot<S, K>, K extends StorageKey> {
 
         private final int index;
         private final S before;

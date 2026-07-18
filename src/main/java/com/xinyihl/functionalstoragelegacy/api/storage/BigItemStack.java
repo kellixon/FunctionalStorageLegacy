@@ -32,7 +32,7 @@ public final class BigItemStack implements StorageSnapshot<BigItemStack, ItemSto
      * never retained by reference.
      *
      * @param template item type, metadata, capabilities, and NBT to represent
-     * @param amount represented amount; negative values are clamped to zero
+     * @param amount   represented amount; negative values are clamped to zero
      */
     public BigItemStack(@Nullable ItemStack template, long amount) {
         if (template == null || template.isEmpty()) {
@@ -66,7 +66,9 @@ public final class BigItemStack implements StorageSnapshot<BigItemStack, ItemSto
         return template.isEmpty() ? ItemStack.EMPTY : template.copy();
     }
 
-    /** @return immutable exact item key, or {@code null} when unconfigured */
+    /**
+     * @return immutable exact item key, or {@code null} when unconfigured
+     */
     @Nullable
     @Override
     public ItemStorageKey getKey() {
@@ -124,9 +126,7 @@ public final class BigItemStack implements StorageSnapshot<BigItemStack, ItemSto
      * @return {@code true} when this snapshot and the stack represent the same item type
      */
     public boolean isSameType(@Nullable ItemStack other) {
-        return hasTemplate() && other != null && !other.isEmpty()
-                && ItemStack.areItemsEqual(template, other)
-                && ItemStack.areItemStackTagsEqual(template, other);
+        return hasTemplate() && other != null && !other.isEmpty() && ItemStack.areItemsEqual(template, other) && ItemStack.areItemStackTagsEqual(template, other);
     }
 
     /**

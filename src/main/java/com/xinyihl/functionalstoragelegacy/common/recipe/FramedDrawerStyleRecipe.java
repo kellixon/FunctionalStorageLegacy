@@ -11,9 +11,10 @@ import net.minecraftforge.registries.IForgeRegistryEntry;
 
 import javax.annotation.Nonnull;
 
-/** 2x2 framed styling recipe: exterior, front, drawer, and optional divider. */
-public class FramedDrawerStyleRecipe extends IForgeRegistryEntry.Impl<IRecipe>
-        implements IRecipe {
+/**
+ * 2x2 framed styling recipe: exterior, front, drawer, and optional divider.
+ */
+public class FramedDrawerStyleRecipe extends IForgeRegistryEntry.Impl<IRecipe> implements IRecipe {
 
     private static Match findMatch(InventoryCrafting inventory) {
         int width = inventory.getWidth();
@@ -37,20 +38,26 @@ public class FramedDrawerStyleRecipe extends IForgeRegistryEntry.Impl<IRecipe>
         ItemStack front = inventory.getStackInRowAndColumn(left + 1, top);
         ItemStack drawer = inventory.getStackInRowAndColumn(left, top + 1);
         ItemStack divider = inventory.getStackInRowAndColumn(left + 1, top + 1);
-        if (!isBlock(exterior) || !isBlock(front) || !isFramedDrawer(drawer)
-                || (!divider.isEmpty() && !isBlock(divider))) {
+        if (!isBlock(exterior) || !isBlock(front) || !isFramedDrawer(drawer) || (!divider.isEmpty() && !isBlock(divider))) {
             return null;
         }
         for (int row = 0; row < inventory.getHeight(); row++) {
             for (int column = 0; column < inventory.getWidth(); column++) {
-                boolean inside = column >= left && column <= left + 1
-                        && row >= top && row <= top + 1;
+                boolean inside = column >= left && column <= left + 1 && row >= top && row <= top + 1;
                 if (!inside && !inventory.getStackInRowAndColumn(column, row).isEmpty()) {
                     return null;
                 }
             }
         }
         return new Match(exterior, front, drawer, divider);
+    }
+
+    private static boolean isBlock(ItemStack stack) {
+        return !stack.isEmpty() && stack.getItem() instanceof ItemBlock;
+    }
+
+    private static boolean isFramedDrawer(ItemStack stack) {
+        return isBlock(stack) && ((ItemBlock) stack.getItem()).getBlock() instanceof FramedDrawerBlock;
     }
 
     @Override
@@ -69,15 +76,6 @@ public class FramedDrawerStyleRecipe extends IForgeRegistryEntry.Impl<IRecipe>
         return true;
     }
 
-    private static boolean isBlock(ItemStack stack) {
-        return !stack.isEmpty() && stack.getItem() instanceof ItemBlock;
-    }
-
-    private static boolean isFramedDrawer(ItemStack stack) {
-        return isBlock(stack)
-                && ((ItemBlock) stack.getItem()).getBlock() instanceof FramedDrawerBlock;
-    }
-
     @Nonnull
     @Override
     public ItemStack getCraftingResult(@Nonnull InventoryCrafting inventory) {
@@ -87,10 +85,7 @@ public class FramedDrawerStyleRecipe extends IForgeRegistryEntry.Impl<IRecipe>
         }
         ItemStack result = match.drawer.copy();
         result.setCount(1);
-        new FramedDrawerStyle(
-                match.exterior,
-                match.front,
-                match.divider).applyToDrawerStack(result);
+        new FramedDrawerStyle(match.exterior, match.front, match.divider).applyToDrawerStack(result);
         return result;
     }
 
@@ -105,8 +100,7 @@ public class FramedDrawerStyleRecipe extends IForgeRegistryEntry.Impl<IRecipe>
         private final ItemStack drawer;
         private final ItemStack divider;
 
-        private Match(ItemStack exterior, ItemStack front,
-                      ItemStack drawer, ItemStack divider) {
+        private Match(ItemStack exterior, ItemStack front, ItemStack drawer, ItemStack divider) {
             this.exterior = exterior;
             this.front = front;
             this.drawer = drawer;

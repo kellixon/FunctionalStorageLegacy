@@ -1,9 +1,13 @@
 package com.xinyihl.functionalstoragelegacy.api.storage;
 
-/** Idempotently closeable registration for storage change notifications. */
+/**
+ * Idempotently closeable registration for storage change notifications.
+ */
 public interface StorageSubscription extends AutoCloseable {
 
-    /** Shared already-closed subscription used by handlers without an event source. */
+    /**
+     * Shared already-closed subscription used by handlers without an event source.
+     */
     StorageSubscription CLOSED = new StorageSubscription() {
         @Override
         public void close() {
@@ -15,10 +19,14 @@ public interface StorageSubscription extends AutoCloseable {
         }
     };
 
-    /** Stops future notifications. Calling this method repeatedly has no effect. */
+    /**
+     * Stops future notifications. Calling this method repeatedly has no effect.
+     */
     @Override
     void close();
 
-    /** @return whether this subscription has been closed */
+    /**
+     * @return whether this subscription has been closed
+     */
     boolean isClosed();
 }

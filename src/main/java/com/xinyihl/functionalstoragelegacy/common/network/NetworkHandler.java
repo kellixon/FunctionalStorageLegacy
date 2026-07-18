@@ -6,7 +6,6 @@ import net.minecraftforge.fml.common.network.simpleimpl.SimpleNetworkWrapper;
 public class NetworkHandler {
 
     public static SimpleNetworkWrapper CHANNEL;
-    private static final int packetId = 0;
 
     public static void init() {
         CHANNEL = NetworkRegistry.INSTANCE.newSimpleChannel("xfsl");

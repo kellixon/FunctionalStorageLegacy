@@ -1,19 +1,14 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory;
 
-import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
-import com.xinyihl.functionalstoragelegacy.api.storage.ItemStorageKey;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
-import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
+import com.xinyihl.functionalstoragelegacy.api.storage.*;
 import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigInventoryHandler;
 import net.minecraft.init.Bootstrap;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.ResourceLocation;
-import net.minecraftforge.oredict.OreDictionary;
 import net.minecraftforge.fml.common.registry.ForgeRegistries;
+import net.minecraftforge.oredict.OreDictionary;
 import net.minecraftforge.registries.ForgeRegistry;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -22,9 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class BigInventoryHandlerTest {
 
@@ -359,7 +352,7 @@ public class BigInventoryHandlerTest {
         handler.deserializeNBT(new NBTTagCompound());
         assertEquals(1, events.size());
         assertTrue(events.get(0).isReset());
-        handler.notifyConfigurationChanged();
+        handler.onChange(StorageChange.reset());
         handler.locked = true;
         handler.applyLockConfiguration(true);
         assertEquals(3, events.size());

@@ -76,10 +76,7 @@ public class UtilityUpgradeItem extends UpgradeItem {
     }
 
     public static boolean hasWirelessTarget(ItemStack stack) {
-        return stack.hasTagCompound()
-                && stack.getTagCompound().hasKey(TARGET_POS_KEY)
-                && stack.getTagCompound().hasKey(TARGET_FACE_KEY)
-                && stack.getTagCompound().hasKey(TARGET_DIMENSION_KEY);
+        return stack.hasTagCompound() && stack.getTagCompound().hasKey(TARGET_POS_KEY) && stack.getTagCompound().hasKey(TARGET_FACE_KEY) && stack.getTagCompound().hasKey(TARGET_DIMENSION_KEY);
     }
 
     public static void setWirelessTarget(ItemStack stack, BlockPos pos, EnumFacing face, int dimension, String name) {
@@ -176,20 +173,16 @@ public class UtilityUpgradeItem extends UpgradeItem {
     }
 
     public boolean isWirelessUtility() {
-        return utilityAction == UtilityAction.WIRELESS_PULLING
-                || utilityAction == UtilityAction.WIRELESS_PUSHING;
+        return utilityAction == UtilityAction.WIRELESS_PULLING || utilityAction == UtilityAction.WIRELESS_PUSHING;
     }
 
     public boolean isDirectionalUtility() {
-        return utilityAction == UtilityAction.PULLING
-                || utilityAction == UtilityAction.PUSHING
-                || utilityAction == UtilityAction.COLLECTOR;
+        return utilityAction == UtilityAction.PULLING || utilityAction == UtilityAction.PUSHING || utilityAction == UtilityAction.COLLECTOR;
     }
 
     @Nonnull
     @Override
-    public EnumActionResult onItemUse(@Nonnull EntityPlayer player, World worldIn, @Nonnull BlockPos pos, @Nonnull EnumHand hand,
-                                      @Nonnull EnumFacing facing, float hitX, float hitY, float hitZ) {
+    public EnumActionResult onItemUse(@Nonnull EntityPlayer player, @Nonnull World worldIn, @Nonnull BlockPos pos, @Nonnull EnumHand hand, @Nonnull EnumFacing facing, float hitX, float hitY, float hitZ) {
         if (!isWirelessUtility() || !player.isSneaking()) {
             return super.onItemUse(player, worldIn, pos, hand, facing, hitX, hitY, hitZ);
         }
@@ -203,12 +196,7 @@ public class UtilityUpgradeItem extends UpgradeItem {
         String targetName = block.getLocalizedName();
         setWirelessTarget(stack, pos, facing, worldIn.provider.getDimension(), targetName);
 
-        player.sendStatusMessage(new TextComponentTranslation(
-                "item.functionalstoragelegacy.upgrade.wireless.bound",
-                targetName,
-                new TextComponentTranslation("item.functionalstoragelegacy.upgrade.direction." + facing.getName()),
-                pos.getX(), pos.getY(), pos.getZ()
-        ).setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.GREEN)), true);
+        player.sendStatusMessage(new TextComponentTranslation("item.functionalstoragelegacy.upgrade.wireless.bound", targetName, new TextComponentTranslation("item.functionalstoragelegacy.upgrade.direction." + facing.getName()), pos.getX(), pos.getY(), pos.getZ()).setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.GREEN)), true);
         return EnumActionResult.SUCCESS;
     }
 
@@ -220,9 +208,7 @@ public class UtilityUpgradeItem extends UpgradeItem {
             if (!worldIn.isRemote) {
                 if (hasWirelessTarget(stack)) {
                     clearWirelessTarget(stack);
-                    playerIn.sendStatusMessage(new TextComponentTranslation(
-                            "item.functionalstoragelegacy.upgrade.wireless.cleared"
-                    ).setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.YELLOW)), true);
+                    playerIn.sendStatusMessage(new TextComponentTranslation("item.functionalstoragelegacy.upgrade.wireless.cleared").setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.YELLOW)), true);
                 }
             }
             return new ActionResult<>(EnumActionResult.SUCCESS, stack);
@@ -234,10 +220,7 @@ public class UtilityUpgradeItem extends UpgradeItem {
             setDirection(stack, next);
 
             if (!worldIn.isRemote) {
-                playerIn.sendStatusMessage(new TextComponentTranslation(
-                        "item.functionalstoragelegacy.upgrade.direction.swapped",
-                        new TextComponentTranslation("item.functionalstoragelegacy.upgrade.direction." + next.getName())
-                ).setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.GREEN)), true);
+                playerIn.sendStatusMessage(new TextComponentTranslation("item.functionalstoragelegacy.upgrade.direction.swapped", new TextComponentTranslation("item.functionalstoragelegacy.upgrade.direction." + next.getName())).setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.GREEN)), true);
             }
 
             return new ActionResult<>(EnumActionResult.SUCCESS, stack);
@@ -252,40 +235,24 @@ public class UtilityUpgradeItem extends UpgradeItem {
         super.addInformation(stack, worldIn, tooltip, flagIn);
         if (isDirectionalUtility()) {
             EnumFacing direction = getDirection(stack);
-            tooltip.add(TextFormatting.YELLOW
-                    + new TextComponentTranslation("item.functionalstoragelegacy.upgrade.direction").getUnformattedText()
-                    + " " + TextFormatting.AQUA
-                    + new TextComponentTranslation("item.functionalstoragelegacy.upgrade.direction." + direction.getName()).getUnformattedText());
-            tooltip.add(TextFormatting.GRAY
-                    + new TextComponentTranslation("item.functionalstoragelegacy.upgrade.direction.use").getUnformattedText());
+            tooltip.add(TextFormatting.YELLOW + new TextComponentTranslation("item.functionalstoragelegacy.upgrade.direction").getUnformattedText() + " " + TextFormatting.AQUA + new TextComponentTranslation("item.functionalstoragelegacy.upgrade.direction." + direction.getName()).getUnformattedText());
+            tooltip.add(TextFormatting.GRAY + new TextComponentTranslation("item.functionalstoragelegacy.upgrade.direction.use").getUnformattedText());
         }
         if (isWirelessUtility()) {
             if (hasWirelessTarget(stack)) {
                 EnumFacing targetFace = getWirelessTargetFace(stack);
                 BlockPos targetPos = getWirelessTargetPos(stack);
-                tooltip.add(TextFormatting.YELLOW
-                        + new TextComponentTranslation(
-                        "item.functionalstoragelegacy.upgrade.wireless.target",
-                        getWirelessTargetName(stack),
-                        new TextComponentTranslation("item.functionalstoragelegacy.upgrade.direction." + targetFace.getName())
-                ).getUnformattedText());
+                tooltip.add(TextFormatting.YELLOW + new TextComponentTranslation("item.functionalstoragelegacy.upgrade.wireless.target", getWirelessTargetName(stack), new TextComponentTranslation("item.functionalstoragelegacy.upgrade.direction." + targetFace.getName())).getUnformattedText());
 
                 if (targetPos != null) {
-                    tooltip.add(TextFormatting.GRAY
-                            + new TextComponentTranslation(
-                            "item.functionalstoragelegacy.upgrade.wireless.target_pos",
-                            targetPos.getX(), targetPos.getY(), targetPos.getZ()
-                    ).getUnformattedText());
+                    tooltip.add(TextFormatting.GRAY + new TextComponentTranslation("item.functionalstoragelegacy.upgrade.wireless.target_pos", targetPos.getX(), targetPos.getY(), targetPos.getZ()).getUnformattedText());
                 }
             } else {
-                tooltip.add(TextFormatting.RED
-                        + new TextComponentTranslation("item.functionalstoragelegacy.upgrade.wireless.no_target").getUnformattedText());
+                tooltip.add(TextFormatting.RED + new TextComponentTranslation("item.functionalstoragelegacy.upgrade.wireless.no_target").getUnformattedText());
             }
 
-            tooltip.add(TextFormatting.GRAY
-                    + new TextComponentTranslation("item.functionalstoragelegacy.upgrade.wireless.use").getUnformattedText());
-            tooltip.add(TextFormatting.GRAY
-                    + new TextComponentTranslation("item.functionalstoragelegacy.upgrade.wireless.clear").getUnformattedText());
+            tooltip.add(TextFormatting.GRAY + new TextComponentTranslation("item.functionalstoragelegacy.upgrade.wireless.use").getUnformattedText());
+            tooltip.add(TextFormatting.GRAY + new TextComponentTranslation("item.functionalstoragelegacy.upgrade.wireless.clear").getUnformattedText());
         }
     }
 
@@ -293,7 +260,7 @@ public class UtilityUpgradeItem extends UpgradeItem {
      * Called every tick for utility upgrades while installed in a drawer.
      */
     public void onTick(ControllableDrawerTile tile, ItemStack upgradeStack, int upgradeSlot) {
-        if (tile.getWorld() == null || tile.getWorld().isRemote) return;
+        if (tile.getWorld().isRemote) return;
 
         switch (utilityAction) {
             case PULLING:
@@ -440,7 +407,7 @@ public class UtilityUpgradeItem extends UpgradeItem {
 
     @Nullable
     private TileEntity getWirelessTargetTile(ControllableDrawerTile tile, ItemStack upgradeStack) {
-        if (!hasWirelessTarget(upgradeStack) || tile.getWorld() == null) {
+        if (!hasWirelessTarget(upgradeStack)) {
             return null;
         }
 
@@ -523,13 +490,6 @@ public class UtilityUpgradeItem extends UpgradeItem {
     }
 
     public enum UtilityAction {
-        NONE,
-        PULLING,
-        PUSHING,
-        COLLECTOR,
-        VOID,
-        REDSTONE,
-        WIRELESS_PULLING,
-        WIRELESS_PUSHING
+        NONE, PULLING, PUSHING, COLLECTOR, VOID, REDSTONE, WIRELESS_PULLING, WIRELESS_PUSHING
     }
 }

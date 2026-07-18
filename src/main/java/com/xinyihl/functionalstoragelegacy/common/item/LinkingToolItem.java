@@ -123,12 +123,10 @@ public class LinkingToolItem extends Item {
                 EnderInventoryHandler inventory = EnderSavedData.getInstance(worldIn).getFrequency(((EnderDrawerTile) te).getFrequency());
                 if (inventory.getStackInSlot(0).isEmpty() || (player.isSneaking() && hasEnderSafety(stack))) {
                     ((EnderDrawerTile) te).setFrequency(storedFreq);
-                    player.sendStatusMessage(new TextComponentTranslation("linkingtool.ender.changed")
-                            .setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.AQUA)), true);
+                    player.sendStatusMessage(new TextComponentTranslation("linkingtool.ender.changed").setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.AQUA)), true);
                     removeEnderSafety(stack);
                 } else {
-                    player.sendStatusMessage(new TextComponentTranslation("linkingtool.ender.warning")
-                            .setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.RED)), true);
+                    player.sendStatusMessage(new TextComponentTranslation("linkingtool.ender.warning").setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.RED)), true);
                     setEnderSafety(stack, true);
                 }
                 return EnumActionResult.SUCCESS;
@@ -142,8 +140,7 @@ public class LinkingToolItem extends Item {
             if (stack.hasTagCompound()) {
                 stack.getTagCompound().removeTag("EnderFrequency");
             }
-            player.sendStatusMessage(new TextComponentTranslation("linkingtool.controller.configured")
-                    .setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.GREEN)), true);
+            player.sendStatusMessage(new TextComponentTranslation("linkingtool.controller.configured").setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.GREEN)), true);
             return EnumActionResult.SUCCESS;
         }
 
@@ -159,30 +156,17 @@ public class LinkingToolItem extends Item {
 
                     if (mode == LinkingMode.SINGLE) {
                         if (controller.addConnectedDrawers(action, pos)) {
-                            String msgKey = action == ActionMode.ADD
-                                    ? "linkingtool.single_drawer.linked"
-                                    : "linkingtool.single_drawer.removed";
-                            player.sendStatusMessage(new TextComponentTranslation(msgKey)
-                                    .setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.AQUA)), true);
+                            String msgKey = action == ActionMode.ADD ? "linkingtool.single_drawer.linked" : "linkingtool.single_drawer.removed";
+                            player.sendStatusMessage(new TextComponentTranslation(msgKey).setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.AQUA)), true);
                         }
                     } else { // MULTIPLE mode
                         if (hasFirstPosition(stack)) {
                             BlockPos firstPos = getFirstPosition(stack);
-                            AxisAlignedBB aabb = new AxisAlignedBB(
-                                    Math.min(firstPos.getX(), pos.getX()),
-                                    Math.min(firstPos.getY(), pos.getY()),
-                                    Math.min(firstPos.getZ(), pos.getZ()),
-                                    Math.max(firstPos.getX(), pos.getX()) + 1,
-                                    Math.max(firstPos.getY(), pos.getY()) + 1,
-                                    Math.max(firstPos.getZ(), pos.getZ()) + 1
-                            );
+                            AxisAlignedBB aabb = new AxisAlignedBB(Math.min(firstPos.getX(), pos.getX()), Math.min(firstPos.getY(), pos.getY()), Math.min(firstPos.getZ(), pos.getZ()), Math.max(firstPos.getX(), pos.getX()) + 1, Math.max(firstPos.getY(), pos.getY()) + 1, Math.max(firstPos.getZ(), pos.getZ()) + 1);
                             List<BlockPos> positions = getBlockPosInAABB(aabb);
                             if (controller.addConnectedDrawers(action, positions.toArray(new BlockPos[0]))) {
-                                String msgKey = action == ActionMode.ADD
-                                        ? "linkingtool.multiple_drawer.linked"
-                                        : "linkingtool.multiple_drawer.removed";
-                                player.sendStatusMessage(new TextComponentTranslation(msgKey)
-                                        .setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.AQUA)), true);
+                                String msgKey = action == ActionMode.ADD ? "linkingtool.multiple_drawer.linked" : "linkingtool.multiple_drawer.removed";
+                                player.sendStatusMessage(new TextComponentTranslation(msgKey).setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.AQUA)), true);
                             }
                             clearFirstPosition(stack);
                         } else {
@@ -205,8 +189,7 @@ public class LinkingToolItem extends Item {
             if (getEnderFrequency(stack) != null) {
                 if (playerIn.isSneaking()) {
                     stack.getTagCompound().removeTag("EnderFrequency");
-                    playerIn.sendStatusMessage(new TextComponentTranslation("linkingtool.drawer.clear")
-                            .setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.GREEN)), true);
+                    playerIn.sendStatusMessage(new TextComponentTranslation("linkingtool.drawer.clear").setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.GREEN)), true);
                 }
             } else {
                 if (playerIn.isSneaking()) {
@@ -214,16 +197,12 @@ public class LinkingToolItem extends Item {
                     LinkingMode newMode = mode == LinkingMode.SINGLE ? LinkingMode.MULTIPLE : LinkingMode.SINGLE;
                     setLinkingMode(stack, newMode);
                     clearFirstPosition(stack);
-                    playerIn.sendStatusMessage(new TextComponentTranslation("linkingtool.linkingmode.swapped",
-                            new TextComponentTranslation("linkingtool.linkingmode." + newMode.name().toLowerCase(Locale.ROOT)))
-                            .setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.GREEN)), true);
+                    playerIn.sendStatusMessage(new TextComponentTranslation("linkingtool.linkingmode.swapped", new TextComponentTranslation("linkingtool.linkingmode." + newMode.name().toLowerCase(Locale.ROOT))).setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.GREEN)), true);
                 } else {
                     ActionMode mode = getActionMode(stack);
                     ActionMode newMode = mode == ActionMode.ADD ? ActionMode.REMOVE : ActionMode.ADD;
                     setActionMode(stack, newMode);
-                    playerIn.sendStatusMessage(new TextComponentTranslation("linkingtool.linkingaction.swapped",
-                            new TextComponentTranslation("linkingtool.linkingaction." + newMode.name().toLowerCase(Locale.ROOT)))
-                            .setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.GOLD)), true);
+                    playerIn.sendStatusMessage(new TextComponentTranslation("linkingtool.linkingaction.swapped", new TextComponentTranslation("linkingtool.linkingaction." + newMode.name().toLowerCase(Locale.ROOT))).setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.GOLD)), true);
                 }
             }
             return new ActionResult<>(EnumActionResult.SUCCESS, stack);
@@ -247,20 +226,11 @@ public class LinkingToolItem extends Item {
         } else {
             LinkingMode mode = getLinkingMode(stack);
             ActionMode action = getActionMode(stack);
-            tooltip.add(TextFormatting.YELLOW
-                    + new TextComponentTranslation("linkingtool.linkingmode").getUnformattedText()
-                    + " " + TextFormatting.AQUA
-                    + new TextComponentTranslation("linkingtool.linkingmode." + mode.name().toLowerCase(Locale.ROOT)).getUnformattedText());
-            tooltip.add(TextFormatting.YELLOW
-                    + new TextComponentTranslation("linkingtool.linkingaction").getUnformattedText()
-                    + " " + TextFormatting.GOLD
-                    + new TextComponentTranslation("linkingtool.linkingaction." + action.name().toLowerCase(Locale.ROOT)).getUnformattedText());
+            tooltip.add(TextFormatting.YELLOW + new TextComponentTranslation("linkingtool.linkingmode").getUnformattedText() + " " + TextFormatting.AQUA + new TextComponentTranslation("linkingtool.linkingmode." + mode.name().toLowerCase(Locale.ROOT)).getUnformattedText());
+            tooltip.add(TextFormatting.YELLOW + new TextComponentTranslation("linkingtool.linkingaction").getUnformattedText() + " " + TextFormatting.GOLD + new TextComponentTranslation("linkingtool.linkingaction." + action.name().toLowerCase(Locale.ROOT)).getUnformattedText());
             BlockPos controllerPos = getControllerPos(stack);
             if (controllerPos != null) {
-                tooltip.add(TextFormatting.YELLOW
-                        + new TextComponentTranslation("linkingtool.controller").getUnformattedText()
-                        + " " + TextFormatting.DARK_AQUA
-                        + controllerPos.getX() + ", " + controllerPos.getY() + ", " + controllerPos.getZ());
+                tooltip.add(TextFormatting.YELLOW + new TextComponentTranslation("linkingtool.controller").getUnformattedText() + " " + TextFormatting.DARK_AQUA + controllerPos.getX() + ", " + controllerPos.getY() + ", " + controllerPos.getZ());
             }
             tooltip.add("");
             tooltip.addAll(Arrays.asList(new TextComponentTranslation("linkingtool.use").getUnformattedText().split("\\\\n")));
@@ -299,12 +269,10 @@ public class LinkingToolItem extends Item {
     }
 
     public enum LinkingMode {
-        SINGLE,
-        MULTIPLE
+        SINGLE, MULTIPLE
     }
 
     public enum ActionMode {
-        ADD,
-        REMOVE
+        ADD, REMOVE
     }
 }

@@ -1,6 +1,8 @@
 package com.xinyihl.functionalstoragelegacy.common.block;
 
-/** Number and arrangement of interactive regions on a drawer's front face. */
+/**
+ * Number and arrangement of interactive regions on a drawer's front face.
+ */
 public enum DrawerFaceLayout {
     X_1,
     X_2,

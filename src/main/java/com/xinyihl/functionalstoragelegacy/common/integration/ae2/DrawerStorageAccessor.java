@@ -21,8 +21,7 @@ public class DrawerStorageAccessor implements IStorageMonitorableAccessor, AutoC
     private final DrawerMEMonitor<IAEFluidStack> fluidMonitor;
     private boolean closed;
 
-    public DrawerStorageAccessor(@Nullable DrawerMEMonitor<IAEItemStack> itemMonitor,
-                                 @Nullable DrawerMEMonitor<IAEFluidStack> fluidMonitor) {
+    public DrawerStorageAccessor(@Nullable DrawerMEMonitor<IAEItemStack> itemMonitor, @Nullable DrawerMEMonitor<IAEFluidStack> fluidMonitor) {
         this.itemMonitor = itemMonitor;
         this.fluidMonitor = fluidMonitor;
     }
@@ -47,7 +46,9 @@ public class DrawerStorageAccessor implements IStorageMonitorableAccessor, AutoC
         };
     }
 
-    /** Releases both monitor subscriptions; repeated invalidation is harmless. */
+    /**
+     * Releases both monitor subscriptions; repeated invalidation is harmless.
+     */
     @Override
     public synchronized void close() {
         if (closed) {
@@ -62,7 +63,9 @@ public class DrawerStorageAccessor implements IStorageMonitorableAccessor, AutoC
         }
     }
 
-    /** Alias used by capability providers when a tile is invalidated. */
+    /**
+     * Alias used by capability providers when a tile is invalidated.
+     */
     public void invalidate() {
         close();
     }

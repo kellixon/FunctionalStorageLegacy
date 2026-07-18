@@ -1,28 +1,10 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory.controller;
 
-import com.xinyihl.functionalstoragelegacy.api.storage.IStorageHandler;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageChangeDispatcher;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageKey;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageRoutingPolicy;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageSnapshot;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
-import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
+import com.xinyihl.functionalstoragelegacy.api.storage.*;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.NavigableSet;
-import java.util.Objects;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.function.Consumer;
 
 /**
@@ -34,36 +16,114 @@ import java.util.function.Consumer;
  * filtering. Resource facades only decide candidate eligibility and execute
  * their domain-specific route order.</p>
  */
-public final class ControllerStorageIndex<
-        S extends StorageSnapshot<S, K>, K extends StorageKey>
-        implements IStorageHandler<S, K> {
+public final class ControllerStorageIndex<S extends StorageSnapshot<S, K>, K extends StorageKey> implements IStorageHandler<S, K> {
 
     private final Object mutex = new Object();
     private final S emptySnapshot;
     private final StorageRoutingPolicy<S, K> policy;
-    private final StorageChangeDispatcher<S, K> dispatcher =
-            new StorageChangeDispatcher<>();
+    private final StorageChangeDispatcher<S, K> dispatcher = new StorageChangeDispatcher<>();
 
     private volatile IndexState<S, K> state = IndexState.empty();
     private List<StorageSubscription> childSubscriptions = Collections.emptyList();
     private boolean subscriptionsActive = true;
     private long generation;
 
-    public ControllerStorageIndex(
-            @Nonnull S emptySnapshot,
-            @Nonnull StorageRoutingPolicy<S, K> policy) {
+    public ControllerStorageIndex(@Nonnull S emptySnapshot, @Nonnull StorageRoutingPolicy<S, K> policy) {
         this.emptySnapshot = Objects.requireNonNull(emptySnapshot, "emptySnapshot");
         this.policy = Objects.requireNonNull(policy, "policy");
         if (emptySnapshot.hasTemplate() || !emptySnapshot.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "emptySnapshot must be unconfigured with amount zero");
+            throw new IllegalArgumentException("emptySnapshot must be unconfigured with amount zero");
         }
     }
 
-    public ControllerStorageIndex(
-            @Nonnull StorageRoutingPolicy<S, K> policy,
-            @Nonnull S emptySnapshot) {
+    public ControllerStorageIndex(@Nonnull StorageRoutingPolicy<S, K> policy, @Nonnull S emptySnapshot) {
         this(emptySnapshot, policy);
+    }
+
+    private static <S extends StorageSnapshot<S, K>, K extends StorageKey> boolean sameHandlerObjects(IndexState<S, K> current, List<ChildSpec<S, K>> requested) {
+        if (current.children.size() != requested.size()) {
+            return false;
+        }
+        for (int index = 0; index < requested.size(); index++) {
+            if (current.children.get(index).handler != requested.get(index).handler) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static long amountOf(@Nullable StorageSnapshot<?, ?> snapshot) {
+        return snapshot == null || snapshot.isEmpty() ? 0L : Math.max(0L, snapshot.getAmount());
+    }
+
+    private static boolean sameTopology(IndexState<?, ?> current, List<? extends ChildSpec<?, ?>> requested) {
+        if (current.children.size() != requested.size()) {
+            return false;
+        }
+        for (int index = 0; index < requested.size(); index++) {
+            ChildSpec<?, ?> before = current.children.get(index);
+            ChildSpec<?, ?> after = requested.get(index);
+            if (before.identity != after.identity || before.storageCount != after.storageCount) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static Object identityOf(IStorageHandler<?, ?> handler) {
+        return handler.getStorageIdentity();
+    }
+
+    private static boolean validLocal(@Nullable int[] indexes, int localIndex) {
+        return indexes != null && localIndex >= 0 && localIndex < indexes.length;
+    }
+
+    private static void closeAll(List<StorageSubscription> subscriptions) {
+        for (StorageSubscription subscription : subscriptions) {
+            if (subscription != null) {
+                subscription.close();
+            }
+        }
+    }
+
+    private static <T> void addAll(Set<T> target, @Nullable Set<T> source) {
+        if (source != null) {
+            target.addAll(source);
+        }
+    }
+
+    private static TreeSet<Integer> copy(@Nullable Set<Integer> source) {
+        return source == null ? new TreeSet<>() : new TreeSet<>(source);
+    }
+
+    private static List<Integer> immutableList(Set<Integer> source) {
+        return Collections.unmodifiableList(new ArrayList<>(source));
+    }
+
+    private static Set<Integer> immutableSet(@Nullable Set<Integer> source) {
+        return source == null || source.isEmpty() ? Collections.emptySet() : Collections.unmodifiableSet(new TreeSet<>(source));
+    }
+
+    private static <K> void removeFrom(Map<K, NavigableSet<Integer>> map, K key, int index) {
+        NavigableSet<Integer> indexes = map.get(key);
+        if (indexes == null) {
+            return;
+        }
+        indexes.remove(index);
+        if (indexes.isEmpty()) {
+            map.remove(key);
+        }
+    }
+
+    private static <S extends StorageSnapshot<S, K>, K extends StorageKey> List<IndexedStorage<S, K>> views(IndexState<S, K> state, Set<Integer> indexes) {
+        List<IndexedStorage<S, K>> result = new ArrayList<>(indexes.size());
+        for (Integer index : indexes) {
+            Binding<S, K> binding = state.binding(index);
+            if (binding != null) {
+                result.add(new IndexedStorage<>(binding));
+            }
+        }
+        return Collections.unmodifiableList(result);
     }
 
     @Override
@@ -86,38 +146,31 @@ public final class ControllerStorageIndex<
     @Override
     public long getCapacity(int index) {
         Binding<S, K> binding = bindingAt(index);
-        return binding == null ? 0L
-                : Math.max(0L, binding.handler.getCapacity(binding.localIndex));
+        return binding == null ? 0L : Math.max(0L, binding.handler.getCapacity(binding.localIndex));
     }
 
     @Nonnull
     @Override
-    public TransferResult<S, K> insert(
-            int index, @Nonnull S request, @Nonnull StorageAction action) {
+    public TransferResult<S, K> insert(int index, @Nonnull S request, @Nonnull StorageAction action) {
         Objects.requireNonNull(action, "action");
         long requested = amountOf(request);
         if (requested == 0L) {
             return emptyResult(0L, action);
         }
         Binding<S, K> binding = bindingAt(index);
-        return binding == null
-                ? emptyResult(requested, action)
-                : binding.handler.insert(binding.localIndex, request, action);
+        return binding == null ? emptyResult(requested, action) : binding.handler.insert(binding.localIndex, request, action);
     }
 
     @Nonnull
     @Override
-    public TransferResult<S, K> extract(
-            int index, long amount, @Nonnull StorageAction action) {
+    public TransferResult<S, K> extract(int index, long amount, @Nonnull StorageAction action) {
         Objects.requireNonNull(action, "action");
         long requested = Math.max(0L, amount);
         if (requested == 0L) {
             return emptyResult(0L, action);
         }
         Binding<S, K> binding = bindingAt(index);
-        return binding == null
-                ? emptyResult(requested, action)
-                : binding.handler.extract(binding.localIndex, requested, action);
+        return binding == null ? emptyResult(requested, action) : binding.handler.extract(binding.localIndex, requested, action);
     }
 
     /**
@@ -127,10 +180,9 @@ public final class ControllerStorageIndex<
      *
      * @return whether the index was rebuilt
      */
-    public boolean setHandlers(
-            @Nonnull List<? extends IStorageHandler<S, K>> requestedHandlers) {
+    public boolean setHandlers(@Nonnull List<? extends IStorageHandler<S, K>> requestedHandlers) {
         Objects.requireNonNull(requestedHandlers, "requestedHandlers");
-        List<StorageSubscription> subscriptionsToClose = Collections.emptyList();
+        List<StorageSubscription> subscriptionsToClose;
         StorageChange<S, K> topologyChange = null;
         synchronized (mutex) {
             List<ChildSpec<S, K>> requested = normalizeChildren(requestedHandlers);
@@ -152,9 +204,7 @@ public final class ControllerStorageIndex<
                 for (ChildSpec<S, K> child : requested) {
                     child.subscriptionGeneration = nextGeneration;
                     final IndexState<S, K> capturedState = next;
-                    final long capturedGeneration = nextGeneration;
-                    replacements.add(child.handler.subscribe(change -> onChildChange(
-                            capturedState, capturedGeneration, child, change)));
+                    replacements.add(child.handler.subscribe(change -> onChildChange(capturedState, nextGeneration, child, change)));
                 }
                 state = next;
                 childSubscriptions = Collections.unmodifiableList(replacements);
@@ -200,7 +250,9 @@ public final class ControllerStorageIndex<
         return state.handlers;
     }
 
-    /** amount > 0 only; typed-zero filters are deliberately excluded. */
+    /**
+     * amount > 0 only; typed-zero filters are deliberately excluded.
+     */
     @Nonnull
     public List<Integer> getOccupiedIndices() {
         synchronized (mutex) {
@@ -208,7 +260,9 @@ public final class ControllerStorageIndex<
         }
     }
 
-    /** !hasTemplate only; typed-zero filters are deliberately excluded. */
+    /**
+     * !hasTemplate only; typed-zero filters are deliberately excluded.
+     */
     @Nonnull
     public List<Integer> getEmptyIndices() {
         synchronized (mutex) {
@@ -230,7 +284,9 @@ public final class ControllerStorageIndex<
         }
     }
 
-    /** Union for a key that is already known to be exact or an alias. */
+    /**
+     * Union for a key that is already known to be exact or an alias.
+     */
     @Nonnull
     public Set<Integer> getCandidateIndices(@Nullable StorageKey key) {
         synchronized (mutex) {
@@ -241,7 +297,9 @@ public final class ControllerStorageIndex<
         }
     }
 
-    /** Exact plus every policy alias derived from the request. */
+    /**
+     * Exact plus every policy alias derived from the request.
+     */
     @Nonnull
     public Set<Integer> getCandidateIndices(@Nullable S request) {
         if (request == null || !request.hasTemplate()) {
@@ -274,11 +332,7 @@ public final class ControllerStorageIndex<
                 addAll(aliases, current.aliases.get(alias));
             }
             aliases.removeAll(exact);
-            return new CandidateSnapshot<>(
-                    views(current, exact),
-                    views(current, aliases),
-                    views(current, current.empty),
-                    views(current, current.occupied));
+            return new CandidateSnapshot<>(views(current, exact), views(current, aliases), views(current, current.empty), views(current, current.occupied));
         }
     }
 
@@ -298,7 +352,9 @@ public final class ControllerStorageIndex<
         return Collections.unmodifiableList(result);
     }
 
-    /** O(1) child/local to global lookup by handler or physical identity. */
+    /**
+     * O(1) child/local to global lookup by handler or physical identity.
+     */
     public int getGlobalIndex(@Nonnull IStorageHandler<S, K> handler, int localIndex) {
         Objects.requireNonNull(handler, "handler");
         IndexState<S, K> current = state;
@@ -317,32 +373,25 @@ public final class ControllerStorageIndex<
 
     @Nonnull
     @Override
-    public StorageSubscription subscribe(
-            @Nonnull Consumer<? super StorageChange<S, K>> listener) {
+    public StorageSubscription subscribe(@Nonnull Consumer<? super StorageChange<S, K>> listener) {
         return dispatcher.subscribe(listener);
     }
 
-    private void onChildChange(
-            IndexState<S, K> capturedState,
-            long capturedGeneration,
-            ChildSpec<S, K> child,
-            StorageChange<S, K> change) {
+    private void onChildChange(IndexState<S, K> capturedState, long capturedGeneration, ChildSpec<S, K> child, StorageChange<S, K> change) {
         if (change == null) {
             return;
         }
         StorageChange<S, K> translated = null;
         boolean reset = false;
         synchronized (mutex) {
-            if (!subscriptionsActive || state != capturedState
-                    || child.subscriptionGeneration != capturedGeneration) {
+            if (!subscriptionsActive || state != capturedState || child.subscriptionGeneration != capturedGeneration) {
                 return;
             }
             if (change.isReset()) {
                 rebuildIndexes(capturedState);
                 reset = true;
             } else {
-                List<StorageChange.Entry<S, K>> entries =
-                        new ArrayList<>(change.getEntries().size());
+                List<StorageChange.Entry<S, K>> entries = new ArrayList<>(change.getEntries().size());
                 for (StorageChange.Entry<S, K> entry : change.getEntries()) {
                     int local = entry.getIndex();
                     if (local < 0 || local >= child.bindings.size()) {
@@ -350,8 +399,7 @@ public final class ControllerStorageIndex<
                     }
                     Binding<S, K> binding = child.bindings.get(local);
                     updateBinding(capturedState, binding, entry.getAfter());
-                    entries.add(new StorageChange.Entry<>(
-                            binding.globalIndex, entry.getBefore(), entry.getAfter()));
+                    entries.add(new StorageChange.Entry<>(binding.globalIndex, entry.getBefore(), entry.getAfter()));
                 }
                 if (!entries.isEmpty()) {
                     translated = StorageChange.delta(entries);
@@ -359,17 +407,15 @@ public final class ControllerStorageIndex<
             }
         }
         if (reset) {
-            onChange(StorageChange.<S, K>reset());
+            onChange(StorageChange.reset());
         } else if (translated != null) {
             onChange(translated);
         }
     }
 
-    private void updateBinding(
-            IndexState<S, K> target, Binding<S, K> binding, S after) {
+    private void updateBinding(IndexState<S, K> target, Binding<S, K> binding, S after) {
         S before = binding.snapshot;
-        boolean typeChanged = before.hasTemplate() != after.hasTemplate()
-                || !Objects.equals(before.getKey(), after.getKey());
+        boolean typeChanged = before.hasTemplate() != after.hasTemplate() || !Objects.equals(before.getKey(), after.getKey());
         if (typeChanged) {
             removeIndexes(target, binding);
             binding.snapshot = after;
@@ -398,8 +444,7 @@ public final class ControllerStorageIndex<
             List<Binding<S, K>> localBindings = new ArrayList<>(child.storageCount);
             int[] reverse = new int[child.storageCount];
             for (int local = 0; local < child.storageCount; local++) {
-                Binding<S, K> binding = new Binding<>(
-                        global++, child.handler, local, safeSnapshot(child.handler, local));
+                Binding<S, K> binding = new Binding<>(global++, child.handler, local, safeSnapshot(child.handler, local));
                 localBindings.add(binding);
                 reverse[local] = binding.globalIndex;
                 result.bindings.add(binding);
@@ -433,12 +478,10 @@ public final class ControllerStorageIndex<
             target.empty.add(binding.globalIndex);
         } else {
             if (binding.key != null) {
-                target.exact.computeIfAbsent(binding.key, ignored -> new TreeSet<>())
-                        .add(binding.globalIndex);
+                target.exact.computeIfAbsent(binding.key, ignored -> new TreeSet<>()).add(binding.globalIndex);
             }
             for (StorageKey alias : binding.aliases) {
-                target.aliases.computeIfAbsent(alias, ignored -> new TreeSet<>())
-                        .add(binding.globalIndex);
+                target.aliases.computeIfAbsent(alias, ignored -> new TreeSet<>()).add(binding.globalIndex);
             }
         }
         if (snapshot.getAmount() > 0L) {
@@ -473,23 +516,19 @@ public final class ControllerStorageIndex<
         }
         LinkedHashSet<StorageKey> result = new LinkedHashSet<>();
         Iterable<? extends StorageKey> supplied = policy.getCompatibleAliases(snapshot);
-        if (supplied != null) {
-            for (StorageKey alias : supplied) {
-                if (alias != null) {
-                    result.add(alias);
-                }
+        for (StorageKey alias : supplied) {
+            if (alias != null) {
+                result.add(alias);
             }
         }
-        return result.isEmpty()
-                ? Collections.emptySet() : Collections.unmodifiableSet(result);
+        return result.isEmpty() ? Collections.emptySet() : Collections.unmodifiableSet(result);
     }
 
     private List<StorageKey> aliasesFor(S snapshot) {
         return new ArrayList<>(aliasSet(snapshot));
     }
 
-    private List<ChildSpec<S, K>> normalizeChildren(
-            List<? extends IStorageHandler<S, K>> requested) {
+    private List<ChildSpec<S, K>> normalizeChildren(List<? extends IStorageHandler<S, K>> requested) {
         List<ChildSpec<S, K>> result = new ArrayList<>(requested.size());
         IdentityHashMap<Object, Boolean> seen = new IdentityHashMap<>();
         for (IStorageHandler<S, K> handler : requested) {
@@ -500,24 +539,9 @@ public final class ControllerStorageIndex<
             if (seen.put(identity, Boolean.TRUE) != null) {
                 continue;
             }
-            result.add(new ChildSpec<>(handler, identity,
-                    Math.max(0, handler.getStorageCount())));
+            result.add(new ChildSpec<>(handler, identity, Math.max(0, handler.getStorageCount())));
         }
         return result;
-    }
-
-    private static <S extends StorageSnapshot<S, K>, K extends StorageKey>
-    boolean sameHandlerObjects(
-            IndexState<S, K> current, List<ChildSpec<S, K>> requested) {
-        if (current.children.size() != requested.size()) {
-            return false;
-        }
-        for (int index = 0; index < requested.size(); index++) {
-            if (current.children.get(index).handler != requested.get(index).handler) {
-                return false;
-            }
-        }
-        return true;
     }
 
     /**
@@ -525,8 +549,7 @@ public final class ControllerStorageIndex<
      * unchanged. No child snapshots, classification policy calls or aggregate
      * events are produced by this path.
      */
-    private List<StorageSubscription> rebindRepresentatives(
-            IndexState<S, K> current, List<ChildSpec<S, K>> requested) {
+    private List<StorageSubscription> rebindRepresentatives(IndexState<S, K> current, List<ChildSpec<S, K>> requested) {
         List<StorageSubscription> oldSubscriptions = new ArrayList<>();
         List<StorageSubscription> replacements = new ArrayList<>(childSubscriptions);
         List<IStorageHandler<S, K>> handlers = new ArrayList<>(current.handlers);
@@ -556,16 +579,14 @@ public final class ControllerStorageIndex<
             final ChildSpec<S, K> capturedChild = existing;
             final long capturedGeneration = ++generation;
             existing.subscriptionGeneration = capturedGeneration;
-            replacements.set(index, newHandler.subscribe(change -> onChildChange(
-                    capturedState, capturedGeneration, capturedChild, change)));
+            replacements.set(index, newHandler.subscribe(change -> onChildChange(capturedState, capturedGeneration, capturedChild, change)));
         }
         current.handlers = Collections.unmodifiableList(handlers);
         childSubscriptions = Collections.unmodifiableList(replacements);
         return oldSubscriptions;
     }
 
-    private StorageChange<S, K> topologyChange(
-            IndexState<S, K> previous, IndexState<S, K> next) {
+    private StorageChange<S, K> topologyChange(IndexState<S, K> previous, IndexState<S, K> next) {
         int count = Math.max(previous.bindings.size(), next.bindings.size());
         List<StorageChange.Entry<S, K>> entries = new ArrayList<>();
         for (int index = 0; index < count; index++) {
@@ -573,13 +594,11 @@ public final class ControllerStorageIndex<
             Binding<S, K> newBinding = next.binding(index);
             S before = oldBinding == null ? emptySnapshot : oldBinding.snapshot;
             S after = newBinding == null ? emptySnapshot : newBinding.snapshot;
-            if (before.getAmount() != after.getAmount()
-                    || !Objects.equals(before.getKey(), after.getKey())) {
+            if (before.getAmount() != after.getAmount() || !Objects.equals(before.getKey(), after.getKey())) {
                 entries.add(new StorageChange.Entry<>(index, before, after));
             }
         }
-        return entries.isEmpty()
-                ? StorageChange.<S, K>reset() : StorageChange.delta(entries);
+        return entries.isEmpty() ? StorageChange.reset() : StorageChange.delta(entries);
     }
 
     private Binding<S, K> bindingAt(int index) {
@@ -588,110 +607,23 @@ public final class ControllerStorageIndex<
     }
 
     private S safeSnapshot(IStorageHandler<S, K> handler, int localIndex) {
-        S snapshot = handler.getSnapshot(localIndex);
-        return snapshot == null ? emptySnapshot : snapshot;
+        return handler.getSnapshot(localIndex);
     }
 
     private TransferResult<S, K> emptyResult(long requested, StorageAction action) {
         return new TransferResult<>(Math.max(0L, requested), emptySnapshot, action);
     }
 
-    private static long amountOf(@Nullable StorageSnapshot<?, ?> snapshot) {
-        return snapshot == null || snapshot.isEmpty()
-                ? 0L : Math.max(0L, snapshot.getAmount());
-    }
-
-    private static boolean sameTopology(
-            IndexState<?, ?> current, List<? extends ChildSpec<?, ?>> requested) {
-        if (current.children.size() != requested.size()) {
-            return false;
-        }
-        for (int index = 0; index < requested.size(); index++) {
-            ChildSpec<?, ?> before = current.children.get(index);
-            ChildSpec<?, ?> after = requested.get(index);
-            if (before.identity != after.identity
-                    || before.storageCount != after.storageCount) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static Object identityOf(IStorageHandler<?, ?> handler) {
-        Object identity = handler.getStorageIdentity();
-        return identity == null ? handler : identity;
-    }
-
-    private static boolean validLocal(@Nullable int[] indexes, int localIndex) {
-        return indexes != null && localIndex >= 0 && localIndex < indexes.length;
-    }
-
-    private static void closeAll(List<StorageSubscription> subscriptions) {
-        for (StorageSubscription subscription : subscriptions) {
-            if (subscription != null) {
-                subscription.close();
-            }
-        }
-    }
-
-    private static <T> void addAll(Set<T> target, @Nullable Set<T> source) {
-        if (source != null) {
-            target.addAll(source);
-        }
-    }
-
-    private static TreeSet<Integer> copy(@Nullable Set<Integer> source) {
-        return source == null ? new TreeSet<>() : new TreeSet<>(source);
-    }
-
-    private static List<Integer> immutableList(Set<Integer> source) {
-        return Collections.unmodifiableList(new ArrayList<>(source));
-    }
-
-    private static Set<Integer> immutableSet(@Nullable Set<Integer> source) {
-        return source == null || source.isEmpty()
-                ? Collections.emptySet()
-                : Collections.unmodifiableSet(new TreeSet<>(source));
-    }
-
-    private static <K> void removeFrom(
-            Map<K, NavigableSet<Integer>> map, K key, int index) {
-        NavigableSet<Integer> indexes = map.get(key);
-        if (indexes == null) {
-            return;
-        }
-        indexes.remove(index);
-        if (indexes.isEmpty()) {
-            map.remove(key);
-        }
-    }
-
-    private static <S extends StorageSnapshot<S, K>, K extends StorageKey>
-    List<IndexedStorage<S, K>> views(
-            IndexState<S, K> state, Set<Integer> indexes) {
-        List<IndexedStorage<S, K>> result = new ArrayList<>(indexes.size());
-        for (Integer index : indexes) {
-            Binding<S, K> binding = state.binding(index);
-            if (binding != null) {
-                result.add(new IndexedStorage<>(binding));
-            }
-        }
-        return Collections.unmodifiableList(result);
-    }
-
-    /** Immutable candidate-list membership captured for one routing operation. */
-    public static final class CandidateSnapshot<
-            S extends StorageSnapshot<S, K>, K extends StorageKey> {
+    /**
+     * Immutable candidate-list membership captured for one routing operation.
+     */
+    public static final class CandidateSnapshot<S extends StorageSnapshot<S, K>, K extends StorageKey> {
         private final List<IndexedStorage<S, K>> exact;
         private final List<IndexedStorage<S, K>> aliases;
         private final List<IndexedStorage<S, K>> empty;
         private final List<IndexedStorage<S, K>> occupied;
 
-        private CandidateSnapshot(
-                List<IndexedStorage<S, K>> exact,
-                List<IndexedStorage<S, K>> aliases,
-                List<IndexedStorage<S, K>> empty,
-                List<IndexedStorage<S, K>> occupied) {
+        private CandidateSnapshot(List<IndexedStorage<S, K>> exact, List<IndexedStorage<S, K>> aliases, List<IndexedStorage<S, K>> empty, List<IndexedStorage<S, K>> occupied) {
             this.exact = exact;
             this.aliases = aliases;
             this.empty = empty;
@@ -719,9 +651,10 @@ public final class ControllerStorageIndex<
         }
     }
 
-    /** Read-only view of one O(1) global/local binding. */
-    public static final class IndexedStorage<
-            S extends StorageSnapshot<S, K>, K extends StorageKey> {
+    /**
+     * Read-only view of one O(1) global/local binding.
+     */
+    public static final class IndexedStorage<S extends StorageSnapshot<S, K>, K extends StorageKey> {
         private final Binding<S, K> binding;
 
         private IndexedStorage(Binding<S, K> binding) {
@@ -752,36 +685,29 @@ public final class ControllerStorageIndex<
         }
     }
 
-    private static final class ChildSpec<
-            S extends StorageSnapshot<S, K>, K extends StorageKey> {
-        private IStorageHandler<S, K> handler;
+    private static final class ChildSpec<S extends StorageSnapshot<S, K>, K extends StorageKey> {
         private final Object identity;
         private final int storageCount;
+        private IStorageHandler<S, K> handler;
         private List<Binding<S, K>> bindings = Collections.emptyList();
         private long subscriptionGeneration;
 
-        private ChildSpec(
-                IStorageHandler<S, K> handler, Object identity, int storageCount) {
+        private ChildSpec(IStorageHandler<S, K> handler, Object identity, int storageCount) {
             this.handler = handler;
             this.identity = identity;
             this.storageCount = storageCount;
         }
     }
 
-    private static final class Binding<
-            S extends StorageSnapshot<S, K>, K extends StorageKey> {
+    private static final class Binding<S extends StorageSnapshot<S, K>, K extends StorageKey> {
         private final int globalIndex;
-        private volatile IStorageHandler<S, K> handler;
         private final int localIndex;
+        private volatile IStorageHandler<S, K> handler;
         private volatile S snapshot;
         private K key;
         private Set<StorageKey> aliases = Collections.emptySet();
 
-        private Binding(
-                int globalIndex,
-                IStorageHandler<S, K> handler,
-                int localIndex,
-                S snapshot) {
+        private Binding(int globalIndex, IStorageHandler<S, K> handler, int localIndex, S snapshot) {
             this.globalIndex = globalIndex;
             this.handler = handler;
             this.localIndex = localIndex;
@@ -789,22 +715,18 @@ public final class ControllerStorageIndex<
         }
     }
 
-    private static final class IndexState<
-            S extends StorageSnapshot<S, K>, K extends StorageKey> {
-        private List<Binding<S, K>> bindings = new ArrayList<>();
-        private List<ChildSpec<S, K>> children = new ArrayList<>();
-        private List<IStorageHandler<S, K>> handlers = new ArrayList<>();
-        private final IdentityHashMap<IStorageHandler<S, K>, int[]> reverseByHandler =
-                new IdentityHashMap<>();
-        private final IdentityHashMap<Object, int[]> reverseByIdentity =
-                new IdentityHashMap<>();
+    private static final class IndexState<S extends StorageSnapshot<S, K>, K extends StorageKey> {
+        private final IdentityHashMap<IStorageHandler<S, K>, int[]> reverseByHandler = new IdentityHashMap<>();
+        private final IdentityHashMap<Object, int[]> reverseByIdentity = new IdentityHashMap<>();
         private final Map<K, NavigableSet<Integer>> exact = new HashMap<>();
         private final Map<StorageKey, NavigableSet<Integer>> aliases = new HashMap<>();
         private final NavigableSet<Integer> empty = new TreeSet<>();
         private final NavigableSet<Integer> occupied = new TreeSet<>();
+        private List<Binding<S, K>> bindings = new ArrayList<>();
+        private List<ChildSpec<S, K>> children = new ArrayList<>();
+        private List<IStorageHandler<S, K>> handlers = new ArrayList<>();
 
-        private static <S extends StorageSnapshot<S, K>, K extends StorageKey>
-        IndexState<S, K> empty() {
+        private static <S extends StorageSnapshot<S, K>, K extends StorageKey> IndexState<S, K> empty() {
             return new IndexState<S, K>().freeze();
         }
 

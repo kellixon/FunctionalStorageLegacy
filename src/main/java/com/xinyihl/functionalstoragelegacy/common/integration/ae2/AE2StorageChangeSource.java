@@ -1,7 +1,6 @@
 package com.xinyihl.functionalstoragelegacy.common.integration.ae2;
 
 import appeng.api.storage.data.IAEStack;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
 
 import java.util.function.Consumer;

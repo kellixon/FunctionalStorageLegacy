@@ -1,8 +1,6 @@
 package com.xinyihl.functionalstoragelegacy.common.tile;
 
-import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
-import com.xinyihl.functionalstoragelegacy.api.storage.ItemStorageKey;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
 import com.xinyihl.functionalstoragelegacy.common.inventory.ArmoryCabinetInventoryHandler;
@@ -178,8 +176,7 @@ public class ArmoryCabinetTile extends TileEntity implements ITickable {
             return;
         }
         readInProgress = true;
-        readHadSubscription = world != null && !world.isRemote
-                && subscription != null && !subscription.isClosed();
+        readHadSubscription = world != null && !world.isRemote && subscription != null && !subscription.isClosed();
         closeSubscription();
     }
 
@@ -189,7 +186,7 @@ public class ArmoryCabinetTile extends TileEntity implements ITickable {
         readHadSubscription = false;
         subscribeHandler();
         if (notifyReset) {
-            handler.onChange(StorageChange.<BigItemStack, ItemStorageKey>reset());
+            handler.onChange(StorageChange.reset());
         }
     }
 }

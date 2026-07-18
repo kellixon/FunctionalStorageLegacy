@@ -27,7 +27,9 @@ public class AE2Compat {
         return AE2CapabilityHelper.createAccessor(tile);
     }
 
-    /** Releases a lazily-created accessor when its owning tile unloads. */
+    /**
+     * Releases a lazily-created accessor when its owning tile unloads.
+     */
     public static void closeAccessor(Object accessor) {
         if (!(accessor instanceof AutoCloseable)) {
             return;

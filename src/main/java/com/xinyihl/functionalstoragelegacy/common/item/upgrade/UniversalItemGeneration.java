@@ -3,7 +3,6 @@ package com.xinyihl.functionalstoragelegacy.common.item.upgrade;
 import com.xinyihl.functionalstoragelegacy.common.inventory.CompactingInventoryHandler;
 import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.compact.CompactingDrawerTile;
-
 import com.xinyihl.functionalstoragelegacy.misc.Configurations;
 import com.xinyihl.functionalstoragelegacy.misc.RegistrationHandler;
 import com.xinyihl.functionalstoragelegacy.util.CompactingUtil;
@@ -22,13 +21,14 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.ItemHandlerHelper;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.List;
 
 public class UniversalItemGeneration extends UtilityUpgradeItem {
 
-    private final GenerationTier tier;
     private static ItemStack TARGET_ITEM_CACHE = null;
+    private final GenerationTier tier;
 
     public UniversalItemGeneration(GenerationTier tier) {
         super(UtilityAction.NONE);
@@ -63,7 +63,7 @@ public class UniversalItemGeneration extends UtilityUpgradeItem {
             if (!metaStr.equals("*")) {
                 try {
                     meta = Integer.parseInt(metaStr);
-                } catch (NumberFormatException e) {
+                } catch (NumberFormatException ignored) {
 
                 }
             }
@@ -144,11 +144,11 @@ public class UniversalItemGeneration extends UtilityUpgradeItem {
 
     @SideOnly(Side.CLIENT)
     @Override
-    public void addInformation(ItemStack stack, @Nullable World worldIn, List<String> tooltip, ITooltipFlag flagIn) {
+    public void addInformation(@Nonnull ItemStack stack, @Nullable World worldIn, @Nonnull List<String> tooltip, @Nonnull ITooltipFlag flagIn) {
         super.addInformation(stack, worldIn, tooltip, flagIn);
 
         loadTargetItemIfNeeded();
-        String rateText = String.format("%d/" + " " +Configurations.GENERATION.UNIVERSAL_ITEMS_GENERATION_TICK + "t", tier.getGenerationRate());
+        String rateText = String.format("%d/" + " " + Configurations.GENERATION.UNIVERSAL_ITEMS_GENERATION_TICK + "t", tier.getGenerationRate());
         tooltip.add(TextFormatting.YELLOW + I18n.format("item.functionalstoragelegacy.universal_generation_upgrade.rate") + TextFormatting.WHITE + rateText);
 
         if (TARGET_ITEM_CACHE != null && !TARGET_ITEM_CACHE.isEmpty()) {
@@ -163,10 +163,7 @@ public class UniversalItemGeneration extends UtilityUpgradeItem {
     }
 
     public enum GenerationTier {
-        T1(1),
-        T2(2),
-        T3(3),
-        T4(4);
+        T1(1), T2(2), T3(3), T4(4);
 
         private final int tier;
 

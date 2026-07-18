@@ -48,9 +48,7 @@ public abstract class DrawerBlock extends Block {
 
     public DrawerBlock(Material material) {
         super(material);
-        this.setDefaultState(this.blockState.getBaseState()
-                .withProperty(ATTACHMENT, DrawerAttachment.WALL)
-                .withProperty(HORIZONTAL_FACING, EnumFacing.NORTH));
+        this.setDefaultState(this.blockState.getBaseState().withProperty(ATTACHMENT, DrawerAttachment.WALL).withProperty(HORIZONTAL_FACING, EnumFacing.NORTH));
         this.setHardness(2.5F);
         this.setResistance(8.0F);
 
@@ -134,7 +132,7 @@ public abstract class DrawerBlock extends Block {
     @Override
     public boolean removedByPlayer(@Nonnull IBlockState state, @Nonnull World world, @Nonnull BlockPos pos, @Nonnull EntityPlayer player, boolean willHarvest) {
         if (willHarvest) return true; // Delay removal for getDrops
-        return super.removedByPlayer(state, world, pos, player, willHarvest);
+        return super.removedByPlayer(state, world, pos, player, false);
     }
 
     @Override
@@ -204,9 +202,7 @@ public abstract class DrawerBlock extends Block {
         int safeMeta = Math.max(0, Math.min(meta, 11));
         DrawerAttachment attachment = DrawerAttachment.byIndex(safeMeta / 4);
         EnumFacing horizontalFacing = HORIZONTAL_VALUES[safeMeta % 4];
-        return this.getDefaultState()
-                .withProperty(ATTACHMENT, attachment)
-                .withProperty(HORIZONTAL_FACING, horizontalFacing);
+        return this.getDefaultState().withProperty(ATTACHMENT, attachment).withProperty(HORIZONTAL_FACING, horizontalFacing);
     }
 
     @Override
@@ -220,9 +216,7 @@ public abstract class DrawerBlock extends Block {
         EnumFacing placementFacing = HitBoxesUtil.getPlacementFacingFromRay(placer);
         DrawerAttachment attachment = HitBoxesUtil.getAttachmentForPlacement(placementFacing);
         EnumFacing horizontalFacing = HitBoxesUtil.getHorizontalFacingForPlacement(attachment, placementFacing, placer);
-        return this.getDefaultState()
-                .withProperty(ATTACHMENT, attachment)
-                .withProperty(HORIZONTAL_FACING, horizontalFacing);
+        return this.getDefaultState().withProperty(ATTACHMENT, attachment).withProperty(HORIZONTAL_FACING, horizontalFacing);
     }
 
     @Override

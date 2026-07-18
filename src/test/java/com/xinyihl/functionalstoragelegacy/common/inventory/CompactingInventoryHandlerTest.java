@@ -1,11 +1,6 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory;
 
-import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
-import com.xinyihl.functionalstoragelegacy.api.storage.ItemStorageKey;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
-import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
+import com.xinyihl.functionalstoragelegacy.api.storage.*;
 import net.minecraft.init.Bootstrap;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -16,14 +11,13 @@ import net.minecraftforge.registries.ForgeRegistry;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class CompactingInventoryHandlerTest {
 
@@ -81,7 +75,7 @@ public class CompactingInventoryHandlerTest {
         Item item = new Item();
         ItemStack source = new ItemStack(item, 16);
         CompactingInventoryHandler.Tier tier = new CompactingInventoryHandler.Tier(source, 9L);
-        handler.configureTiers(Arrays.asList(tier));
+        handler.configureTiers(Collections.singletonList(tier));
 
         source.setCount(3);
         ItemStack returned = handler.getTiers().get(0).getTemplate();
@@ -165,7 +159,7 @@ public class CompactingInventoryHandlerTest {
         Item newType = new Item();
         TestHandler empty = new TestHandler(1, 1D);
         empty.locked = true;
-        empty.configureTiers(Arrays.asList(
+        empty.configureTiers(Collections.singletonList(
                 new CompactingInventoryHandler.Tier(new ItemStack(oldType), 1L)));
         empty.changes = 0;
 
@@ -176,7 +170,7 @@ public class CompactingInventoryHandlerTest {
         assertEquals(1, empty.changes);
         assertEquals(0, empty.serializeNBT().getCompoundTag("StorageV2")
                 .getTagList("Tiers", 10).tagCount());
-        empty.configureTiers(Arrays.asList(
+        empty.configureTiers(Collections.singletonList(
                 new CompactingInventoryHandler.Tier(new ItemStack(newType), 1L)));
         assertEquals(2L, empty.insert(
                 0,
@@ -200,7 +194,7 @@ public class CompactingInventoryHandlerTest {
         TestHandler source = new TestHandler(1, 1D);
         source.creative = true;
         source.locked = true;
-        source.configureTiers(Arrays.asList(
+        source.configureTiers(Collections.singletonList(
                 new CompactingInventoryHandler.Tier(new ItemStack(stored), 1L)));
         source.changes = 0;
 
@@ -328,8 +322,7 @@ public class CompactingInventoryHandlerTest {
                 new CompactingInventoryHandler.Tier(new ItemStack(second), 1L)));
         assertEquals(1, events.size());
         assertEquals(2, events.get(0).getEntries().size());
-        assertFalse(events.get(0).getEntries().get(0).getBefore().getKey()
-                .equals(events.get(0).getEntries().get(0).getAfter().getKey()));
+        assertNotEquals(events.get(0).getEntries().get(0).getBefore().getKey(), events.get(0).getEntries().get(0).getAfter().getKey());
 
         NBTTagCompound same = handler.serializeNBT();
         events.clear();
@@ -338,14 +331,14 @@ public class CompactingInventoryHandlerTest {
         handler.deserializeNBT(new NBTTagCompound());
         assertEquals(1, events.size());
         assertTrue(events.get(0).isReset());
-        handler.notifyConfigurationChanged();
+        handler.onChange(StorageChange.reset());
         handler.applyLockConfiguration(false);
         assertEquals(3, events.size());
         assertTrue(events.get(1).isReset());
         assertTrue(events.get(2).isReset());
 
         subscription.close();
-        handler.configureTiers(Arrays.asList(
+        handler.configureTiers(Collections.singletonList(
                 new CompactingInventoryHandler.Tier(new ItemStack(first), 1L)));
         assertEquals(3, events.size());
     }

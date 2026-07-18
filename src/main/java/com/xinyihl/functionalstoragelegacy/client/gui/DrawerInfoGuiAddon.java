@@ -15,7 +15,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
-/** Renders immutable long-capacity item snapshots in the drawer GUI panel. */
+/**
+ * Renders immutable long-capacity item snapshots in the drawer GUI panel.
+ */
 public class DrawerInfoGuiAddon {
 
     private final int posX;
@@ -26,10 +28,7 @@ public class DrawerInfoGuiAddon {
     private final Function<Integer, BigItemStack> slotSnapshot;
     private final Function<Integer, Long> slotMaxAmount;
 
-    public DrawerInfoGuiAddon(int posX, int posY, ResourceLocation gui, int slotAmount,
-                              Function<Integer, Pair<Integer, Integer>> slotPosition,
-                              Function<Integer, BigItemStack> slotSnapshot,
-                              Function<Integer, Long> slotMaxAmount) {
+    public DrawerInfoGuiAddon(int posX, int posY, ResourceLocation gui, int slotAmount, Function<Integer, Pair<Integer, Integer>> slotPosition, Function<Integer, BigItemStack> slotSnapshot, Function<Integer, Long> slotMaxAmount) {
         this.posX = posX;
         this.posY = posY;
         this.gui = gui;
@@ -61,8 +60,7 @@ public class DrawerInfoGuiAddon {
             mc.getRenderItem().renderItemAndEffectIntoGUI(itemStack, x, y);
             RenderHelper.disableStandardItemLighting();
 
-            String amount = NumberUtils.formatCompact(snapshot.getAmount())
-                    + "/" + NumberUtils.formatCompact(slotMaxAmount.apply(slot));
+            String amount = NumberUtils.formatCompact(snapshot.getAmount()) + "/" + NumberUtils.formatCompact(slotMaxAmount.apply(slot));
             GlStateManager.pushMatrix();
             GlStateManager.translate(0, 0, 200);
             int textX = (int) (x + 17 - mc.fontRenderer.getStringWidth(amount) / 2F);
@@ -92,18 +90,13 @@ public class DrawerInfoGuiAddon {
             BigItemStack snapshot = safeSnapshot(slot);
             List<String> tooltip = new ArrayList<>();
             if (!snapshot.hasTemplate()) {
-                tooltip.add("\u00a76" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.item")
-                        + "\u00a7f" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.empty"));
+                tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.item") + "§f" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.empty"));
             } else {
-                tooltip.add("\u00a76" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.item")
-                        + "\u00a7f" + snapshot.getTemplate().getDisplayName());
-                String amount = NumberUtils.formatCompact(snapshot.getAmount())
-                        + "/" + NumberUtils.formatCompact(slotMaxAmount.apply(slot));
-                tooltip.add("\u00a76" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.amount")
-                        + "\u00a7f" + amount);
+                tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.item") + "§f" + snapshot.getTemplate().getDisplayName());
+                String amount = NumberUtils.formatCompact(snapshot.getAmount()) + "/" + NumberUtils.formatCompact(slotMaxAmount.apply(slot));
+                tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.amount") + "§f" + amount);
             }
-            tooltip.add("\u00a76" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.slot")
-                    + "\u00a7f" + slot);
+            tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.slot") + "§f" + slot);
             screen.drawHoveringText(tooltip, mouseX - guiX, mouseY - guiY);
         }
     }

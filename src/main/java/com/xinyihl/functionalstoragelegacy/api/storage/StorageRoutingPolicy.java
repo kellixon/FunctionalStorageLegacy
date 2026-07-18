@@ -10,32 +10,32 @@ import java.util.Collections;
  * Priorities are ordered from lower to higher; a negative priority excludes a
  * candidate. Compatibility aliases are stable value keys such as ore IDs.
  */
-public interface StorageRoutingPolicy<
-        S extends StorageSnapshot<S, K>, K extends StorageKey> {
+public interface StorageRoutingPolicy<S extends StorageSnapshot<S, K>, K extends StorageKey> {
 
-    /** @return the exact key used by the primary index, or null when unconfigured */
+    /**
+     * @return the exact key used by the primary index, or null when unconfigured
+     */
     @Nullable
     default K getExactKey(@Nonnull S snapshot) {
         return snapshot.getKey();
     }
 
-    /** @return stable compatibility alias keys used by secondary indexes */
+    /**
+     * @return stable compatibility alias keys used by secondary indexes
+     */
     @Nonnull
     default Collection<? extends StorageKey> getCompatibleAliases(@Nonnull S snapshot) {
         return Collections.emptyList();
     }
 
-    /** @return whether an unconfigured index may accept this request */
-    boolean isEmptySlotEligible(
-            @Nonnull IStorageHandler<S, K> handler, int index, @Nonnull S request);
+    /**
+     * @return whether an unconfigured index may accept this request
+     */
+    boolean isEmptySlotEligible(@Nonnull IStorageHandler<S, K> handler, int index, @Nonnull S request);
 
     /**
      * Returns the candidate priority for the current snapshot and request.
      * Lower values are attempted first; a negative value means ineligible.
      */
-    int getCandidatePriority(
-            @Nonnull IStorageHandler<S, K> handler,
-            int index,
-            @Nonnull S current,
-            @Nonnull S request);
+    int getCandidatePriority(@Nonnull IStorageHandler<S, K> handler, int index, @Nonnull S current, @Nonnull S request);
 }

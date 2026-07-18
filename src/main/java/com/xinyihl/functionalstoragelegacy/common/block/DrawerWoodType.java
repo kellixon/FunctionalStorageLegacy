@@ -8,7 +8,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
-/** Internal wood variant data with stable serialized identifiers. */
+/**
+ * Internal wood variant data with stable serialized identifiers.
+ */
 public enum DrawerWoodType {
 
     OAK(Blocks.LOG, Blocks.PLANKS, 0),
@@ -38,6 +40,11 @@ public enum DrawerWoodType {
         this.id = name().toLowerCase(Locale.ROOT);
     }
 
+    public static DrawerWoodType fromId(String id) {
+        DrawerWoodType woodType = BY_ID.get(Objects.requireNonNull(id, "id"));
+        return woodType == null ? OAK : woodType;
+    }
+
     public Block getLog() {
         return log;
     }
@@ -52,10 +59,5 @@ public enum DrawerWoodType {
 
     public String getId() {
         return id;
-    }
-
-    public static DrawerWoodType fromId(String id) {
-        DrawerWoodType woodType = BY_ID.get(Objects.requireNonNull(id, "id"));
-        return woodType == null ? OAK : woodType;
     }
 }

@@ -37,10 +37,7 @@ public class FluidDrawerInfoGuiAddon {
     private final Supplier<IBigFluidHandler> fluidHandlerSupplier;
     private final Function<Integer, Long> slotMaxAmount;
 
-    public FluidDrawerInfoGuiAddon(int posX, int posY, ResourceLocation gui, int slotAmount,
-                                   Function<Integer, Pair<Integer, Integer>> slotPosition,
-                                   Supplier<IBigFluidHandler> fluidHandlerSupplier,
-                                   Function<Integer, Long> slotMaxAmount) {
+    public FluidDrawerInfoGuiAddon(int posX, int posY, ResourceLocation gui, int slotAmount, Function<Integer, Pair<Integer, Integer>> slotPosition, Supplier<IBigFluidHandler> fluidHandlerSupplier, Function<Integer, Long> slotMaxAmount) {
         this.posX = posX;
         this.posY = posY;
         this.gui = gui;
@@ -118,8 +115,7 @@ public class FluidDrawerInfoGuiAddon {
             if (snapshot.hasTemplate()) {
                 int x = guiX + slotPosition.apply(i).getLeft() + posX;
                 int y = guiY + slotPosition.apply(i).getRight() + posY;
-                String amount = NumberUtils.formatCompactFluid(snapshot.getAmount())
-                        + "/" + NumberUtils.formatCompactFluid(slotMaxAmount.apply(i));
+                String amount = NumberUtils.formatCompactFluid(snapshot.getAmount()) + "/" + NumberUtils.formatCompactFluid(slotMaxAmount.apply(i));
                 float scale = 1f;
                 GlStateManager.pushMatrix();
                 GlStateManager.translate(0, 0, 200);
@@ -156,18 +152,13 @@ public class FluidDrawerInfoGuiAddon {
                 BigFluidStack snapshot = safeSnapshot(i);
                 FluidStack over = snapshot.getTemplate();
                 if (over == null) {
-                    tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.fluid")
-                            + "§f" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.empty"));
+                    tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.fluid") + "§f" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.empty"));
                 } else {
-                    tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.fluid")
-                            + "§f" + over.getLocalizedName());
-                    String amountStr = NumberUtils.formatCompactFluid(snapshot.getAmount())
-                            + "/" + NumberUtils.formatCompactFluid(slotMaxAmount.apply(i));
-                    tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.amount")
-                            + "§f" + amountStr);
+                    tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.fluid") + "§f" + over.getLocalizedName());
+                    String amountStr = NumberUtils.formatCompactFluid(snapshot.getAmount()) + "/" + NumberUtils.formatCompactFluid(slotMaxAmount.apply(i));
+                    tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.amount") + "§f" + amountStr);
                 }
-                tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.slot")
-                        + "§f" + i);
+                tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.slot") + "§f" + i);
 
                 screen.drawHoveringText(tooltip, mouseX - guiX, mouseY - guiY);
             }
@@ -181,7 +172,6 @@ public class FluidDrawerInfoGuiAddon {
         if (still == null) return;
 
         TextureAtlasSprite sprite = mc.getTextureMapBlocks().getAtlasSprite(still.toString());
-        if (sprite == null) return;
 
         int color = fluid.getColor(fluidStack);
         float r = ((color >> 16) & 0xFF) / 255f;
@@ -200,10 +190,7 @@ public class FluidDrawerInfoGuiAddon {
             for (int y = 0; y < rect[3]; y += 16) {
                 int drawWidth = Math.min(16, rect[2] - x);
                 int drawHeight = Math.min(16, rect[3] - y);
-                drawTexturedRect(
-                        posX + guiX + rect[0] + x,
-                        posY + guiY + rect[1] + y,
-                        drawWidth, drawHeight, sprite);
+                drawTexturedRect(posX + guiX + rect[0] + x, posY + guiY + rect[1] + y, drawWidth, drawHeight, sprite);
             }
         }
 
@@ -216,8 +203,7 @@ public class FluidDrawerInfoGuiAddon {
         if (handler == null || tank < 0 || tank >= handler.getStorageCount()) {
             return BigFluidStack.empty();
         }
-        BigFluidStack snapshot = handler.getSnapshot(tank);
-        return snapshot == null ? BigFluidStack.empty() : snapshot;
+        return handler.getSnapshot(tank);
     }
 
     private void drawTexturedRect(int x, int y, int width, int height, TextureAtlasSprite sprite) {

@@ -1,28 +1,19 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory.base;
 
-import com.xinyihl.functionalstoragelegacy.api.storage.BigFluidStack;
-import com.xinyihl.functionalstoragelegacy.api.storage.FluidStorageKey;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
-import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
+import com.xinyihl.functionalstoragelegacy.api.storage.*;
 import net.minecraft.init.Bootstrap;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraftforge.common.util.Constants;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.FluidStack;
-import org.junit.Test;
 import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class BigFluidHandlerTest {
 
@@ -283,7 +274,7 @@ public class BigFluidHandlerTest {
         handler.deserializeNBT(new NBTTagCompound());
         assertEquals(1, events.size());
         assertTrue(events.get(0).isReset());
-        handler.notifyConfigurationChanged();
+        handler.onChange(StorageChange.reset());
         handler.locked = true;
         handler.applyLockConfiguration(true);
         assertEquals(3, events.size());

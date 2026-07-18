@@ -80,11 +80,8 @@ public class TileTOPDataProvider implements IProbeInfoProvider {
         }
         for (int slot = 0; slot < handler.getStorageCount(); slot++) {
             BigItemStack snapshot = handler.getSnapshot(slot);
-            if (snapshot != null && !snapshot.isEmpty()) {
-                items.add(new ItemEntry(
-                        iconStack(snapshot.getTemplate()),
-                        safeAmount(snapshot.getAmount()),
-                        safeCapacity(handler.getCapacity(slot))));
+            if (!snapshot.isEmpty()) {
+                items.add(new ItemEntry(iconStack(snapshot.getTemplate()), safeAmount(snapshot.getAmount()), safeCapacity(handler.getCapacity(slot))));
             }
         }
         return items;
@@ -99,12 +96,9 @@ public class TileTOPDataProvider implements IProbeInfoProvider {
         }
         for (int tank = 0; tank < handler.getStorageCount(); tank++) {
             BigFluidStack snapshot = handler.getSnapshot(tank);
-            if (snapshot != null && !snapshot.isEmpty()) {
+            if (!snapshot.isEmpty()) {
                 FluidStack fluid = snapshot.getTemplate();
-                fluids.add(new FluidEntry(
-                        fluid.getLocalizedName(),
-                        safeAmount(snapshot.getAmount()),
-                        safeCapacity(handler.getCapacity(tank))));
+                fluids.add(new FluidEntry(fluid.getLocalizedName(), safeAmount(snapshot.getAmount()), safeCapacity(handler.getCapacity(tank))));
             }
         }
 
@@ -131,11 +125,7 @@ public class TileTOPDataProvider implements IProbeInfoProvider {
         int rendered = Math.min(items.size(), MAX_RENDERED_ENTRIES);
         for (int i = 0; i < rendered; i++) {
             ItemEntry item = items.get(i);
-            vertical.horizontal(probeInfo.defaultLayoutStyle().alignment(ElementAlignment.ALIGN_CENTER))
-                    .item(item.stack)
-                    .vertical(probeInfo.defaultLayoutStyle().spacing(0))
-                    .itemLabel(item.stack)
-                    .text(TextStyleClass.INFO + NumberUtils.formatCompact(item.amount) + " / " + NumberUtils.formatCompact(item.capacity));
+            vertical.horizontal(probeInfo.defaultLayoutStyle().alignment(ElementAlignment.ALIGN_CENTER)).item(item.stack).vertical(probeInfo.defaultLayoutStyle().spacing(0)).itemLabel(item.stack).text(TextStyleClass.INFO + NumberUtils.formatCompact(item.amount) + " / " + NumberUtils.formatCompact(item.capacity));
         }
 
         if (items.size() > MAX_RENDERED_ENTRIES) {
@@ -153,12 +143,7 @@ public class TileTOPDataProvider implements IProbeInfoProvider {
         int rendered = Math.min(fluids.size(), MAX_RENDERED_ENTRIES);
         for (int i = 0; i < rendered; i++) {
             FluidEntry fluid = fluids.get(i);
-            vertical.text(TextStyleClass.INFO + fluid.name + " " + NumberUtils.formatCompactFluid(fluid.amount) + " / " + NumberUtils.formatCompactFluid(fluid.capacity))
-                    .progress(fluid.amount, fluid.capacity,
-                            probeInfo.defaultProgressStyle()
-                                    .numberFormat(NumberFormat.COMPACT)
-                                    .suffix(" mB")
-                    );
+            vertical.text(TextStyleClass.INFO + fluid.name + " " + NumberUtils.formatCompactFluid(fluid.amount) + " / " + NumberUtils.formatCompactFluid(fluid.capacity)).progress(fluid.amount, fluid.capacity, probeInfo.defaultProgressStyle().numberFormat(NumberFormat.COMPACT).suffix(" mB"));
         }
 
         if (fluids.size() > MAX_RENDERED_ENTRIES) {

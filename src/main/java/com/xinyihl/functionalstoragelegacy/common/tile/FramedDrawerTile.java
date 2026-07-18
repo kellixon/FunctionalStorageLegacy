@@ -8,7 +8,9 @@ import net.minecraftforge.common.util.Constants;
 
 import javax.annotation.Nonnull;
 
-/** Standard long-capacity item drawer with an additional persisted framed style. */
+/**
+ * Standard long-capacity item drawer with an additional persisted framed style.
+ */
 public class FramedDrawerTile extends WoodDrawerTile {
 
     private FramedDrawerStyle style = FramedDrawerStyle.EMPTY;
@@ -72,8 +74,6 @@ public class FramedDrawerTile extends WoodDrawerTile {
     }
 
     private void readStyle(NBTTagCompound nbt) {
-        style = nbt.hasKey(FramedDrawerStyle.NBT_KEY, Constants.NBT.TAG_COMPOUND)
-                ? FramedDrawerStyle.fromNBT(nbt.getCompoundTag(FramedDrawerStyle.NBT_KEY))
-                : FramedDrawerStyle.EMPTY;
+        style = nbt.hasKey(FramedDrawerStyle.NBT_KEY, Constants.NBT.TAG_COMPOUND) ? FramedDrawerStyle.fromNBT(nbt.getCompoundTag(FramedDrawerStyle.NBT_KEY)) : FramedDrawerStyle.EMPTY;
     }
 }

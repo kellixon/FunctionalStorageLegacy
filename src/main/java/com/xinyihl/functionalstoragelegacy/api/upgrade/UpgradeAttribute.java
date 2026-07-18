@@ -7,10 +7,16 @@ package com.xinyihl.functionalstoragelegacy.api.upgrade;
  * when evaluating an attribute through {@link UpgradeState#calculate(UpgradeAttribute, double)}.</p>
  */
 public enum UpgradeAttribute {
-    /** Capacity of an item-storage slot. */
+    /**
+     * Capacity of an item-storage slot.
+     */
     ITEM_CAPACITY,
-    /** Capacity of a fluid-storage tank. */
+    /**
+     * Capacity of a fluid-storage tank.
+     */
     FLUID_CAPACITY,
-    /** Additional controller discovery range. */
+    /**
+     * Additional controller discovery range.
+     */
     CONTROLLER_RANGE
 }

@@ -1,13 +1,6 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory;
 
-import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
-import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
-import com.xinyihl.functionalstoragelegacy.api.storage.ItemStorageKey;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageChangeDispatcher;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
-import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
+import com.xinyihl.functionalstoragelegacy.api.storage.*;
 import com.xinyihl.functionalstoragelegacy.util.ItemUtil;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -36,14 +29,21 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler {
     private static final String BASE_UNITS = "BaseUnits";
 
     private final Tier[] tiers;
-    private final StorageChangeDispatcher<BigItemStack, ItemStorageKey> changeDispatcher =
-            new StorageChangeDispatcher<>();
+    private final StorageChangeDispatcher<BigItemStack, ItemStorageKey> changeDispatcher = new StorageChangeDispatcher<>();
     private long baseAmount;
     private boolean configured;
 
     protected CompactingInventoryHandler(int slots) {
         tiers = new Tier[Math.max(0, slots)];
         clearConfiguration();
+    }
+
+    private static TransferResult<BigItemStack, ItemStorageKey> emptyResult(long requested, StorageAction action) {
+        return new TransferResult<>(requested, BigItemStack.empty(), action);
+    }
+
+    private static TransferResult<BigItemStack, ItemStorageKey> processedResult(BigItemStack request, long processed, StorageAction action) {
+        return new TransferResult<>(request.getAmount(), processed == 0L ? BigItemStack.empty() : request.withAmount(processed), action);
     }
 
     @Override
@@ -74,18 +74,15 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler {
 
     @Nonnull
     @Override
-    public final TransferResult<BigItemStack, ItemStorageKey> insert(
-            int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action) {
+    public final TransferResult<BigItemStack, ItemStorageKey> insert(int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action) {
         Objects.requireNonNull(action, "action");
-        long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
+        long requested = request.isEmpty() ? 0L : request.getAmount();
         if (requested == 0L || !isOperationEnabled() || !isValidSlot(slot)) {
             return emptyResult(requested, action);
         }
 
         Tier tier = tiers[slot];
-        if (!tier.hasTemplate()
-                || !ItemUtil.areItemStacksCompatible(
-                        tier.template, request.getTemplate(), allowsEquivalentItems())) {
+        if (!tier.hasTemplate() || !ItemUtil.areItemStacksCompatible(tier.template, request.getTemplate(), allowsEquivalentItems())) {
             return emptyResult(requested, action);
         }
 
@@ -100,7 +97,7 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler {
 
         if (action == StorageAction.EXECUTE && inserted > 0L) {
             BigItemStack[] before = snapshots();
-            baseAmount = saturatedAdd(baseAmount, inserted * tier.baseUnits);
+            baseAmount = baseAmount >= Long.MAX_VALUE - inserted * tier.baseUnits ? Long.MAX_VALUE : baseAmount + inserted * tier.baseUnits;
             publishVisibleTierDelta(before);
         }
         return processedResult(request, processed, action);
@@ -108,12 +105,10 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler {
 
     @Nonnull
     @Override
-    public final TransferResult<BigItemStack, ItemStorageKey> extract(
-            int slot, long amount, @Nonnull StorageAction action) {
+    public final TransferResult<BigItemStack, ItemStorageKey> extract(int slot, long amount, @Nonnull StorageAction action) {
         Objects.requireNonNull(action, "action");
         long requested = Math.max(0L, amount);
-        if (requested == 0L || !isOperationEnabled()
-                || !isValidSlot(slot) || !tiers[slot].hasTemplate()) {
+        if (requested == 0L || !isOperationEnabled() || !isValidSlot(slot) || !tiers[slot].hasTemplate()) {
             return emptyResult(requested, action);
         }
 
@@ -132,8 +127,7 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler {
             }
             publishVisibleTierDelta(before);
         }
-        return new TransferResult<>(
-                requested, new BigItemStack(tier.template, extracted), action);
+        return new TransferResult<>(requested, new BigItemStack(tier.template, extracted), action);
     }
 
     /**
@@ -148,8 +142,7 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler {
         Tier[] replacement = new Tier[tiers.length];
         boolean hasTemplate = false;
         for (int slot = 0; slot < replacement.length; slot++) {
-            Tier tier = slot < newTiers.size() && newTiers.get(slot) != null
-                    ? newTiers.get(slot) : Tier.empty();
+            Tier tier = slot < newTiers.size() && newTiers.get(slot) != null ? newTiers.get(slot) : Tier.empty();
             replacement[slot] = new Tier(tier.template, tier.baseUnits);
             hasTemplate |= replacement[slot].hasTemplate();
         }
@@ -169,7 +162,9 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler {
         }
     }
 
-    /** @return an unmodifiable list of detached immutable tier definitions */
+    /**
+     * @return an unmodifiable list of detached immutable tier definitions
+     */
     @Nonnull
     public final List<Tier> getTiers() {
         List<Tier> snapshots = new ArrayList<>(tiers.length);
@@ -179,12 +174,16 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler {
         return Collections.unmodifiableList(snapshots);
     }
 
-    /** @return whether at least one compression tier has a retained template */
+    /**
+     * @return whether at least one compression tier has a retained template
+     */
     public final boolean isConfigured() {
         return configured;
     }
 
-    /** @return exact stored amount in lowest-tier units */
+    /**
+     * @return exact stored amount in lowest-tier units
+     */
     public final long getStoredBaseAmount() {
         return baseAmount;
     }
@@ -225,16 +224,16 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler {
         if (Double.isNaN(multiplier) || multiplier <= 0D) {
             return 0L;
         }
-        double capacity = multiplier
-                * Math.max(0, baseTier.template.getMaxStackSize())
-                * (double) largestUnits;
+        double capacity = multiplier * Math.max(0, baseTier.template.getMaxStackSize()) * (double) largestUnits;
         if (Double.isInfinite(capacity) || capacity >= Long.MAX_VALUE) {
             return Long.MAX_VALUE;
         }
         return capacity <= 0D ? 0L : (long) Math.floor(capacity);
     }
 
-    /** @return whether the configured slot participates in double-click insertion */
+    /**
+     * @return whether the configured slot participates in double-click insertion
+     */
     public final boolean canDoubleClickSlot(int slot) {
         return isValidSlot(slot) && (isLocked() || tiers[slot].hasTemplate());
     }
@@ -254,20 +253,19 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler {
         }
     }
 
-    /** Applies empty-tier retention and emits exactly one reset for a lock transition. */
+    /**
+     * Applies empty-tier retention and emits exactly one reset for a lock transition.
+     */
     public final void applyLockConfiguration(boolean locked) {
         if (!locked && !isCreative() && baseAmount == 0L && configured) {
             clearConfiguration();
         }
-        publish(StorageChange.<BigItemStack, ItemStorageKey>reset());
+        onChange(StorageChange.reset());
     }
 
-    /** Emits one explicit reset after an actual creative, compatibility, or upgrade change. */
-    public final void notifyConfigurationChanged() {
-        publish(StorageChange.<BigItemStack, ItemStorageKey>reset());
-    }
-
-    /** Serializes only {@code StorageV2.BaseAmount/Tiers}. */
+    /**
+     * Serializes only {@code StorageV2.BaseAmount/Tiers}.
+     */
     @Nonnull
     public final NBTTagCompound serializeNBT() {
         NBTTagCompound root = new NBTTagCompound();
@@ -299,7 +297,7 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler {
         long beforeAmount = baseAmount;
         boolean beforeConfigured = configured;
         clearConfiguration();
-        if (root != null && root.hasKey(STORAGE_V2, Constants.NBT.TAG_COMPOUND)) {
+        if (root.hasKey(STORAGE_V2, Constants.NBT.TAG_COMPOUND)) {
             NBTTagCompound storage = root.getCompoundTag(STORAGE_V2);
             NBTTagList tierList = storage.getTagList(TIERS, Constants.NBT.TAG_COMPOUND);
             for (int i = 0; i < tierList.tagCount(); i++) {
@@ -320,26 +318,25 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler {
                 clearConfiguration();
             }
         }
-        if (changeDispatcher.hasSubscribers()
-                && !sameState(beforeTiers, beforeAmount, beforeConfigured)) {
-            publish(StorageChange.<BigItemStack, ItemStorageKey>reset());
+        if (changeDispatcher.hasSubscribers() && !sameState(beforeTiers, beforeAmount, beforeConfigured)) {
+            onChange(StorageChange.reset());
         }
     }
 
     @Override
-    public final void onChange(
-            @Nonnull StorageChange<BigItemStack, ItemStorageKey> change) {
+    public final void onChange(@Nonnull StorageChange<BigItemStack, ItemStorageKey> change) {
         changeDispatcher.dispatch(change);
     }
 
     @Nonnull
     @Override
-    public final StorageSubscription subscribe(
-            @Nonnull Consumer<? super StorageChange<BigItemStack, ItemStorageKey>> listener) {
+    public final StorageSubscription subscribe(@Nonnull Consumer<? super StorageChange<BigItemStack, ItemStorageKey>> listener) {
         return changeDispatcher.subscribe(listener);
     }
 
-    /** @return the compacting storage multiplier */
+    /**
+     * @return the compacting storage multiplier
+     */
     public abstract double getMultiplier();
 
     protected boolean allowsEquivalentItems() {
@@ -350,7 +347,9 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler {
         return false;
     }
 
-    /** @return whether this handler's owning container currently allows transactions */
+    /**
+     * @return whether this handler's owning container currently allows transactions
+     */
     protected boolean isOperationEnabled() {
         return true;
     }
@@ -384,7 +383,7 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler {
             }
         }
         if (!entries.isEmpty()) {
-            publish(StorageChange.delta(entries));
+            onChange(StorageChange.delta(entries));
         }
     }
 
@@ -392,24 +391,17 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler {
         List<StorageChange.Entry<BigItemStack, ItemStorageKey>> entries = new ArrayList<>();
         for (int slot = 0; slot < tiers.length; slot++) {
             BigItemStack after = getSnapshot(slot);
-            if (!previousTiers[slot].sameDefinition(tiers[slot])
-                    || !sameSnapshot(before[slot], after)) {
+            if (!previousTiers[slot].sameDefinition(tiers[slot]) || !(before[slot].getAmount() == after.getAmount() && Objects.equals(before[slot].getKey(), after.getKey()))) {
                 entries.add(new StorageChange.Entry<>(slot, before[slot], after));
             }
         }
         if (!entries.isEmpty()) {
-            publish(StorageChange.delta(entries));
+            onChange(StorageChange.delta(entries));
         }
     }
 
-    private void publish(StorageChange<BigItemStack, ItemStorageKey> change) {
-        onChange(change);
-    }
-
-    private boolean sameState(
-            Tier[] previousTiers, long previousAmount, boolean previousConfigured) {
-        if (previousAmount != baseAmount || previousConfigured != configured
-                || previousTiers.length != tiers.length) {
+    private boolean sameState(Tier[] previousTiers, long previousAmount, boolean previousConfigured) {
+        if (previousAmount != baseAmount || previousConfigured != configured || previousTiers.length != tiers.length) {
             return false;
         }
         for (int slot = 0; slot < tiers.length; slot++) {
@@ -420,29 +412,9 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler {
         return true;
     }
 
-    private static boolean sameSnapshot(BigItemStack left, BigItemStack right) {
-        return left.getAmount() == right.getAmount()
-                && Objects.equals(left.getKey(), right.getKey());
-    }
-
-    private static long saturatedAdd(long left, long right) {
-        return left >= Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
-    }
-
-    private static TransferResult<BigItemStack, ItemStorageKey> emptyResult(
-            long requested, StorageAction action) {
-        return new TransferResult<>(requested, BigItemStack.empty(), action);
-    }
-
-    private static TransferResult<BigItemStack, ItemStorageKey> processedResult(
-            BigItemStack request, long processed, StorageAction action) {
-        return new TransferResult<>(
-                request.getAmount(),
-                processed == 0L ? BigItemStack.empty() : request.withAmount(processed),
-                action);
-    }
-
-    /** Immutable definition of one visible compression tier. */
+    /**
+     * Immutable definition of one visible compression tier.
+     */
     public static final class Tier {
         private static final Tier EMPTY = new Tier(ItemStack.EMPTY, 1L);
 
@@ -460,6 +432,16 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler {
         }
 
         @Nonnull
+        private static ItemStack normalize(ItemStack stack) {
+            if (stack == null || stack.isEmpty()) {
+                return ItemStack.EMPTY;
+            }
+            ItemStack copy = stack.copy();
+            copy.setCount(1);
+            return copy;
+        }
+
+        @Nonnull
         public ItemStack getTemplate() {
             return template.isEmpty() ? ItemStack.EMPTY : template.copy();
         }
@@ -473,18 +455,7 @@ public abstract class CompactingInventoryHandler implements IBigItemHandler {
         }
 
         private boolean sameDefinition(Tier other) {
-            return baseUnits == other.baseUnits
-                    && ItemUtil.areItemStacksEqual(template, other.template);
-        }
-
-        @Nonnull
-        private static ItemStack normalize(ItemStack stack) {
-            if (stack == null || stack.isEmpty()) {
-                return ItemStack.EMPTY;
-            }
-            ItemStack copy = stack.copy();
-            copy.setCount(1);
-            return copy;
+            return baseUnits == other.baseUnits && ItemUtil.areItemStacksEqual(template, other.template);
         }
     }
 }

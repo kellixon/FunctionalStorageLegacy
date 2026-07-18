@@ -1,11 +1,6 @@
 package com.xinyihl.functionalstoragelegacy.common.tile;
 
-import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
-import com.xinyihl.functionalstoragelegacy.api.storage.BigFluidStack;
-import com.xinyihl.functionalstoragelegacy.api.storage.FluidStorageKey;
-import com.xinyihl.functionalstoragelegacy.api.storage.IBigFluidHandler;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
-import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
+import com.xinyihl.functionalstoragelegacy.api.storage.*;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.StorageFeature;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeAttribute;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeState;
@@ -44,15 +39,14 @@ public class FluidDrawerTile extends ControllableDrawerTile {
         super();
         this.drawerLayout = drawerLayout;
         this.fluidHandler = createFluidHandler();
-        bindStorageHandler(this.fluidHandler, this.fluidHandler::notifyConfigurationChanged);
+        bindStorageHandler(this.fluidHandler, () -> this.fluidHandler.onChange(StorageChange.reset()));
     }
 
     private BigFluidHandler createFluidHandler() {
-        BigFluidHandler created = new BigFluidHandler(drawerLayout.getSlotCount()) {
+        return new BigFluidHandler(drawerLayout.getSlotCount()) {
             @Override
             public double getMultiplier() {
-                return FluidDrawerTile.this.getFluidMultiplier(
-                        FluidDrawerTile.this.drawerLayout.getBaseCapacity());
+                return FluidDrawerTile.this.getFluidMultiplier(FluidDrawerTile.this.drawerLayout.getBaseCapacity());
             }
 
             @Override
@@ -75,12 +69,10 @@ public class FluidDrawerTile extends ControllableDrawerTile {
                 return FluidDrawerTile.this.isCreative();
             }
         };
-        return created;
     }
 
     @Override
-    public boolean onSlotActivated(EntityPlayer player, EnumHand hand, EnumFacing facing,
-                                   float hitX, float hitY, float hitZ, int slot) {
+    public boolean onSlotActivated(EntityPlayer player, EnumHand hand, EnumFacing facing, float hitX, float hitY, float hitZ, int slot) {
         ItemStack heldStack = player.getHeldItem(hand);
 
         if (!world.isRemote && slot >= 0 && slot < fluidHandler.getStorageCount() && !heldStack.isEmpty()) {
@@ -119,10 +111,7 @@ public class FluidDrawerTile extends ControllableDrawerTile {
                 if (resource == null || resource.amount <= 0) {
                     return 0;
                 }
-                TransferResult<BigFluidStack, FluidStorageKey> result = fluidHandler.insert(
-                        slot,
-                        new BigFluidStack(resource, resource.amount),
-                        doFill ? StorageAction.EXECUTE : StorageAction.SIMULATE);
+                TransferResult<BigFluidStack, FluidStorageKey> result = fluidHandler.insert(slot, new BigFluidStack(resource, resource.amount), doFill ? StorageAction.EXECUTE : StorageAction.SIMULATE);
                 return (int) Math.min(result.getProcessedAmount(), Integer.MAX_VALUE);
             }
 
@@ -135,10 +124,7 @@ public class FluidDrawerTile extends ControllableDrawerTile {
                 if (current.isEmpty() || !current.isSameType(resource)) {
                     return null;
                 }
-                TransferResult<BigFluidStack, FluidStorageKey> result = fluidHandler.extract(
-                        slot,
-                        resource.amount,
-                        doDrain ? StorageAction.EXECUTE : StorageAction.SIMULATE);
+                TransferResult<BigFluidStack, FluidStorageKey> result = fluidHandler.extract(slot, resource.amount, doDrain ? StorageAction.EXECUTE : StorageAction.SIMULATE);
                 return result.getProcessed().toFluidStack();
             }
 
@@ -147,10 +133,7 @@ public class FluidDrawerTile extends ControllableDrawerTile {
                 if (maxDrain <= 0 || fluidHandler.getSnapshot(slot).isEmpty()) {
                     return null;
                 }
-                TransferResult<BigFluidStack, FluidStorageKey> result = fluidHandler.extract(
-                        slot,
-                        maxDrain,
-                        doDrain ? StorageAction.EXECUTE : StorageAction.SIMULATE);
+                TransferResult<BigFluidStack, FluidStorageKey> result = fluidHandler.extract(slot, maxDrain, doDrain ? StorageAction.EXECUTE : StorageAction.SIMULATE);
                 return result.getProcessed().toFluidStack();
             }
         };
@@ -174,7 +157,7 @@ public class FluidDrawerTile extends ControllableDrawerTile {
         }
         fluidHandler = createFluidHandler();
         fluidHandler.deserializeNBT(nbt);
-        finishStorageRead(fluidHandler, fluidHandler::notifyConfigurationChanged);
+        finishStorageRead(fluidHandler, () -> fluidHandler.onChange(StorageChange.reset()));
     }
 
     @Nonnull
@@ -195,7 +178,7 @@ public class FluidDrawerTile extends ControllableDrawerTile {
         super.readFromNBT(compound);
         fluidHandler = createFluidHandler();
         fluidHandler.deserializeNBT(compound);
-        finishStorageRead(fluidHandler, fluidHandler::notifyConfigurationChanged);
+        finishStorageRead(fluidHandler, () -> fluidHandler.onChange(StorageChange.reset()));
     }
 
     @Override
@@ -241,8 +224,7 @@ public class FluidDrawerTile extends ControllableDrawerTile {
 
     @Override
     protected boolean canApplyUpgradeState(UpgradeState state) {
-        if (state.hasFeature(StorageFeature.CREATIVE)
-                || state.hasFeature(StorageFeature.MAX_CAPACITY)) {
+        if (state.hasFeature(StorageFeature.CREATIVE) || state.hasFeature(StorageFeature.MAX_CAPACITY)) {
             return true;
         }
         double calculated = state.calculate(UpgradeAttribute.FLUID_CAPACITY, drawerLayout.getBaseCapacity());

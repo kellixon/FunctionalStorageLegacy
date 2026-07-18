@@ -53,8 +53,7 @@ public class ConfigurationToolItem extends Item {
 
     @Nonnull
     @Override
-    public EnumActionResult onItemUse(@Nonnull EntityPlayer player, World worldIn, @Nonnull BlockPos pos, @Nonnull EnumHand hand,
-                                      @Nonnull EnumFacing facing, float hitX, float hitY, float hitZ) {
+    public EnumActionResult onItemUse(@Nonnull EntityPlayer player, World worldIn, @Nonnull BlockPos pos, @Nonnull EnumHand hand, @Nonnull EnumFacing facing, float hitX, float hitY, float hitZ) {
         if (worldIn.isRemote) return EnumActionResult.SUCCESS;
 
         ItemStack stack = player.getHeldItem(hand);
@@ -68,9 +67,7 @@ public class ConfigurationToolItem extends Item {
             } else {
                 drawerTile.toggleOption(action);
                 if (action.getMax() > 1) {
-                    player.sendStatusMessage(
-                            new TextComponentTranslation("configurationtool.configmode.indicator.mode_"
-                                    + drawerTile.getDrawerOptions().getAdvancedValue(action)), true);
+                    player.sendStatusMessage(new TextComponentTranslation("configurationtool.configmode.indicator.mode_" + drawerTile.getDrawerOptions().getAdvancedValue(action)), true);
                 }
             }
             return EnumActionResult.SUCCESS;
@@ -89,12 +86,7 @@ public class ConfigurationToolItem extends Item {
             setAction(stack, newAction);
 
             if (!worldIn.isRemote) {
-                playerIn.sendStatusMessage(
-                        new TextComponentTranslation("configurationtool.configmode.swapped")
-                                .appendText(" ")
-                                .appendSibling(new TextComponentTranslation(
-                                        "configurationtool.configmode." + newAction.name().toLowerCase(Locale.ROOT))),
-                        true);
+                playerIn.sendStatusMessage(new TextComponentTranslation("configurationtool.configmode.swapped").appendText(" ").appendSibling(new TextComponentTranslation("configurationtool.configmode." + newAction.name().toLowerCase(Locale.ROOT))), true);
             }
             return new ActionResult<>(EnumActionResult.SUCCESS, stack);
         }
@@ -106,10 +98,7 @@ public class ConfigurationToolItem extends Item {
     public void addInformation(@Nonnull ItemStack stack, @Nullable World worldIn, @Nonnull List<String> tooltip, @Nonnull ITooltipFlag flagIn) {
         super.addInformation(stack, worldIn, tooltip, flagIn);
         ConfigurationAction action = getAction(stack);
-        tooltip.add(TextFormatting.YELLOW
-                + new TextComponentTranslation("configurationtool.configmode").getUnformattedText()
-                + " " + TextFormatting.WHITE
-                + new TextComponentTranslation("configurationtool.configmode." + action.name().toLowerCase(Locale.ROOT)).getUnformattedText());
+        tooltip.add(TextFormatting.YELLOW + new TextComponentTranslation("configurationtool.configmode").getUnformattedText() + " " + TextFormatting.WHITE + new TextComponentTranslation("configurationtool.configmode." + action.name().toLowerCase(Locale.ROOT)).getUnformattedText());
         tooltip.add(TextFormatting.GRAY + "");
         tooltip.addAll(Arrays.asList(new TextComponentTranslation("configurationtool.use").getUnformattedText().split("\\\\n")));
     }
@@ -118,11 +107,7 @@ public class ConfigurationToolItem extends Item {
      * Available configuration actions.
      */
     public enum ConfigurationAction {
-        LOCKING(1),
-        TOGGLE_NUMBERS(1),
-        TOGGLE_RENDER(1),
-        TOGGLE_UPGRADES(1),
-        INDICATOR(3);
+        LOCKING(1), TOGGLE_NUMBERS(1), TOGGLE_RENDER(1), TOGGLE_UPGRADES(1), INDICATOR(3);
 
         private final int max;
 

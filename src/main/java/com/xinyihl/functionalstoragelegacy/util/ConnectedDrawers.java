@@ -128,12 +128,6 @@ public class ConnectedDrawers {
         return topologyChanged;
     }
 
-    interface LoadedTileResolver {
-        boolean isLoaded(BlockPos pos);
-
-        TileEntity getTileEntity(BlockPos pos);
-    }
-
     /**
      * Scan from controller using BFS. Replaces any stored positions.
      */
@@ -182,9 +176,7 @@ public class ConnectedDrawers {
     }
 
     private boolean isConnectableDrawer(TileEntity te) {
-        return te instanceof ControllableDrawerTile
-                && !(te instanceof DrawerControllerTile)
-                && !(te instanceof ControllerExtensionTile);
+        return te instanceof ControllableDrawerTile && !(te instanceof DrawerControllerTile) && !(te instanceof ControllerExtensionTile);
     }
 
     /**
@@ -261,5 +253,11 @@ public class ConnectedDrawers {
         if (nbt.hasKey("ControllerPos")) {
             controllerPos = BlockPos.fromLong(nbt.getLong("ControllerPos"));
         }
+    }
+
+    interface LoadedTileResolver {
+        boolean isLoaded(BlockPos pos);
+
+        TileEntity getTileEntity(BlockPos pos);
     }
 }

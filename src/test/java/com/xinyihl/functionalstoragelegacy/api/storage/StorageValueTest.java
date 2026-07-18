@@ -1,20 +1,17 @@
 package com.xinyihl.functionalstoragelegacy.api.storage;
 
+import net.minecraft.init.Bootstrap;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.init.Bootstrap;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.FluidStack;
-import org.junit.Test;
 import org.junit.BeforeClass;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import javax.annotation.Nonnull;
+
+import static org.junit.Assert.*;
 
 public class StorageValueTest {
 
@@ -115,7 +112,7 @@ public class StorageValueTest {
         assertEquals(key.hashCode(), equalKey.hashCode());
         assertEquals(7, key.toItemStack().getMetadata());
         assertEquals("source", key.toItemStack().getTagCompound().getString("owner"));
-        assertFalse(key.equals(new ItemStorageKey(new ItemStack(item, 1, 8))));
+        assertNotEquals(key, new ItemStorageKey(new ItemStack(item, 1, 8)));
     }
 
     @Test
@@ -135,8 +132,8 @@ public class StorageValueTest {
         assertEquals(key, equalKey);
         assertEquals(key.hashCode(), equalKey.hashCode());
         assertEquals("source", key.toFluidStack().tag.getString("owner"));
-        assertFalse(key.equals(new FluidStorageKey(
-                new FluidStack(FluidRegistry.LAVA, 1))));
+        assertNotEquals(key, new FluidStorageKey(
+                new FluidStack(FluidRegistry.LAVA, 1)));
     }
 
     @Test
@@ -218,6 +215,7 @@ public class StorageValueTest {
                 return 0;
             }
 
+                    @Nonnull
             @Override
             public BigItemStack getSnapshot(int index) {
                 return BigItemStack.empty();
@@ -228,16 +226,18 @@ public class StorageValueTest {
                 return 0L;
             }
 
+                    @Nonnull
             @Override
             public TransferResult<BigItemStack, ItemStorageKey> insert(
-                    int index, BigItemStack request, StorageAction action) {
+                            int index, @Nonnull BigItemStack request, @Nonnull StorageAction action) {
                 return new TransferResult<>(
                         request.getAmount(), BigItemStack.empty(), action);
             }
 
+                    @Nonnull
             @Override
             public TransferResult<BigItemStack, ItemStorageKey> extract(
-                    int index, long amount, StorageAction action) {
+                            int index, long amount, @Nonnull StorageAction action) {
                 return new TransferResult<>(
                         Math.max(0L, amount), BigItemStack.empty(), action);
             }
@@ -247,7 +247,7 @@ public class StorageValueTest {
         assertFalse(handler.voidsOverflow());
         assertFalse(handler.isCreative());
         assertEquals(1.0D, handler.getMultiplier(), 0.0D);
-        assertTrue(handler.getStorageIdentity() == handler);
+        assertSame(handler.getStorageIdentity(), handler);
         assertEquals(StorageAction.SIMULATE, StorageAction.fromSimulation(true));
         assertEquals(StorageAction.EXECUTE, StorageAction.fromSimulation(false));
         assertTrue(StorageAction.SIMULATE.isSimulation());

@@ -22,7 +22,9 @@ public final class StorageAliasKey implements StorageKey {
         this.hashCode = 31 * namespace.hashCode() + value;
     }
 
-    /** Creates the alias used by Forge's ore dictionary ids. */
+    /**
+     * Creates the alias used by Forge's ore dictionary ids.
+     */
     @Nonnull
     public static StorageAliasKey ore(int oreId) {
         return new StorageAliasKey("ore", oreId);

@@ -3,7 +3,9 @@ package com.xinyihl.functionalstoragelegacy.common.integration.ae2;
 import appeng.api.storage.data.IAEStack;
 import appeng.api.storage.data.IItemList;
 
-/** Saturating writes for AE2 lists whose native aggregation uses raw long addition. */
+/**
+ * Saturating writes for AE2 lists whose native aggregation uses raw long addition.
+ */
 final class AE2StorageListHelper {
 
     private AE2StorageListHelper() {

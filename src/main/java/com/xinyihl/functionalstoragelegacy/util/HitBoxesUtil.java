@@ -17,24 +17,10 @@ public class HitBoxesUtil {
     private static final EnumMap<DrawerFaceLayout, List<AxisAlignedBB>> BASE_HIT_BOXES = new EnumMap<>(DrawerFaceLayout.class);
 
     static {
-        BASE_HIT_BOXES.put(DrawerFaceLayout.X_1, Collections.singletonList(
-                new AxisAlignedBB(1 / 16D, 1 / 16D, 0, 15 / 16D, 15 / 16D, 1 / 16D)
-        ));
-        BASE_HIT_BOXES.put(DrawerFaceLayout.X_2, Arrays.asList(
-                new AxisAlignedBB(1 / 16D, 9 / 16D, 0, 15 / 16D, 15 / 16D, 1 / 16D),
-                new AxisAlignedBB(1 / 16D, 1 / 16D, 0, 15 / 16D, 7 / 16D, 1 / 16D)
-        ));
-        BASE_HIT_BOXES.put(DrawerFaceLayout.X_3, Arrays.asList(
-                new AxisAlignedBB(1 / 16D, 9 / 16D, 0, 15 / 16D, 15 / 16D, 1 / 16D),
-                new AxisAlignedBB(9 / 16D, 1 / 16D, 0, 15 / 16D, 7 / 16D, 1 / 16D),
-                new AxisAlignedBB(1 / 16D, 1 / 16D, 0, 7 / 16D, 7 / 16D, 1 / 16D)
-        ));
-        BASE_HIT_BOXES.put(DrawerFaceLayout.X_4, Arrays.asList(
-                new AxisAlignedBB(9 / 16D, 9 / 16D, 0, 15 / 16D, 15 / 16D, 1 / 16D),
-                new AxisAlignedBB(1 / 16D, 9 / 16D, 0, 7 / 16D, 15 / 16D, 1 / 16D),
-                new AxisAlignedBB(9 / 16D, 1 / 16D, 0, 15 / 16D, 7 / 16D, 1 / 16D),
-                new AxisAlignedBB(1 / 16D, 1 / 16D, 0, 7 / 16D, 7 / 16D, 1 / 16D)
-        ));
+        BASE_HIT_BOXES.put(DrawerFaceLayout.X_1, Collections.singletonList(new AxisAlignedBB(1 / 16D, 1 / 16D, 0, 15 / 16D, 15 / 16D, 1 / 16D)));
+        BASE_HIT_BOXES.put(DrawerFaceLayout.X_2, Arrays.asList(new AxisAlignedBB(1 / 16D, 9 / 16D, 0, 15 / 16D, 15 / 16D, 1 / 16D), new AxisAlignedBB(1 / 16D, 1 / 16D, 0, 15 / 16D, 7 / 16D, 1 / 16D)));
+        BASE_HIT_BOXES.put(DrawerFaceLayout.X_3, Arrays.asList(new AxisAlignedBB(1 / 16D, 9 / 16D, 0, 15 / 16D, 15 / 16D, 1 / 16D), new AxisAlignedBB(9 / 16D, 1 / 16D, 0, 15 / 16D, 7 / 16D, 1 / 16D), new AxisAlignedBB(1 / 16D, 1 / 16D, 0, 7 / 16D, 7 / 16D, 1 / 16D)));
+        BASE_HIT_BOXES.put(DrawerFaceLayout.X_4, Arrays.asList(new AxisAlignedBB(9 / 16D, 9 / 16D, 0, 15 / 16D, 15 / 16D, 1 / 16D), new AxisAlignedBB(1 / 16D, 9 / 16D, 0, 7 / 16D, 15 / 16D, 1 / 16D), new AxisAlignedBB(9 / 16D, 1 / 16D, 0, 15 / 16D, 7 / 16D, 1 / 16D), new AxisAlignedBB(1 / 16D, 1 / 16D, 0, 7 / 16D, 7 / 16D, 1 / 16D)));
     }
 
     public static int getHorizontalFacingIndex(EnumFacing facing) {
@@ -87,16 +73,12 @@ public class HitBoxesUtil {
         if (player == null) {
             return DEFAULT_REACH_DISTANCE;
         }
-        if (player.getEntityAttribute(EntityPlayer.REACH_DISTANCE) != null) {
-            return player.getEntityAttribute(EntityPlayer.REACH_DISTANCE).getAttributeValue();
-        }
-        return DEFAULT_REACH_DISTANCE;
+        player.getEntityAttribute(EntityPlayer.REACH_DISTANCE);
+        return player.getEntityAttribute(EntityPlayer.REACH_DISTANCE).getAttributeValue();
     }
 
     public static boolean containsHitVec(AxisAlignedBB hitBox, Vec3d localHitVec) {
-        return localHitVec.x >= hitBox.minX - HIT_EPSILON && localHitVec.x <= hitBox.maxX + HIT_EPSILON
-                && localHitVec.y >= hitBox.minY - HIT_EPSILON && localHitVec.y <= hitBox.maxY + HIT_EPSILON
-                && localHitVec.z >= hitBox.minZ - HIT_EPSILON && localHitVec.z <= hitBox.maxZ + HIT_EPSILON;
+        return localHitVec.x >= hitBox.minX - HIT_EPSILON && localHitVec.x <= hitBox.maxX + HIT_EPSILON && localHitVec.y >= hitBox.minY - HIT_EPSILON && localHitVec.y <= hitBox.maxY + HIT_EPSILON && localHitVec.z >= hitBox.minZ - HIT_EPSILON && localHitVec.z <= hitBox.maxZ + HIT_EPSILON;
     }
 
     public static List<AxisAlignedBB> buildHitBoxes(DrawerFaceLayout layout, DrawerAttachment attachment, EnumFacing horizontalFacing) {
@@ -145,16 +127,7 @@ public class HitBoxesUtil {
     }
 
     private static AxisAlignedBB transformHitBox(AxisAlignedBB localHitBox, EnumFacing leftDirection, EnumFacing upDirection, EnumFacing inwardDirection) {
-        Vec3d[] corners = new Vec3d[]{
-                transformPoint(localHitBox.minX, localHitBox.minY, localHitBox.minZ, leftDirection, upDirection, inwardDirection),
-                transformPoint(localHitBox.minX, localHitBox.minY, localHitBox.maxZ, leftDirection, upDirection, inwardDirection),
-                transformPoint(localHitBox.minX, localHitBox.maxY, localHitBox.minZ, leftDirection, upDirection, inwardDirection),
-                transformPoint(localHitBox.minX, localHitBox.maxY, localHitBox.maxZ, leftDirection, upDirection, inwardDirection),
-                transformPoint(localHitBox.maxX, localHitBox.minY, localHitBox.minZ, leftDirection, upDirection, inwardDirection),
-                transformPoint(localHitBox.maxX, localHitBox.minY, localHitBox.maxZ, leftDirection, upDirection, inwardDirection),
-                transformPoint(localHitBox.maxX, localHitBox.maxY, localHitBox.minZ, leftDirection, upDirection, inwardDirection),
-                transformPoint(localHitBox.maxX, localHitBox.maxY, localHitBox.maxZ, leftDirection, upDirection, inwardDirection)
-        };
+        Vec3d[] corners = new Vec3d[]{transformPoint(localHitBox.minX, localHitBox.minY, localHitBox.minZ, leftDirection, upDirection, inwardDirection), transformPoint(localHitBox.minX, localHitBox.minY, localHitBox.maxZ, leftDirection, upDirection, inwardDirection), transformPoint(localHitBox.minX, localHitBox.maxY, localHitBox.minZ, leftDirection, upDirection, inwardDirection), transformPoint(localHitBox.minX, localHitBox.maxY, localHitBox.maxZ, leftDirection, upDirection, inwardDirection), transformPoint(localHitBox.maxX, localHitBox.minY, localHitBox.minZ, leftDirection, upDirection, inwardDirection), transformPoint(localHitBox.maxX, localHitBox.minY, localHitBox.maxZ, leftDirection, upDirection, inwardDirection), transformPoint(localHitBox.maxX, localHitBox.maxY, localHitBox.minZ, leftDirection, upDirection, inwardDirection), transformPoint(localHitBox.maxX, localHitBox.maxY, localHitBox.maxZ, leftDirection, upDirection, inwardDirection)};
 
         double minX = Double.POSITIVE_INFINITY;
         double minY = Double.POSITIVE_INFINITY;
@@ -180,10 +153,6 @@ public class HitBoxesUtil {
         double originY = leftDirection.getYOffset() < 0 || upDirection.getYOffset() < 0 || inwardDirection.getYOffset() < 0 ? 1.0D : 0.0D;
         double originZ = leftDirection.getZOffset() < 0 || upDirection.getZOffset() < 0 || inwardDirection.getZOffset() < 0 ? 1.0D : 0.0D;
 
-        return new Vec3d(
-                originX + localX * leftDirection.getXOffset() + localY * upDirection.getXOffset() + localZ * inwardDirection.getXOffset(),
-                originY + localX * leftDirection.getYOffset() + localY * upDirection.getYOffset() + localZ * inwardDirection.getYOffset(),
-                originZ + localX * leftDirection.getZOffset() + localY * upDirection.getZOffset() + localZ * inwardDirection.getZOffset()
-        );
+        return new Vec3d(originX + localX * leftDirection.getXOffset() + localY * upDirection.getXOffset() + localZ * inwardDirection.getXOffset(), originY + localX * leftDirection.getYOffset() + localY * upDirection.getYOffset() + localZ * inwardDirection.getYOffset(), originZ + localX * leftDirection.getZOffset() + localY * upDirection.getZOffset() + localZ * inwardDirection.getZOffset());
     }
 }

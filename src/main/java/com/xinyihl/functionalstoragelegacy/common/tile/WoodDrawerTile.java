@@ -2,6 +2,7 @@ package com.xinyihl.functionalstoragelegacy.common.tile;
 
 import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.StorageFeature;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeAttribute;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeState;
@@ -45,11 +46,26 @@ public class WoodDrawerTile extends ControllableDrawerTile {
         this.drawerLayout = drawerLayout;
         this.woodType = woodType;
         this.handler = createHandler();
-        bindStorageHandler(this.handler, this.handler::notifyConfigurationChanged);
+        bindStorageHandler(this.handler, () -> this.handler.onChange(StorageChange.reset()));
+    }
+
+    private static long saturatedAdd(long left, long right) {
+        return left >= Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
+    }
+
+    private static long capacityFor(double multiplier, ItemStack template) {
+        if (Double.isNaN(multiplier) || multiplier <= 0D) {
+            return 0L;
+        }
+        double capacity = multiplier * Math.max(0, template.getMaxStackSize());
+        if (Double.isInfinite(capacity) || capacity >= Long.MAX_VALUE) {
+            return Long.MAX_VALUE;
+        }
+        return (long) Math.floor(capacity);
     }
 
     private BigInventoryHandler createHandler() {
-        BigInventoryHandler created = new BigInventoryHandler(drawerLayout.getSlotCount()) {
+        return new BigInventoryHandler(drawerLayout.getSlotCount()) {
             @Override
             public double getMultiplier() {
                 return WoodDrawerTile.this.getStorageMultiplier(WoodDrawerTile.this.drawerLayout.getBaseCapacity());
@@ -80,7 +96,6 @@ public class WoodDrawerTile extends ControllableDrawerTile {
                 return WoodDrawerTile.this.isCreative();
             }
         };
-        return created;
     }
 
     @Override
@@ -92,8 +107,7 @@ public class WoodDrawerTile extends ControllableDrawerTile {
     }
 
     @Override
-    public boolean onSlotActivated(EntityPlayer player, EnumHand hand, EnumFacing facing,
-                                   float hitX, float hitY, float hitZ, int slot) {
+    public boolean onSlotActivated(EntityPlayer player, EnumHand hand, EnumFacing facing, float hitX, float hitY, float hitZ, int slot) {
         ItemStack heldStack = player.getHeldItem(hand);
 
         // Let parent handle upgrades and tools
@@ -103,8 +117,7 @@ public class WoodDrawerTile extends ControllableDrawerTile {
 
         if (slot != -1 && !world.isRemote) {
             // Set the type filter if empty slot and holding item
-            if (!heldStack.isEmpty() && isLocked() && slot < handler.getStorageCount()
-                    && !handler.getSnapshot(slot).hasTemplate()) {
+            if (!heldStack.isEmpty() && isLocked() && slot < handler.getStorageCount() && !handler.getSnapshot(slot).hasTemplate()) {
                 handler.setSlotFilter(slot, heldStack);
             }
 
@@ -166,7 +179,7 @@ public class WoodDrawerTile extends ControllableDrawerTile {
         }
         handler = createHandler();
         handler.deserializeNBT(nbt);
-        finishStorageRead(handler, handler::notifyConfigurationChanged);
+        finishStorageRead(handler, () -> handler.onChange(StorageChange.reset()));
     }
 
     @Nonnull
@@ -191,7 +204,7 @@ public class WoodDrawerTile extends ControllableDrawerTile {
         super.readFromNBT(compound);
         handler = createHandler();
         handler.deserializeNBT(compound);
-        finishStorageRead(handler, handler::notifyConfigurationChanged);
+        finishStorageRead(handler, () -> handler.onChange(StorageChange.reset()));
     }
 
     @Override
@@ -243,8 +256,7 @@ public class WoodDrawerTile extends ControllableDrawerTile {
 
     @Override
     protected boolean canApplyUpgradeState(UpgradeState state) {
-        if (state.hasFeature(StorageFeature.CREATIVE)
-                || state.hasFeature(StorageFeature.MAX_CAPACITY)) {
+        if (state.hasFeature(StorageFeature.CREATIVE) || state.hasFeature(StorageFeature.MAX_CAPACITY)) {
             return true;
         }
         double calculated = state.calculate(UpgradeAttribute.ITEM_CAPACITY, drawerLayout.getBaseCapacity());
@@ -263,21 +275,6 @@ public class WoodDrawerTile extends ControllableDrawerTile {
 
     private void writeStorage(NBTTagCompound nbt) {
         nbt.setTag("StorageV2", handler.serializeNBT().getCompoundTag("StorageV2"));
-    }
-
-    private static long saturatedAdd(long left, long right) {
-        return left >= Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
-    }
-
-    private static long capacityFor(double multiplier, ItemStack template) {
-        if (Double.isNaN(multiplier) || multiplier <= 0D) {
-            return 0L;
-        }
-        double capacity = multiplier * Math.max(0, template.getMaxStackSize());
-        if (Double.isInfinite(capacity) || capacity >= Long.MAX_VALUE) {
-            return Long.MAX_VALUE;
-        }
-        return (long) Math.floor(capacity);
     }
 
     public DrawerLayout getDrawerLayout() {

@@ -1,13 +1,6 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory.base;
 
-import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
-import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
-import com.xinyihl.functionalstoragelegacy.api.storage.ItemStorageKey;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageChangeDispatcher;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
-import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
+import com.xinyihl.functionalstoragelegacy.api.storage.*;
 import com.xinyihl.functionalstoragelegacy.util.ItemUtil;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -16,6 +9,7 @@ import net.minecraftforge.common.util.Constants;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -34,12 +28,45 @@ public abstract class BigInventoryHandler implements IBigItemHandler {
     private static final String AMOUNT = "Amount";
 
     private final SlotState[] states;
-    private final StorageChangeDispatcher<BigItemStack, ItemStorageKey> changeDispatcher =
-            new StorageChangeDispatcher<>();
+    private final StorageChangeDispatcher<BigItemStack, ItemStorageKey> changeDispatcher = new StorageChangeDispatcher<>();
 
     protected BigInventoryHandler(int slots) {
         this.states = new SlotState[Math.max(0, slots)];
-        clearStates();
+        Arrays.fill(states, SlotState.EMPTY);
+    }
+
+    private static boolean sameStates(SlotState[] left, SlotState[] right) {
+        if (left.length != right.length) {
+            return false;
+        }
+        for (int slot = 0; slot < left.length; slot++) {
+            if (left[slot].amount != right[slot].amount || !ItemUtil.areItemStacksEqual(left[slot].template, right[slot].template)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Nonnull
+    private static ItemStack normalize(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return ItemStack.EMPTY;
+        }
+        ItemStack copy = stack.copy();
+        copy.setCount(1);
+        return copy;
+    }
+
+    private static long saturatedAdd(long left, long right) {
+        return left >= Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
+    }
+
+    private static TransferResult<BigItemStack, ItemStorageKey> emptyResult(long requested, StorageAction action) {
+        return new TransferResult<>(requested, BigItemStack.empty(), action);
+    }
+
+    private static TransferResult<BigItemStack, ItemStorageKey> processedResult(BigItemStack request, long processed, StorageAction action) {
+        return new TransferResult<>(request.getAmount(), processed == 0L ? BigItemStack.empty() : request.withAmount(processed), action);
     }
 
     @Override
@@ -71,10 +98,9 @@ public abstract class BigInventoryHandler implements IBigItemHandler {
 
     @Nonnull
     @Override
-    public final TransferResult<BigItemStack, ItemStorageKey> insert(
-            int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action) {
+    public final TransferResult<BigItemStack, ItemStorageKey> insert(int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action) {
         Objects.requireNonNull(action, "action");
-        long requested = request == null || request.isEmpty() ? 0L : request.getAmount();
+        long requested = request.isEmpty() ? 0L : request.getAmount();
         if (requested == 0L || !isOperationEnabled() || !isValidSlot(slot)) {
             return emptyResult(requested, action);
         }
@@ -82,8 +108,7 @@ public abstract class BigInventoryHandler implements IBigItemHandler {
         ItemStack incoming = request.getTemplate();
         SlotState current = states[slot];
         boolean unconfigured = current.template.isEmpty();
-        if ((unconfigured && isLocked())
-                || (!unconfigured && !isCompatible(current.template, incoming))) {
+        if ((unconfigured && isLocked()) || (!unconfigured && !ItemUtil.areItemStacksCompatible(current.template, incoming, allowsEquivalentItems()))) {
             return emptyResult(requested, action);
         }
 
@@ -91,7 +116,7 @@ public abstract class BigInventoryHandler implements IBigItemHandler {
             if (action == StorageAction.EXECUTE && unconfigured) {
                 BigItemStack before = getSnapshot(slot);
                 states[slot] = new SlotState(incoming, Long.MAX_VALUE);
-                publish(StorageChange.delta(slot, before, getSnapshot(slot)));
+                onChange(StorageChange.delta(slot, before, getSnapshot(slot)));
             }
             return processedResult(request, requested, action);
         }
@@ -104,18 +129,15 @@ public abstract class BigInventoryHandler implements IBigItemHandler {
 
         if (action == StorageAction.EXECUTE && inserted > 0L) {
             BigItemStack before = getSnapshot(slot);
-            states[slot] = new SlotState(
-                    unconfigured ? incoming : current.template,
-                    saturatedAdd(current.amount, inserted));
-            publish(StorageChange.delta(slot, before, getSnapshot(slot)));
+            states[slot] = new SlotState(unconfigured ? incoming : current.template, saturatedAdd(current.amount, inserted));
+            onChange(StorageChange.delta(slot, before, getSnapshot(slot)));
         }
         return processedResult(request, processed, action);
     }
 
     @Nonnull
     @Override
-    public final TransferResult<BigItemStack, ItemStorageKey> extract(
-            int slot, long amount, @Nonnull StorageAction action) {
+    public final TransferResult<BigItemStack, ItemStorageKey> extract(int slot, long amount, @Nonnull StorageAction action) {
         Objects.requireNonNull(action, "action");
         long requested = Math.max(0L, amount);
         if (requested == 0L || !isOperationEnabled() || !isValidSlot(slot)) {
@@ -135,31 +157,28 @@ public abstract class BigInventoryHandler implements IBigItemHandler {
         if (action == StorageAction.EXECUTE && !isCreative()) {
             BigItemStack before = getSnapshot(slot);
             long remaining = current.amount - extracted;
-            ItemStack retainedTemplate = remaining == 0L && !isLocked()
-                    ? ItemStack.EMPTY : current.template;
+            ItemStack retainedTemplate = remaining == 0L && !isLocked() ? ItemStack.EMPTY : current.template;
             states[slot] = new SlotState(retainedTemplate, remaining);
-            publish(StorageChange.delta(slot, before, getSnapshot(slot)));
+            onChange(StorageChange.delta(slot, before, getSnapshot(slot)));
         }
-        return new TransferResult<>(
-                requested, new BigItemStack(current.template, extracted), action);
+        return new TransferResult<>(requested, new BigItemStack(current.template, extracted), action);
     }
 
     /**
      * Installs or clears a retained slot filter without exposing mutable slot
      * state. A populated slot can only keep its existing compatible type.
      *
-     * @param slot target slot
+     * @param slot   target slot
      * @param filter desired item type, or an empty stack to clear an empty slot
      * @return whether the requested filter is valid for the current contents
      */
     public final boolean setSlotFilter(int slot, @Nonnull ItemStack filter) {
-        if (!isValidSlot(slot) || filter == null) {
+        if (!isValidSlot(slot)) {
             return false;
         }
         SlotState current = states[slot];
         ItemStack normalized = normalize(filter);
-        if (current.amount > 0L
-                && (normalized.isEmpty() || !isCompatible(current.template, normalized))) {
+        if (current.amount > 0L && (normalized.isEmpty() || !ItemUtil.areItemStacksCompatible(current.template, normalized, allowsEquivalentItems()))) {
             return false;
         }
         ItemStack replacement = current.amount > 0L ? current.template : normalized;
@@ -168,7 +187,7 @@ public abstract class BigInventoryHandler implements IBigItemHandler {
         }
         BigItemStack before = getSnapshot(slot);
         states[slot] = new SlotState(replacement, current.amount);
-        publish(StorageChange.delta(slot, before, getSnapshot(slot)));
+        onChange(StorageChange.delta(slot, before, getSnapshot(slot)));
         return true;
     }
 
@@ -189,12 +208,11 @@ public abstract class BigInventoryHandler implements IBigItemHandler {
             if (current.amount == 0L && !current.template.isEmpty()) {
                 BigItemStack before = getSnapshot(slot);
                 states[slot] = SlotState.EMPTY;
-                entries.add(new StorageChange.Entry<>(
-                        slot, before, getSnapshot(slot)));
+                entries.add(new StorageChange.Entry<>(slot, before, getSnapshot(slot)));
             }
         }
         if (!entries.isEmpty()) {
-            publish(StorageChange.delta(entries));
+            onChange(StorageChange.delta(entries));
         }
     }
 
@@ -207,12 +225,7 @@ public abstract class BigInventoryHandler implements IBigItemHandler {
         if (!locked) {
             clearEmptyFiltersSilently();
         }
-        publish(StorageChange.<BigItemStack, ItemStorageKey>reset());
-    }
-
-    /** Emits one explicit reset after an actual creative, compatibility, or upgrade change. */
-    public final void notifyConfigurationChanged() {
-        publish(StorageChange.<BigItemStack, ItemStorageKey>reset());
+        onChange(StorageChange.reset());
     }
 
     /**
@@ -246,8 +259,8 @@ public abstract class BigInventoryHandler implements IBigItemHandler {
      */
     public final void deserializeNBT(@Nonnull NBTTagCompound root) {
         SlotState[] before = states.clone();
-        clearStates();
-        if (root != null && root.hasKey(STORAGE_V2, Constants.NBT.TAG_COMPOUND)) {
+        Arrays.fill(states, SlotState.EMPTY);
+        if (root.hasKey(STORAGE_V2, Constants.NBT.TAG_COMPOUND)) {
             NBTTagCompound storage = root.getCompoundTag(STORAGE_V2);
             NBTTagList items = storage.getTagList(ITEMS, Constants.NBT.TAG_COMPOUND);
             for (int i = 0; i < items.tagCount(); i++) {
@@ -267,37 +280,38 @@ public abstract class BigInventoryHandler implements IBigItemHandler {
             }
         }
         if (changeDispatcher.hasSubscribers() && !sameStates(before, states)) {
-            publish(StorageChange.<BigItemStack, ItemStorageKey>reset());
+            onChange(StorageChange.reset());
         }
     }
 
     @Override
-    public final void onChange(
-            @Nonnull StorageChange<BigItemStack, ItemStorageKey> change) {
+    public final void onChange(@Nonnull StorageChange<BigItemStack, ItemStorageKey> change) {
         changeDispatcher.dispatch(change);
     }
 
     @Nonnull
     @Override
-    public final StorageSubscription subscribe(
-            @Nonnull Consumer<? super StorageChange<BigItemStack, ItemStorageKey>> listener) {
+    public final StorageSubscription subscribe(@Nonnull Consumer<? super StorageChange<BigItemStack, ItemStorageKey>> listener) {
         return changeDispatcher.subscribe(listener);
     }
 
-    /** @return the current per-slot storage multiplier */
-    public abstract double getMultiplier();
-
-    /** @return whether ore-dictionary-equivalent items share a configured slot */
+    /**
+     * @return whether ore-dictionary-equivalent items share a configured slot
+     */
     protected boolean allowsEquivalentItems() {
         return false;
     }
 
-    /** @return whether finite capacity is replaced with {@link Long#MAX_VALUE} */
+    /**
+     * @return whether finite capacity is replaced with {@link Long#MAX_VALUE}
+     */
     protected boolean hasMaxStorage() {
         return false;
     }
 
-    /** @return whether this handler's owning container currently allows transactions */
+    /**
+     * @return whether this handler's owning container currently allows transactions
+     */
     protected boolean isOperationEnabled() {
         return true;
     }
@@ -318,18 +332,8 @@ public abstract class BigInventoryHandler implements IBigItemHandler {
         return capacity <= 0D ? 0L : (long) Math.floor(capacity);
     }
 
-    private boolean isCompatible(ItemStack template, ItemStack incoming) {
-        return ItemUtil.areItemStacksCompatible(template, incoming, allowsEquivalentItems());
-    }
-
     private boolean isValidSlot(int slot) {
         return slot >= 0 && slot < states.length;
-    }
-
-    private void clearStates() {
-        for (int i = 0; i < states.length; i++) {
-            states[i] = SlotState.EMPTY;
-        }
     }
 
     private void clearEmptyFiltersSilently() {
@@ -339,51 +343,6 @@ public abstract class BigInventoryHandler implements IBigItemHandler {
                 states[slot] = SlotState.EMPTY;
             }
         }
-    }
-
-    private void publish(StorageChange<BigItemStack, ItemStorageKey> change) {
-        onChange(change);
-    }
-
-    private static boolean sameStates(SlotState[] left, SlotState[] right) {
-        if (left.length != right.length) {
-            return false;
-        }
-        for (int slot = 0; slot < left.length; slot++) {
-            if (left[slot].amount != right[slot].amount
-                    || !ItemUtil.areItemStacksEqual(
-                    left[slot].template, right[slot].template)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    @Nonnull
-    private static ItemStack normalize(ItemStack stack) {
-        if (stack == null || stack.isEmpty()) {
-            return ItemStack.EMPTY;
-        }
-        ItemStack copy = stack.copy();
-        copy.setCount(1);
-        return copy;
-    }
-
-    private static long saturatedAdd(long left, long right) {
-        return left >= Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
-    }
-
-    private static TransferResult<BigItemStack, ItemStorageKey> emptyResult(
-            long requested, StorageAction action) {
-        return new TransferResult<>(requested, BigItemStack.empty(), action);
-    }
-
-    private static TransferResult<BigItemStack, ItemStorageKey> processedResult(
-            BigItemStack request, long processed, StorageAction action) {
-        return new TransferResult<>(
-                request.getAmount(),
-                processed == 0L ? BigItemStack.empty() : request.withAmount(processed),
-                action);
     }
 
     private static final class SlotState {

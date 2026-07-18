@@ -19,11 +19,7 @@ public class CompactingStackItemHandler extends CompactingInventoryHandler {
         super(slots);
         this.drawerStack = drawerStack;
         NBTTagCompound tileData = DrawerStackDataHelper.getTileData(drawerStack);
-        this.upgradeState = DrawerStackDataHelper.readUpgradeState(
-                tileData,
-                4,
-                3
-        );
+        this.upgradeState = DrawerStackDataHelper.readUpgradeState(tileData, 4, 3);
         this.locked = DrawerStackDataHelper.isLocked(tileData);
         if (tileData != null) {
             deserializeNBT(tileData);

@@ -62,10 +62,8 @@ public class StorageUpgradeItem extends UpgradeItem {
                 float mult = getItemStorageMultiplier(tier);
                 Map<UpgradeAttribute, UpgradeModifier> map = new EnumMap<>(UpgradeAttribute.class);
                 map.put(UpgradeAttribute.ITEM_CAPACITY, UpgradeModifier.multiply(mult));
-                map.put(UpgradeAttribute.FLUID_CAPACITY,
-                        UpgradeModifier.multiply(mult / Configurations.STORAGE.fluidDivisor));
-                map.put(UpgradeAttribute.CONTROLLER_RANGE,
-                        UpgradeModifier.addBase(mult / Configurations.STORAGE.rangeDivisor));
+                map.put(UpgradeAttribute.FLUID_CAPACITY, UpgradeModifier.multiply(mult / Configurations.STORAGE.fluidDivisor));
+                map.put(UpgradeAttribute.CONTROLLER_RANGE, UpgradeModifier.addBase(mult / Configurations.STORAGE.rangeDivisor));
                 return map;
             }
             case MAX:
@@ -126,12 +124,7 @@ public class StorageUpgradeItem extends UpgradeItem {
      * describing how the tier affects different aspects of a drawer.
      */
     public enum StorageTier {
-        IRON("iron"),
-        COPPER("copper"),
-        GOLD("gold"),
-        DIAMOND("diamond"),
-        NETHERITE("netherite"),
-        MAX("max");
+        IRON("iron"), COPPER("copper"), GOLD("gold"), DIAMOND("diamond"), NETHERITE("netherite"), MAX("max");
 
         private final String name;
 

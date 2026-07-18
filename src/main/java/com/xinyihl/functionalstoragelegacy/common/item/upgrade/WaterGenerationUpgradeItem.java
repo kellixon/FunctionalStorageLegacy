@@ -1,10 +1,10 @@
 package com.xinyihl.functionalstoragelegacy.common.item.upgrade;
 
-import com.xinyihl.functionalstoragelegacy.common.tile.FluidDrawerTile;
-import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
 import com.xinyihl.functionalstoragelegacy.api.storage.BigFluidStack;
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigFluidHandler;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
+import com.xinyihl.functionalstoragelegacy.common.tile.FluidDrawerTile;
+import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
 import com.xinyihl.functionalstoragelegacy.misc.Configurations;
 import com.xinyihl.functionalstoragelegacy.misc.RegistrationHandler;
 import net.minecraft.client.resources.I18n;
@@ -19,7 +19,7 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
 import javax.annotation.Nonnull;
-import java.util.*;
+import java.util.List;
 
 public class WaterGenerationUpgradeItem extends UtilityUpgradeItem {
 
@@ -65,16 +65,11 @@ public class WaterGenerationUpgradeItem extends UtilityUpgradeItem {
         }
 
         int amountPerTick = tier.getGenerationRate();
-        fluidHandler.fillRouted(
-                new BigFluidStack(new FluidStack(water, 1), amountPerTick),
-                StorageAction.EXECUTE);
+        fluidHandler.fillRouted(new BigFluidStack(new FluidStack(water, 1), amountPerTick), StorageAction.EXECUTE);
     }
 
     public enum WaterGenerationTire {
-        T1(1, Configurations.GENERATION.WATER_GENERATION_T1),
-        T2(2, Configurations.GENERATION.WATER_GENERATION_T2),
-        T3(3, Configurations.GENERATION.WATER_GENERATION_T3),
-        T4(4, Configurations.GENERATION.WATER_GENERATION_T4);
+        T1(1, Configurations.GENERATION.WATER_GENERATION_T1), T2(2, Configurations.GENERATION.WATER_GENERATION_T2), T3(3, Configurations.GENERATION.WATER_GENERATION_T3), T4(4, Configurations.GENERATION.WATER_GENERATION_T4);
 
         private final int tier;
         private final int generationRate;

@@ -1,5 +1,6 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory;
 
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
 import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigInventoryHandler;
 import net.minecraft.nbt.NBTTagCompound;
 
@@ -15,6 +16,7 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
     private boolean voidsOverflow = false;
     private boolean isCreative = false;
     private double multiplier = 64D * 4D;
+
     public EnderInventoryHandler() {
         super(1); // Ender drawer has one shared slot.
     }
@@ -29,7 +31,7 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
             return;
         }
         this.multiplier = multiplier;
-        notifyConfigurationChanged();
+        onChange(StorageChange.reset());
     }
 
     @Override
@@ -42,7 +44,7 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
             return;
         }
         this.voidsOverflow = voidsOverflow;
-        notifyConfigurationChanged();
+        onChange(StorageChange.reset());
     }
 
     @Override
@@ -69,7 +71,7 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
             return;
         }
         this.isCreative = isCreative;
-        notifyConfigurationChanged();
+        onChange(StorageChange.reset());
     }
 
     public String getFrequency() {
@@ -81,7 +83,7 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
             return;
         }
         this.frequency = frequency;
-        notifyConfigurationChanged();
+        onChange(StorageChange.reset());
     }
 
     public NBTTagCompound serializeNBTFull() {
@@ -105,11 +107,7 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
             nextMultiplier = 1D;
         }
 
-        boolean configurationChanged = !Objects.equals(frequency, nextFrequency)
-                || locked != nextLocked
-                || voidsOverflow != nextVoidsOverflow
-                || isCreative != nextCreative
-                || Double.compare(multiplier, nextMultiplier) != 0;
+        boolean configurationChanged = !Objects.equals(frequency, nextFrequency) || locked != nextLocked || voidsOverflow != nextVoidsOverflow || isCreative != nextCreative || Double.compare(multiplier, nextMultiplier) != 0;
         // Set all virtual properties before loading slots so unlock/creative
         // filtering is applied against the final configuration.
         frequency = nextFrequency;
@@ -121,7 +119,7 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
 
         boolean storageChanged = !beforeStorage.equals(serializeNBT());
         if (configurationChanged && !storageChanged) {
-            notifyConfigurationChanged();
+            onChange(StorageChange.reset());
         }
     }
 }

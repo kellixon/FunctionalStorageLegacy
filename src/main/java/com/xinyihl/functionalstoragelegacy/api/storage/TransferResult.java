@@ -11,8 +11,7 @@ import java.util.Objects;
  * @param <S> concrete snapshot type
  * @param <K> immutable resource key type
  */
-public final class TransferResult<
-        S extends StorageSnapshot<S, K>, K extends StorageKey> {
+public final class TransferResult<S extends StorageSnapshot<S, K>, K extends StorageKey> {
 
     private final long requestedAmount;
     private final S processed;
@@ -21,7 +20,7 @@ public final class TransferResult<
     /**
      * Creates a validated result.
      *
-     * @throws NullPointerException if {@code processed} or {@code action} is null
+     * @throws NullPointerException     if {@code processed} or {@code action} is null
      * @throws IllegalArgumentException if amounts are negative, processed exceeds
      *                                  requested, or emptiness contradicts the amount
      */

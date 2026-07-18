@@ -1,9 +1,9 @@
 package com.xinyihl.functionalstoragelegacy.misc;
 
 import com.xinyihl.functionalstoragelegacy.Tags;
+import com.xinyihl.functionalstoragelegacy.client.model.FramedDrawerBakedModel;
 import com.xinyihl.functionalstoragelegacy.client.render.ControllerRenderer;
 import com.xinyihl.functionalstoragelegacy.client.render.DrawerRenderer;
-import com.xinyihl.functionalstoragelegacy.client.model.FramedDrawerBakedModel;
 import com.xinyihl.functionalstoragelegacy.common.block.FramedDrawerBlock;
 import com.xinyihl.functionalstoragelegacy.common.block.WoodDrawerBlock;
 import com.xinyihl.functionalstoragelegacy.common.tile.EnderDrawerTile;
@@ -16,8 +16,8 @@ import com.xinyihl.functionalstoragelegacy.common.tile.controller.DrawerControll
 import net.minecraft.block.Block;
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.item.Item;
-import net.minecraftforge.client.event.ModelRegistryEvent;
 import net.minecraftforge.client.event.ModelBakeEvent;
+import net.minecraftforge.client.event.ModelRegistryEvent;
 import net.minecraftforge.client.model.ModelLoader;
 import net.minecraftforge.fml.client.registry.ClientRegistry;
 import net.minecraftforge.fml.common.Mod;
@@ -25,8 +25,8 @@ import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.relauncher.Side;
 
-import java.util.Objects;
 import java.util.ArrayList;
+import java.util.Objects;
 
 public class ClientProxy extends CommonProxy {
 
@@ -94,7 +94,7 @@ public class ClientProxy extends CommonProxy {
             registerItemModel(RegistrationHandler.WATER_GENERATION_UPGRADE_T3);
             registerItemModel(RegistrationHandler.WATER_GENERATION_UPGRADE_T4);
 
-            if(Configurations.GENERATION.UNIVERSAL_ITEMS_GENERATION_REGISTERED) {
+            if (Configurations.GENERATION.UNIVERSAL_ITEMS_GENERATION_REGISTERED) {
                 registerItemModel(RegistrationHandler.UNIVERSAL_ITEM_GENERATION_T1);
                 registerItemModel(RegistrationHandler.UNIVERSAL_ITEM_GENERATION_T2);
                 registerItemModel(RegistrationHandler.UNIVERSAL_ITEM_GENERATION_T3);
@@ -104,15 +104,11 @@ public class ClientProxy extends CommonProxy {
 
         @SubscribeEvent
         public static void bakeFramedModels(ModelBakeEvent event) {
-            for (ModelResourceLocation location : new ArrayList<>(
-                    event.getModelRegistry().getKeys())) {
-                if (!Tags.MOD_ID.equals(location.getNamespace())
-                        || !location.getPath().matches("framed_[124]")) {
+            for (ModelResourceLocation location : new ArrayList<>(event.getModelRegistry().getKeys())) {
+                if (!Tags.MOD_ID.equals(location.getNamespace()) || !location.getPath().matches("framed_[124]")) {
                     continue;
                 }
-                event.getModelRegistry().putObject(location,
-                        new FramedDrawerBakedModel(
-                                event.getModelRegistry().getObject(location)));
+                event.getModelRegistry().putObject(location, new FramedDrawerBakedModel(event.getModelRegistry().getObject(location)));
             }
         }
 

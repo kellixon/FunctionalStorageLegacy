@@ -8,9 +8,9 @@ import com.xinyihl.functionalstoragelegacy.api.upgrade.IStorageUpgrade;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.StorageFeature;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeState;
 import com.xinyihl.functionalstoragelegacy.common.block.DrawerAttachment;
-import com.xinyihl.functionalstoragelegacy.common.storage.DrawerLayout;
 import com.xinyihl.functionalstoragelegacy.common.block.base.DrawerBlock;
 import com.xinyihl.functionalstoragelegacy.common.item.ConfigurationToolItem;
+import com.xinyihl.functionalstoragelegacy.common.storage.DrawerLayout;
 import com.xinyihl.functionalstoragelegacy.common.tile.EnderDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.FluidDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
@@ -50,12 +50,15 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
     private static final float Z_OFFSET_UPGRADE = 1.005F;
     private static final float Z_OFFSET_LOCK = 1.01F;
 
+    private static float ratio(long amount, long capacity) {
+        return capacity <= 0L ? 0.0F : (float) Math.min(1.0D, amount / (double) capacity);
+    }
+
     // ============================================================
     // Standard drawers
     // ============================================================
     @Override
     public void render(@Nonnull ControllableDrawerTile te, double x, double y, double z, float partialTicks, int destroyStage, float alpha) {
-        if (te == null || te.getWorld() == null) return;
 
         // Distance check using client config render range
         double distSq = te.getDistanceSq(Minecraft.getMinecraft().player.posX, Minecraft.getMinecraft().player.posY, Minecraft.getMinecraft().player.posZ);
@@ -141,7 +144,7 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
     private void renderItemSlot(IBigItemHandler handler, int slot, float posX, float posY, float slotScale, boolean showRender, boolean showCount, float textScale, DrawerOptions options) {
         if (slot < 0 || slot >= handler.getStorageCount()) return;
         BigItemStack snapshot = handler.getSnapshot(slot);
-        if (snapshot == null || !snapshot.hasTemplate()) return;
+        if (!snapshot.hasTemplate()) return;
         ItemStack stack = snapshot.getTemplate();
 
         long count = snapshot.getAmount();
@@ -186,7 +189,7 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
     private void renderCompactSlot(IBigItemHandler handler, int slot, float posX, float posY, boolean showRender, boolean showCount, DrawerOptions options) {
         if (slot < 0 || slot >= handler.getStorageCount()) return;
         BigItemStack snapshot = handler.getSnapshot(slot);
-        if (snapshot == null || !snapshot.hasTemplate()) return;
+        if (!snapshot.hasTemplate()) return;
         ItemStack stack = snapshot.getTemplate();
 
         long count = snapshot.getAmount();
@@ -201,7 +204,6 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
         }
     }
 
-
     // ============================================================
     // Ender drawers
     // ============================================================
@@ -213,7 +215,7 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
         boolean showCount = options == null || options.isShowItemCount();
 
         BigItemStack snapshot = handler.getSnapshot(0);
-        if (snapshot == null || !snapshot.hasTemplate()) return;
+        if (!snapshot.hasTemplate()) return;
         ItemStack stack = snapshot.getTemplate();
 
         long count = snapshot.getAmount();
@@ -252,13 +254,10 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
         }
     }
 
-    private void renderSingleFluidSlot(IBigFluidHandler handler, int slot, float posX, float posY, float slotScale,
-                                       float fluidHalfWidth, float fluidHalfHeight,
-                                       boolean showRender, boolean showCount, float textScale,
-                                       DrawerOptions options) {
+    private void renderSingleFluidSlot(IBigFluidHandler handler, int slot, float posX, float posY, float slotScale, float fluidHalfWidth, float fluidHalfHeight, boolean showRender, boolean showCount, float textScale, DrawerOptions options) {
         if (slot < 0 || slot >= handler.getStorageCount()) return;
         BigFluidStack snapshot = handler.getSnapshot(slot);
-        if (snapshot == null || !snapshot.hasTemplate()) return;
+        if (!snapshot.hasTemplate()) return;
         FluidStack fluid = snapshot.getTemplate();
 
         long count = snapshot.getAmount();
@@ -271,10 +270,6 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
         if (showCount) {
             renderCountOnFace(count, posX, posY, slotScale, textScale, Z_OFFSET_COUNT);
         }
-    }
-
-    private static float ratio(long amount, long capacity) {
-        return capacity <= 0L ? 0.0F : (float) Math.min(1.0D, amount / (double) capacity);
     }
 
     // ============================================================
@@ -374,13 +369,10 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
     // ============================================================
     // Core rendering: fluid icon on face
     // ============================================================
-    private void renderFluidOnFace(FluidStack fluid, float posX, float posY, float slotScale, float zOffset,
-                                   float halfWidth, float halfHeight) {
+    private void renderFluidOnFace(FluidStack fluid, float posX, float posY, float slotScale, float zOffset, float halfWidth, float halfHeight) {
         if (fluid == null || fluid.getFluid() == null) return;
 
-        TextureAtlasSprite sprite = Minecraft.getMinecraft().getTextureMapBlocks()
-                .getAtlasSprite(fluid.getFluid().getStill(fluid).toString());
-        if (sprite == null) return;
+        TextureAtlasSprite sprite = Minecraft.getMinecraft().getTextureMapBlocks().getAtlasSprite(fluid.getFluid().getStill(fluid).toString());
         GlStateManager.pushMatrix();
         GlStateManager.translate(posX, posY, zOffset);
 
@@ -605,8 +597,7 @@ public class DrawerRenderer extends TileEntitySpecialRenderer<ControllableDrawer
         GlStateManager.popMatrix();
     }
 
-    private ItemStack findUpgradeProvidingFeature(
-            ControllableDrawerTile tile, StorageFeature feature) {
+    private ItemStack findUpgradeProvidingFeature(ControllableDrawerTile tile, StorageFeature feature) {
         for (int i = 0; i < tile.getStorageUpgrades().getSlots(); i++) {
             ItemStack stack = tile.getStorageUpgrades().getStackInSlot(i);
             if (providesFeature(stack, feature)) {

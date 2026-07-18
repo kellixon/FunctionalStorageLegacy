@@ -8,7 +8,9 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.Objects;
 
-/** Immutable exact fluid identity containing the fluid and its stack NBT. */
+/**
+ * Immutable exact fluid identity containing the fluid and its stack NBT.
+ */
 public final class FluidStorageKey implements StorageKey {
 
     private final Fluid fluid;
@@ -29,19 +31,25 @@ public final class FluidStorageKey implements StorageKey {
         this.hashCode = computeHashCode();
     }
 
-    /** @return the represented fluid */
+    /**
+     * @return the represented fluid
+     */
     @Nonnull
     public Fluid getFluid() {
         return fluid;
     }
 
-    /** @return a defensive copy of the represented fluid NBT, or {@code null} */
+    /**
+     * @return a defensive copy of the represented fluid NBT, or {@code null}
+     */
     @Nullable
     public NBTTagCompound getTag() {
         return tag == null ? null : tag.copy();
     }
 
-    /** @return a fresh one-millibucket stack carrying this key's NBT */
+    /**
+     * @return a fresh one-millibucket stack carrying this key's NBT
+     */
     @Nonnull
     public FluidStack toFluidStack() {
         FluidStack stack = new FluidStack(fluid, 1);

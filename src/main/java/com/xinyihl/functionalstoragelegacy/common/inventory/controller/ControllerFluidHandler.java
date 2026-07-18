@@ -1,27 +1,15 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory.controller;
 
-import com.xinyihl.functionalstoragelegacy.api.storage.BigFluidStack;
-import com.xinyihl.functionalstoragelegacy.api.storage.FluidStorageKey;
-import com.xinyihl.functionalstoragelegacy.api.storage.IBigFluidHandler;
-import com.xinyihl.functionalstoragelegacy.api.storage.IStorageHandler;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageKey;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageRoutingPolicy;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
-import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
+import com.xinyihl.functionalstoragelegacy.api.storage.*;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Consumer;
 
-/** Fluid-specific routing facade over the generic controller index. */
+/**
+ * Fluid-specific routing facade over the generic controller index.
+ */
 public final class ControllerFluidHandler implements IBigFluidHandler {
 
     private final StorageRoutingPolicy<BigFluidStack, FluidStorageKey> policy;
@@ -31,10 +19,34 @@ public final class ControllerFluidHandler implements IBigFluidHandler {
         this(new FluidStorageRoutingPolicy());
     }
 
-    public ControllerFluidHandler(
-            @Nonnull StorageRoutingPolicy<BigFluidStack, FluidStorageKey> policy) {
+    public ControllerFluidHandler(@Nonnull StorageRoutingPolicy<BigFluidStack, FluidStorageKey> policy) {
         this.policy = Objects.requireNonNull(policy, "policy");
         this.index = new ControllerStorageIndex<>(BigFluidStack.empty(), policy);
+    }
+
+    private static IBigFluidHandler fluidHandler(ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> storage) {
+        return (IBigFluidHandler) storage.getHandler();
+    }
+
+    private static long amountOf(@Nullable BigFluidStack request) {
+        return request == null || request.isEmpty() ? 0L : request.getAmount();
+    }
+
+    private static long bounded(@Nullable TransferResult<BigFluidStack, FluidStorageKey> result, long remaining) {
+        return result == null ? 0L : Math.min(remaining, Math.max(0L, result.getProcessedAmount()));
+    }
+
+    private static long saturatedAdd(long left, long right) {
+        return left > Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
+    }
+
+    private static TransferResult<BigFluidStack, FluidStorageKey> aggregate(BigFluidStack request, long processed, StorageAction action) {
+        long amount = Math.min(request.getAmount(), Math.max(0L, processed));
+        return new TransferResult<>(request.getAmount(), amount == 0L ? BigFluidStack.empty() : request.withAmount(amount), action);
+    }
+
+    private static TransferResult<BigFluidStack, FluidStorageKey> emptyResult(long requested, StorageAction action) {
+        return new TransferResult<>(requested, BigFluidStack.empty(), action);
     }
 
     @Override
@@ -60,67 +72,54 @@ public final class ControllerFluidHandler implements IBigFluidHandler {
 
     @Override
     public boolean supportsFill(int tank) {
-        ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> storage =
-                index.getIndexedStorage(tank);
+        ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> storage = index.getIndexedStorage(tank);
         return storage != null && fluidHandler(storage).supportsFill(storage.getLocalIndex());
     }
 
     @Override
     public boolean supportsDrain(int tank) {
-        ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> storage =
-                index.getIndexedStorage(tank);
+        ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> storage = index.getIndexedStorage(tank);
         return storage != null && fluidHandler(storage).supportsDrain(storage.getLocalIndex());
     }
 
     @Override
     public boolean supportsFluid(int tank, @Nonnull BigFluidStack fluid) {
-        ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> storage =
-                index.getIndexedStorage(tank);
-        return storage != null && fluid != null
-                && fluidHandler(storage).supportsFluid(storage.getLocalIndex(), fluid);
+        ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> storage = index.getIndexedStorage(tank);
+        return storage != null && fluidHandler(storage).supportsFluid(storage.getLocalIndex(), fluid);
     }
 
     @Nonnull
     @Override
-    public TransferResult<BigFluidStack, FluidStorageKey> insert(
-            int tank, @Nonnull BigFluidStack request, @Nonnull StorageAction action) {
+    public TransferResult<BigFluidStack, FluidStorageKey> insert(int tank, @Nonnull BigFluidStack request, @Nonnull StorageAction action) {
         return index.insert(tank, request, action);
     }
 
     @Nonnull
     @Override
-    public TransferResult<BigFluidStack, FluidStorageKey> extract(
-            int tank, long amount, @Nonnull StorageAction action) {
+    public TransferResult<BigFluidStack, FluidStorageKey> extract(int tank, long amount, @Nonnull StorageAction action) {
         return index.extract(tank, amount, action);
     }
 
     @Nonnull
     @Override
-    public TransferResult<BigFluidStack, FluidStorageKey> fillRouted(
-            @Nonnull BigFluidStack request, @Nonnull StorageAction action) {
+    public TransferResult<BigFluidStack, FluidStorageKey> fillRouted(@Nonnull BigFluidStack request, @Nonnull StorageAction action) {
         Objects.requireNonNull(action, "action");
         long requested = amountOf(request);
         if (requested == 0L) {
             return emptyResult(0L, action);
         }
-        ControllerStorageIndex.CandidateSnapshot<BigFluidStack, FluidStorageKey> snapshot =
-                index.snapshotCandidates(request);
+        ControllerStorageIndex.CandidateSnapshot<BigFluidStack, FluidStorageKey> snapshot = index.snapshotCandidates(request);
         List<Candidate> candidates = new ArrayList<>();
         addConfigured(candidates, snapshot.getExact(), request);
         addConfigured(candidates, snapshot.getAliases(), request);
-        for (ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> candidate
-                : snapshot.getEmpty()) {
+        for (ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> candidate : snapshot.getEmpty()) {
             IBigFluidHandler child = fluidHandler(candidate);
             int local = candidate.getLocalIndex();
-            if (child.supportsFill(local)
-                    && child.supportsFluid(local, request)
-                    && policy.isEmptySlotEligible(child, local, request)) {
+            if (child.supportsFill(local) && child.supportsFluid(local, request) && policy.isEmptySlotEligible(child, local, request)) {
                 candidates.add(new Candidate(candidate, 2));
             }
         }
-        Collections.sort(candidates, Comparator
-                .comparingInt((Candidate candidate) -> candidate.priority)
-                .thenComparingInt(candidate -> candidate.storage.getGlobalIndex()));
+        candidates.sort(Comparator.comparingInt((Candidate candidate) -> candidate.priority).thenComparingInt(candidate -> candidate.storage.getGlobalIndex()));
 
         long processed = 0L;
         for (Candidate candidate : new ArrayList<>(candidates)) {
@@ -128,9 +127,7 @@ public final class ControllerFluidHandler implements IBigFluidHandler {
                 break;
             }
             long remaining = requested - processed;
-            TransferResult<BigFluidStack, FluidStorageKey> filled = fluidHandler(
-                    candidate.storage).insert(candidate.storage.getLocalIndex(),
-                    request.withAmount(remaining), action);
+            TransferResult<BigFluidStack, FluidStorageKey> filled = fluidHandler(candidate.storage).insert(candidate.storage.getLocalIndex(), request.withAmount(remaining), action);
             processed = saturatedAdd(processed, bounded(filled, remaining));
         }
         return aggregate(request, processed, action);
@@ -138,31 +135,26 @@ public final class ControllerFluidHandler implements IBigFluidHandler {
 
     @Nonnull
     @Override
-    public TransferResult<BigFluidStack, FluidStorageKey> drainRouted(
-            @Nonnull BigFluidStack request, @Nonnull StorageAction action) {
+    public TransferResult<BigFluidStack, FluidStorageKey> drainRouted(@Nonnull BigFluidStack request, @Nonnull StorageAction action) {
         Objects.requireNonNull(action, "action");
         long requested = amountOf(request);
         if (requested == 0L) {
             return emptyResult(0L, action);
         }
-        List<ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey>> candidates =
-                index.snapshotCandidates(request).getExact();
+        List<ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey>> candidates = index.snapshotCandidates(request).getExact();
         long processed = 0L;
-        for (ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> candidate
-                : candidates) {
+        for (ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> candidate : candidates) {
             if (processed >= requested) {
                 break;
             }
             BigFluidStack current = candidate.getSnapshot();
             IBigFluidHandler child = fluidHandler(candidate);
             int local = candidate.getLocalIndex();
-            if (current.getAmount() <= 0L || !current.isSameType(request)
-                    || !child.supportsDrain(local) || !child.supportsFluid(local, request)) {
+            if (current.getAmount() <= 0L || !current.isSameType(request) || !child.supportsDrain(local) || !child.supportsFluid(local, request)) {
                 continue;
             }
             long remaining = requested - processed;
-            TransferResult<BigFluidStack, FluidStorageKey> drained = child.extract(
-                    local, remaining, action);
+            TransferResult<BigFluidStack, FluidStorageKey> drained = child.extract(local, remaining, action);
             processed = saturatedAdd(processed, bounded(drained, remaining));
         }
         return aggregate(request, processed, action);
@@ -170,8 +162,7 @@ public final class ControllerFluidHandler implements IBigFluidHandler {
 
     @Nonnull
     @Override
-    public TransferResult<BigFluidStack, FluidStorageKey> drainRouted(
-            long amount, @Nonnull StorageAction action) {
+    public TransferResult<BigFluidStack, FluidStorageKey> drainRouted(long amount, @Nonnull StorageAction action) {
         Objects.requireNonNull(action, "action");
         long requested = Math.max(0L, amount);
         if (requested == 0L) {
@@ -181,24 +172,18 @@ public final class ControllerFluidHandler implements IBigFluidHandler {
         // never enter this selection pass.
         List<Integer> occupied = index.getOccupiedIndices();
         for (Integer global : occupied) {
-            ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> candidate =
-                    index.getIndexedStorage(global);
+            ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> candidate = index.getIndexedStorage(global);
             if (candidate == null) {
                 continue;
             }
             BigFluidStack current = candidate.getSnapshot();
             IBigFluidHandler child = fluidHandler(candidate);
             int local = candidate.getLocalIndex();
-            if (current.getAmount() > 0L && child.supportsDrain(local)
-                    && child.supportsFluid(local, current)) {
+            if (current.getAmount() > 0L && child.supportsDrain(local) && child.supportsFluid(local, current)) {
                 return drainRouted(current.withAmount(requested), action);
             }
         }
         return emptyResult(requested, action);
-    }
-
-    public void setHandlers(@Nonnull List<? extends IBigFluidHandler> handlers) {
-        index.setHandlers(handlers);
     }
 
     public void closeSubscriptions() {
@@ -212,6 +197,10 @@ public final class ControllerFluidHandler implements IBigFluidHandler {
             result.add((IBigFluidHandler) handler);
         }
         return Collections.unmodifiableList(result);
+    }
+
+    public void setHandlers(@Nonnull List<? extends IBigFluidHandler> handlers) {
+        index.setHandlers(handlers);
     }
 
     @Nonnull
@@ -265,14 +254,12 @@ public final class ControllerFluidHandler implements IBigFluidHandler {
     }
 
     @Nullable
-    public ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey>
-    getIndexedTank(int globalIndex) {
+    public ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> getIndexedTank(int globalIndex) {
         return index.getIndexedStorage(globalIndex);
     }
 
     @Nonnull
-    public List<ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey>>
-    getIndexedTanks() {
+    public List<ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey>> getIndexedTanks() {
         return index.getIndexedStorages();
     }
 
@@ -292,68 +279,29 @@ public final class ControllerFluidHandler implements IBigFluidHandler {
 
     @Nonnull
     @Override
-    public StorageSubscription subscribe(
-            @Nonnull Consumer<? super StorageChange<BigFluidStack, FluidStorageKey>> listener) {
+    public StorageSubscription subscribe(@Nonnull Consumer<? super StorageChange<BigFluidStack, FluidStorageKey>> listener) {
         return index.subscribe(listener);
     }
 
-    private void addConfigured(
-            List<Candidate> result,
-            List<ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey>> supplied,
-            BigFluidStack request) {
-        for (ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> candidate
-                : supplied) {
+    private void addConfigured(List<Candidate> result, List<ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey>> supplied, BigFluidStack request) {
+        for (ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> candidate : supplied) {
             IBigFluidHandler child = fluidHandler(candidate);
             int local = candidate.getLocalIndex();
             if (!child.supportsFill(local) || !child.supportsFluid(local, request)) {
                 continue;
             }
-            int priority = policy.getCandidatePriority(
-                    child, local, candidate.getSnapshot(), request);
+            int priority = policy.getCandidatePriority(child, local, candidate.getSnapshot(), request);
             if (priority >= 0) {
                 result.add(new Candidate(candidate, priority));
             }
         }
     }
 
-    private static IBigFluidHandler fluidHandler(
-            ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> storage) {
-        return (IBigFluidHandler) storage.getHandler();
-    }
-
-    private static long amountOf(@Nullable BigFluidStack request) {
-        return request == null || request.isEmpty() ? 0L : request.getAmount();
-    }
-
-    private static long bounded(
-            @Nullable TransferResult<BigFluidStack, FluidStorageKey> result, long remaining) {
-        return result == null ? 0L
-                : Math.min(remaining, Math.max(0L, result.getProcessedAmount()));
-    }
-
-    private static long saturatedAdd(long left, long right) {
-        return left > Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
-    }
-
-    private static TransferResult<BigFluidStack, FluidStorageKey> aggregate(
-            BigFluidStack request, long processed, StorageAction action) {
-        long amount = Math.min(request.getAmount(), Math.max(0L, processed));
-        return new TransferResult<>(request.getAmount(), amount == 0L
-                ? BigFluidStack.empty() : request.withAmount(amount), action);
-    }
-
-    private static TransferResult<BigFluidStack, FluidStorageKey> emptyResult(
-            long requested, StorageAction action) {
-        return new TransferResult<>(requested, BigFluidStack.empty(), action);
-    }
-
     private static final class Candidate {
         private final ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> storage;
         private final int priority;
 
-        private Candidate(
-                ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> storage,
-                int priority) {
+        private Candidate(ControllerStorageIndex.IndexedStorage<BigFluidStack, FluidStorageKey> storage, int priority) {
             this.storage = storage;
             this.priority = priority;
         }

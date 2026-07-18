@@ -1,6 +1,7 @@
 package com.xinyihl.functionalstoragelegacy.common.tile.compact;
 
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.StorageFeature;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeAttribute;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeState;
@@ -42,11 +43,11 @@ public class CompactingDrawerTile extends ControllableDrawerTile {
         super();
         this.handler = createHandler(slots);
         this.hasCheckedRecipes = false;
-        bindStorageHandler(this.handler, this.handler::notifyConfigurationChanged);
+        bindStorageHandler(this.handler, () -> this.handler.onChange(StorageChange.reset()));
     }
 
     protected CompactingInventoryHandler createHandler(int slots) {
-        CompactingInventoryHandler created = new CompactingInventoryHandler(slots) {
+        return new CompactingInventoryHandler(slots) {
             @Override
             public double getMultiplier() {
                 return CompactingDrawerTile.this.getStorageMultiplier(8.0D);
@@ -77,7 +78,6 @@ public class CompactingDrawerTile extends ControllableDrawerTile {
                 return CompactingDrawerTile.this.isLocked();
             }
         };
-        return created;
     }
 
     @Override
@@ -90,12 +90,7 @@ public class CompactingDrawerTile extends ControllableDrawerTile {
             if (!hasCheckedRecipes) {
                 if (handler.isConfigured() && !getParentStack().isEmpty()) {
                     int anchorSlot = getFirstNonEmptySlot();
-                    List<CompactingInventoryHandler.Tier> results = CompactingUtil.getCompactingResults(
-                            this.world,
-                            getParentStack(),
-                            getSlotCount(),
-                            anchorSlot
-                    );
+                    List<CompactingInventoryHandler.Tier> results = CompactingUtil.getCompactingResults(this.world, getParentStack(), getSlotCount(), anchorSlot);
                     if (!results.isEmpty()) {
                         applyCompactingResults(results);
                     }
@@ -120,8 +115,7 @@ public class CompactingDrawerTile extends ControllableDrawerTile {
     }
 
     @Override
-    public boolean onSlotActivated(EntityPlayer player, EnumHand hand, EnumFacing facing,
-                                   float hitX, float hitY, float hitZ, int slot) {
+    public boolean onSlotActivated(EntityPlayer player, EnumHand hand, EnumFacing facing, float hitX, float hitY, float hitZ, int slot) {
         ItemStack heldStack = player.getHeldItem(hand);
 
         if (super.onSlotActivated(player, hand, facing, hitX, hitY, hitZ, slot)) {
@@ -202,8 +196,7 @@ public class CompactingDrawerTile extends ControllableDrawerTile {
 
     @Override
     protected boolean canApplyUpgradeState(UpgradeState state) {
-        if (state.hasFeature(StorageFeature.CREATIVE)
-                || state.hasFeature(StorageFeature.MAX_CAPACITY)) {
+        if (state.hasFeature(StorageFeature.CREATIVE) || state.hasFeature(StorageFeature.MAX_CAPACITY)) {
             return true;
         }
         double calculated = state.calculate(UpgradeAttribute.ITEM_CAPACITY, 8.0D);
@@ -219,7 +212,7 @@ public class CompactingDrawerTile extends ControllableDrawerTile {
     protected void readCustomData(NBTTagCompound nbt) {
         handler = createHandler(getSlotCount());
         handler.deserializeNBT(nbt);
-        finishStorageRead(handler, handler::notifyConfigurationChanged);
+        finishStorageRead(handler, () -> handler.onChange(StorageChange.reset()));
         hasCheckedRecipes = false;
     }
 
@@ -237,7 +230,7 @@ public class CompactingDrawerTile extends ControllableDrawerTile {
         super.readFromNBT(compound);
         handler = createHandler(getSlotCount());
         handler.deserializeNBT(compound);
-        finishStorageRead(handler, handler::notifyConfigurationChanged);
+        finishStorageRead(handler, () -> handler.onChange(StorageChange.reset()));
         hasCheckedRecipes = false;
     }
 

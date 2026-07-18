@@ -1,8 +1,8 @@
 package com.xinyihl.functionalstoragelegacy.common.world;
 
 import com.xinyihl.functionalstoragelegacy.Tags;
-import com.xinyihl.functionalstoragelegacy.common.inventory.EnderInventoryHandler;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
+import com.xinyihl.functionalstoragelegacy.common.inventory.EnderInventoryHandler;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
 import net.minecraft.world.storage.WorldSavedData;
@@ -42,7 +42,8 @@ public class EnderSavedData extends WorldSavedData {
     public EnderInventoryHandler getFrequency(String frequency) {
         final String key = frequency == null ? "" : frequency;
         return frequencyMap.computeIfAbsent(key, f -> {
-            EnderInventoryHandler handler = new EnderInventoryHandler() { };
+            EnderInventoryHandler handler = new EnderInventoryHandler() {
+            };
             // Initial construction is deliberately silent to external listeners.
             handler.setFrequency(f);
             dirtySubscriptions.put(f, handler.subscribe(change -> markDirty()));
@@ -51,7 +52,7 @@ public class EnderSavedData extends WorldSavedData {
     }
 
     @Override
-    public void readFromNBT(NBTTagCompound nbt) {
+    public void readFromNBT(@Nonnull NBTTagCompound nbt) {
         for (StorageSubscription subscription : dirtySubscriptions.values()) {
             if (subscription != null) {
                 subscription.close();
@@ -63,7 +64,8 @@ public class EnderSavedData extends WorldSavedData {
         for (int i = 0; i < count; i++) {
             String key = nbt.getString("Freq_" + i);
             NBTTagCompound data = nbt.getCompoundTag("FreqData_" + i);
-            EnderInventoryHandler handler = new EnderInventoryHandler() { };
+            EnderInventoryHandler handler = new EnderInventoryHandler() {
+            };
             handler.deserializeNBTFull(data);
             handler.setFrequency(key);
             dirtySubscriptions.put(key, handler.subscribe(change -> markDirty()));

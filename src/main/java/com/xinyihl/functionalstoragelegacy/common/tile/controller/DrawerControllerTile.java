@@ -1,12 +1,7 @@
 package com.xinyihl.functionalstoragelegacy.common.tile.controller;
 
 import com.xinyihl.functionalstoragelegacy.FunctionalStorageLegacy;
-import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
-import com.xinyihl.functionalstoragelegacy.api.storage.IBigFluidHandler;
-import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
-import com.xinyihl.functionalstoragelegacy.api.storage.ItemStorageKey;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
-import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
+import com.xinyihl.functionalstoragelegacy.api.storage.*;
 import com.xinyihl.functionalstoragelegacy.client.render.DrawerOptions;
 import com.xinyihl.functionalstoragelegacy.common.inventory.controller.ControllerFluidHandler;
 import com.xinyihl.functionalstoragelegacy.common.inventory.controller.ControllerItemHandler;
@@ -103,12 +98,23 @@ public class DrawerControllerTile extends ControllableDrawerTile {
         this.fluidHandler = new ControllerFluidHandler();
     }
 
+    private static ItemStack remainderOf(ItemStack original, long remaining) {
+        if (remaining <= 0L) {
+            return ItemStack.EMPTY;
+        }
+        ItemStack remainder = original.copy();
+        remainder.setCount((int) Math.min(remaining, original.getCount()));
+        return remainder;
+    }
+
     private void refreshHandlers() {
         inventoryHandler.setHandlers(connectedDrawers.getItemHandlers());
         fluidHandler.setHandlers(connectedDrawers.getFluidHandlers());
     }
 
-    /** Refreshes flattened mappings after a stable child facade changes target. */
+    /**
+     * Refreshes flattened mappings after a stable child facade changes target.
+     */
     public void refreshHandlerMappings() {
         refreshHandlers();
     }
@@ -124,16 +130,13 @@ public class DrawerControllerTile extends ControllableDrawerTile {
         }
     }
 
-    private boolean rebuild() {
+    private void rebuild() {
         AxisAlignedBB area = new AxisAlignedBB(pos).grow(getControllerRange());
         boolean topologyChanged = false;
         Iterator<Long> iterator = connectedDrawers.getConnectedDrawers().iterator();
         while (iterator.hasNext()) {
             BlockPos drawerPos = BlockPos.fromLong(iterator.next());
-            boolean inRange = area.contains(new Vec3d(
-                    drawerPos.getX() + 0.5,
-                    drawerPos.getY() + 0.5,
-                    drawerPos.getZ() + 0.5));
+            boolean inRange = area.contains(new Vec3d(drawerPos.getX() + 0.5, drawerPos.getY() + 0.5, drawerPos.getZ() + 0.5));
             if (!inRange) {
                 iterator.remove();
                 topologyChanged = true;
@@ -154,11 +157,10 @@ public class DrawerControllerTile extends ControllableDrawerTile {
             markDirty();
             sendUpdatePacket();
         }
-        return topologyChanged;
     }
 
     @Override
-    public void setWorld(World worldIn) {
+    public void setWorld(@Nonnull World worldIn) {
         super.setWorld(worldIn);
         connectedDrawers.setLevel(worldIn);
     }
@@ -199,29 +201,23 @@ public class DrawerControllerTile extends ControllableDrawerTile {
 
             if (!heldStack.isEmpty()) {
                 BigItemStack request = new BigItemStack(heldStack, heldStack.getCount());
-                TransferResult<BigItemStack, ItemStorageKey> simulated = inventoryHandler.insertRouted(
-                        request, StorageAction.SIMULATE);
+                TransferResult<BigItemStack, ItemStorageKey> simulated = inventoryHandler.insertRouted(request, StorageAction.SIMULATE);
                 if (simulated.getProcessedAmount() > 0L) {
-                    TransferResult<BigItemStack, ItemStorageKey> inserted = inventoryHandler.insertRouted(
-                            request, StorageAction.EXECUTE);
+                    TransferResult<BigItemStack, ItemStorageKey> inserted = inventoryHandler.insertRouted(request, StorageAction.EXECUTE);
                     player.setHeldItem(hand, remainderOf(heldStack, inserted.getRemainingAmount()));
                     INTERACTION_LOGGER.put(player.getUniqueID(), System.currentTimeMillis());
                     return true;
                 }
             }
 
-            boolean doubleClick = System.currentTimeMillis()
-                    - INTERACTION_LOGGER.getOrDefault(
-                            player.getUniqueID(), System.currentTimeMillis()) < 300L;
+            boolean doubleClick = System.currentTimeMillis() - INTERACTION_LOGGER.getOrDefault(player.getUniqueID(), System.currentTimeMillis()) < 300L;
             if (doubleClick) {
                 for (ItemStack inventoryStack : player.inventory.mainInventory) {
                     if (inventoryStack.isEmpty()) {
                         continue;
                     }
-                    BigItemStack request = new BigItemStack(
-                            inventoryStack, inventoryStack.getCount());
-                    TransferResult<BigItemStack, ItemStorageKey> inserted = inventoryHandler.insertRouted(
-                            request, StorageAction.EXECUTE);
+                    BigItemStack request = new BigItemStack(inventoryStack, inventoryStack.getCount());
+                    TransferResult<BigItemStack, ItemStorageKey> inserted = inventoryHandler.insertRouted(request, StorageAction.EXECUTE);
                     inventoryStack.setCount((int) inserted.getRemainingAmount());
                 }
             }
@@ -230,15 +226,6 @@ public class DrawerControllerTile extends ControllableDrawerTile {
         }
 
         return true;
-    }
-
-    private static ItemStack remainderOf(ItemStack original, long remaining) {
-        if (remaining <= 0L) {
-            return ItemStack.EMPTY;
-        }
-        ItemStack remainder = original.copy();
-        remainder.setCount((int) Math.min(remaining, original.getCount()));
-        return remainder;
     }
 
     @Override

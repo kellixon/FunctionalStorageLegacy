@@ -18,16 +18,6 @@ import java.util.Objects;
  */
 public final class UpgradeModifier {
 
-    /** Supported modifier operations, listed in their fixed evaluation order. */
-    public enum Operation {
-        /** Replace the current base value. If repeated, the last value wins. */
-        SET_BASE,
-        /** Add to the base value after every base replacement has run. */
-        ADD_BASE,
-        /** Multiply the fully adjusted base value. */
-        MULTIPLY
-    }
-
     private final Operation operation;
     private final double value;
 
@@ -35,7 +25,7 @@ public final class UpgradeModifier {
      * Creates a modifier.
      *
      * @param operation operation to perform; never {@code null}
-     * @param value operand used by the operation
+     * @param value     operand used by the operation
      * @throws NullPointerException if {@code operation} is {@code null}
      */
     public UpgradeModifier(Operation operation, double value) {
@@ -43,35 +33,31 @@ public final class UpgradeModifier {
         this.value = value;
     }
 
-    /** Returns a modifier that replaces the base value. */
+    /**
+     * Returns a modifier that replaces the base value.
+     */
     public static UpgradeModifier setBase(double value) {
         return new UpgradeModifier(Operation.SET_BASE, value);
     }
 
-    /** Returns a modifier that adds to the base value. */
+    /**
+     * Returns a modifier that adds to the base value.
+     */
     public static UpgradeModifier addBase(double value) {
         return new UpgradeModifier(Operation.ADD_BASE, value);
     }
 
-    /** Returns a modifier that multiplies the adjusted base value. */
+    /**
+     * Returns a modifier that multiplies the adjusted base value.
+     */
     public static UpgradeModifier multiply(double value) {
         return new UpgradeModifier(Operation.MULTIPLY, value);
-    }
-
-    /** Returns this modifier's operation. */
-    public Operation getOperation() {
-        return operation;
-    }
-
-    /** Returns this modifier's operand. */
-    public double getValue() {
-        return value;
     }
 
     /**
      * Evaluates modifiers in the fixed SET_BASE, ADD_BASE, MULTIPLY order.
      *
-     * @param modifiers contributions to evaluate; never {@code null} and containing no nulls
+     * @param modifiers   contributions to evaluate; never {@code null} and containing no nulls
      * @param defaultBase base value used when no SET_BASE modifier is present
      * @return a value greater than or equal to zero
      * @throws NullPointerException if the iterable or one of its values is {@code null}
@@ -106,6 +92,20 @@ public final class UpgradeModifier {
         return Double.isNaN(result) || result <= 0.0D ? 0.0D : result;
     }
 
+    /**
+     * Returns this modifier's operation.
+     */
+    public Operation getOperation() {
+        return operation;
+    }
+
+    /**
+     * Returns this modifier's operand.
+     */
+    public double getValue() {
+        return value;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) {
@@ -115,8 +115,7 @@ public final class UpgradeModifier {
             return false;
         }
         UpgradeModifier that = (UpgradeModifier) other;
-        return operation == that.operation
-                && Double.doubleToLongBits(value) == Double.doubleToLongBits(that.value);
+        return operation == that.operation && Double.doubleToLongBits(value) == Double.doubleToLongBits(that.value);
     }
 
     @Override
@@ -127,5 +126,23 @@ public final class UpgradeModifier {
     @Override
     public String toString() {
         return "UpgradeModifier{" + operation + ", value=" + value + '}';
+    }
+
+    /**
+     * Supported modifier operations, listed in their fixed evaluation order.
+     */
+    public enum Operation {
+        /**
+         * Replace the current base value. If repeated, the last value wins.
+         */
+        SET_BASE,
+        /**
+         * Add to the base value after every base replacement has run.
+         */
+        ADD_BASE,
+        /**
+         * Multiply the fully adjusted base value.
+         */
+        MULTIPLY
     }
 }

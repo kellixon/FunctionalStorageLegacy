@@ -4,7 +4,9 @@ import net.minecraft.util.IStringSerializable;
 
 import javax.annotation.Nonnull;
 
-/** Physical surface to which a drawer block is attached. */
+/**
+ * Physical surface to which a drawer block is attached.
+ */
 public enum DrawerAttachment implements IStringSerializable {
     WALL("wall", 0),
     FLOOR("floor", 1),

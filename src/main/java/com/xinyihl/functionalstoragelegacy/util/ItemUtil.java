@@ -51,15 +51,11 @@ public class ItemUtil {
         if (!(stack.getItem() instanceof IStorageUpgrade)) {
             return false;
         }
-        return !(stack.getItem() instanceof DrawerUpgradeBehavior)
-                || ((DrawerUpgradeBehavior) stack.getItem()).getSlotType()
-                == DrawerUpgradeBehavior.SlotType.STORAGE;
+        return !(stack.getItem() instanceof DrawerUpgradeBehavior) || ((DrawerUpgradeBehavior) stack.getItem()).getSlotType() == DrawerUpgradeBehavior.SlotType.STORAGE;
     }
 
     public static boolean isUtilityUpgradeItem(@Nonnull ItemStack stack) {
-        return stack.getItem() instanceof DrawerUpgradeBehavior
-                && ((DrawerUpgradeBehavior) stack.getItem()).getSlotType()
-                == DrawerUpgradeBehavior.SlotType.UTILITY;
+        return stack.getItem() instanceof DrawerUpgradeBehavior && ((DrawerUpgradeBehavior) stack.getItem()).getSlotType() == DrawerUpgradeBehavior.SlotType.UTILITY;
     }
 
     /**
@@ -67,19 +63,15 @@ public class ItemUtil {
      * the installed storage upgrade. Upgrade implementations without the internal drawer
      * behavior contract are treated as having no replacement priority.
      */
-    public static boolean hasHigherUpgradeReplacementPriority(
-            @Nonnull ItemStack candidate, @Nonnull ItemStack installed) {
+    public static boolean hasHigherUpgradeReplacementPriority(@Nonnull ItemStack candidate, @Nonnull ItemStack installed) {
         if (!isStorageUpgradeItem(candidate) || !isStorageUpgradeItem(installed)) {
             return false;
         }
         int candidatePriority = getUpgradeReplacementPriority(candidate);
-        return candidatePriority != Integer.MIN_VALUE
-                && candidatePriority > getUpgradeReplacementPriority(installed);
+        return candidatePriority != Integer.MIN_VALUE && candidatePriority > getUpgradeReplacementPriority(installed);
     }
 
     private static int getUpgradeReplacementPriority(@Nonnull ItemStack stack) {
-        return stack.getItem() instanceof DrawerUpgradeBehavior
-                ? ((DrawerUpgradeBehavior) stack.getItem()).getReplacementPriority(stack)
-                : Integer.MIN_VALUE;
+        return stack.getItem() instanceof DrawerUpgradeBehavior ? ((DrawerUpgradeBehavior) stack.getItem()).getReplacementPriority(stack) : Integer.MIN_VALUE;
     }
 }

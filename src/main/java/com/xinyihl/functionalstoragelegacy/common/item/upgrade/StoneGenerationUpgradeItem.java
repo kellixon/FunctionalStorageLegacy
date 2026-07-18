@@ -17,6 +17,7 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import net.minecraftforge.items.IItemHandler;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.List;
 
@@ -30,21 +31,6 @@ public class StoneGenerationUpgradeItem extends UtilityUpgradeItem {
         this.tier = tier;
     }
 
-    @Override
-    public void onTick(ControllableDrawerTile tile, ItemStack upgradeStack, int upgradeSlot) {
-    
-        if (tile.getWorld().isRemote) {
-            return;
-        }
-    
-        if (!upgradeStack.hasTagCompound()) {
-            upgradeStack.setTagCompound(new NBTTagCompound());
-        }
-        NBTTagCompound nbt = upgradeStack.getTagCompound();
-    
-        TimerUtil.updateAndExecute(nbt, 1, () -> GenerationTreatment(tile, tier));
-    }
-        
     public static boolean GenerationTreatment(ControllableDrawerTile tile, StoneTier tier) {
         IItemHandler handler = tile.getItemHandler();
         if (handler == null) {
@@ -55,20 +41,32 @@ public class StoneGenerationUpgradeItem extends UtilityUpgradeItem {
             CompactingInventoryHandler compactingHandler = (CompactingInventoryHandler) handler;
             if (!compactingHandler.isConfigured()) {
                 ItemStack stoneStack = new ItemStack(Blocks.COBBLESTONE, tier.getGenerationRate());
-                if (CompactingUtil.CompressionDrawertrEatment(tile, stoneStack, compactingHandler)) {
-                    return false;
-                }
-                return true;
+                return !CompactingUtil.CompressionDrawertrEatment(tile, stoneStack, compactingHandler);
             }
         }
-    
+
         ItemStack stoneStack = new ItemStack(Blocks.COBBLESTONE, tier.getGenerationRate());
         return CompactingUtil.ItemRemainder(tile, handler, stoneStack);
     }
 
+    @Override
+    public void onTick(ControllableDrawerTile tile, ItemStack upgradeStack, int upgradeSlot) {
+
+        if (tile.getWorld().isRemote) {
+            return;
+        }
+
+        if (!upgradeStack.hasTagCompound()) {
+            upgradeStack.setTagCompound(new NBTTagCompound());
+        }
+        NBTTagCompound nbt = upgradeStack.getTagCompound();
+
+        TimerUtil.updateAndExecute(nbt, 1, () -> GenerationTreatment(tile, tier));
+    }
+
     @SideOnly(Side.CLIENT)
     @Override
-    public void addInformation(ItemStack stack, @Nullable World worldIn, List<String> tooltip, ITooltipFlag flagIn) {
+    public void addInformation(@Nonnull ItemStack stack, @Nullable World worldIn, @Nonnull List<String> tooltip, @Nonnull ITooltipFlag flagIn) {
         super.addInformation(stack, worldIn, tooltip, flagIn);
 
         String rateText = String.format("%d/t", tier.getGenerationRate());
@@ -77,10 +75,7 @@ public class StoneGenerationUpgradeItem extends UtilityUpgradeItem {
     }
 
     public enum StoneTier {
-        T1(1),
-        T2(2),
-        T3(3),
-        T4(4);
+        T1(1), T2(2), T3(3), T4(4);
 
         private final int tier;
 

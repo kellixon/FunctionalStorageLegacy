@@ -23,11 +23,7 @@ public class FluidDrawerStackItemHandler extends BigFluidHandler implements IFlu
         this.drawerStack = drawerStack;
         this.drawerLayout = drawerLayout;
         NBTTagCompound tileData = DrawerStackDataHelper.getTileData(drawerStack);
-        this.upgradeState = DrawerStackDataHelper.readUpgradeState(
-                tileData,
-                4,
-                3
-        );
+        this.upgradeState = DrawerStackDataHelper.readUpgradeState(tileData, 4, 3);
         this.locked = DrawerStackDataHelper.isLocked(tileData);
         deserializeNBT(tileData);
         subscribe(change -> persistStorage());
@@ -35,8 +31,7 @@ public class FluidDrawerStackItemHandler extends BigFluidHandler implements IFlu
 
     @Override
     public double getMultiplier() {
-        return upgradeState.calculate(
-                UpgradeAttribute.FLUID_CAPACITY, drawerLayout.getBaseCapacity());
+        return upgradeState.calculate(UpgradeAttribute.FLUID_CAPACITY, drawerLayout.getBaseCapacity());
     }
 
     @Override

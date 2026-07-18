@@ -22,11 +22,7 @@ public class DrawerStackItemHandler extends BigInventoryHandler {
         this.drawerStack = drawerStack;
         this.drawerLayout = drawerLayout;
         NBTTagCompound tileData = DrawerStackDataHelper.getTileData(drawerStack);
-        this.upgradeState = DrawerStackDataHelper.readUpgradeState(
-                tileData,
-                4,
-                3
-        );
+        this.upgradeState = DrawerStackDataHelper.readUpgradeState(tileData, 4, 3);
         this.locked = DrawerStackDataHelper.isLocked(tileData);
         if (tileData != null) {
             deserializeNBT(tileData);

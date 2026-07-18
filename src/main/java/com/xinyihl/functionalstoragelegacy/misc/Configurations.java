@@ -37,7 +37,7 @@ public final class Configurations {
 
         @Config.Name("armoryCabinetSize")
         @Config.Comment("Armory slot amount")
-        @Config.RangeInt(min = 1, max = Integer.MAX_VALUE)
+        @Config.RangeInt(min = 1)
         public int armoryCabinetSize = 4096;
 
         @Config.Name("drawerControllerLinkingRange")
@@ -129,47 +129,47 @@ public final class Configurations {
 
         @Config.Name("stoneGenerationT1")
         @Config.Comment("Stone Generation Upgrade T1 generation rate")
-        @Config.RangeInt(min = 1, max = Integer.MAX_VALUE)
+        @Config.RangeInt(min = 1)
         public int stoneGenerationT1 = 1;
 
         @Config.Name("stoneGenerationT2")
         @Config.Comment("Stone Generation Upgrade T2 generation rate")
-        @Config.RangeInt(min = 1, max = Integer.MAX_VALUE)
+        @Config.RangeInt(min = 1)
         public int stoneGenerationT2 = 2;
 
         @Config.Name("stoneGenerationT3")
         @Config.Comment("Stone Generation Upgrade T3 generation rate")
-        @Config.RangeInt(min = 1, max = Integer.MAX_VALUE)
+        @Config.RangeInt(min = 1)
         public int stoneGenerationT3 = 4;
 
         @Config.Name("stoneGenerationT4")
         @Config.Comment("Stone Generation Upgrade T4 generation rate")
-        @Config.RangeInt(min = 1, max = Integer.MAX_VALUE)
+        @Config.RangeInt(min = 1)
         public int stoneGenerationT4 = 8;
 
         @Config.Name("universalGeneratorT1")
         @Config.Comment("Universal Generator T1 generation rate")
-        @Config.RangeInt(min = 1, max = Integer.MAX_VALUE)
+        @Config.RangeInt(min = 1)
         public int UNIVERSAL_GENERATION_RATE_T1 = 1;
 
         @Config.Name("universalGeneratorT2")
         @Config.Comment("Universal Generator T2 generation rate")
-        @Config.RangeInt(min = 1, max = Integer.MAX_VALUE)
+        @Config.RangeInt(min = 1)
         public int UNIVERSAL_GENERATION_RATE_T2 = 2;
 
         @Config.Name("universalGeneratorT3")
         @Config.Comment("Universal Generator T3 generation rate")
-        @Config.RangeInt(min = 1, max = Integer.MAX_VALUE)
+        @Config.RangeInt(min = 1)
         public int UNIVERSAL_GENERATION_RATE_T3 = 4;
 
         @Config.Name("universalGeneratorT4")
         @Config.Comment("Universal Generator T4 generation rate")
-        @Config.RangeInt(min = 1, max = Integer.MAX_VALUE)
+        @Config.RangeInt(min = 1)
         public int UNIVERSAL_GENERATION_RATE_T4 = 8;
 
         @Config.Name("universalItemsGenerationTick")
         @Config.Comment("Universal Generator Items generation tick")
-        @Config.RangeInt(min = 1, max = Integer.MAX_VALUE)
+        @Config.RangeInt(min = 1)
         public int UNIVERSAL_ITEMS_GENERATION_TICK = 1;
 
         @Config.Name("universalItemsGeneration")
@@ -182,22 +182,22 @@ public final class Configurations {
 
         @Config.Name("waterGenerationT1")
         @Config.Comment("Water Generation Upgrade T1 generation rate")
-        @Config.RangeInt(min = 1, max = Integer.MAX_VALUE)
+        @Config.RangeInt(min = 1)
         public int WATER_GENERATION_T1 = 1000;
 
         @Config.Name("waterGenerationT2")
         @Config.Comment("Water Generation Upgrade T2 generation rate")
-        @Config.RangeInt(min = 1, max = Integer.MAX_VALUE)
+        @Config.RangeInt(min = 1)
         public int WATER_GENERATION_T2 = 2000;
 
         @Config.Name("waterGenerationT3")
         @Config.Comment("Water Generation Upgrade T3 generation rate")
-        @Config.RangeInt(min = 1, max = Integer.MAX_VALUE)
+        @Config.RangeInt(min = 1)
         public int WATER_GENERATION_T3 = 4000;
 
         @Config.Name("waterGenerationT4")
         @Config.Comment("Water Generation Upgrade T4 generation rate")
-        @Config.RangeInt(min = 1, max = Integer.MAX_VALUE)
+        @Config.RangeInt(min = 1)
         public int WATER_GENERATION_T4 = 8000;
 
     }

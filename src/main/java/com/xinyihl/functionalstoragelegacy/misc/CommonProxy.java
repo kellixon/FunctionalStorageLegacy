@@ -1,18 +1,12 @@
 package com.xinyihl.functionalstoragelegacy.misc;
 
 import com.xinyihl.functionalstoragelegacy.Tags;
-import com.xinyihl.functionalstoragelegacy.common.tile.ArmoryCabinetTile;
-import com.xinyihl.functionalstoragelegacy.common.tile.EnderDrawerTile;
-import com.xinyihl.functionalstoragelegacy.common.tile.FluidDrawerTile;
-import com.xinyihl.functionalstoragelegacy.common.tile.FramedDrawerTile;
-import com.xinyihl.functionalstoragelegacy.common.tile.WoodDrawerTile;
+import com.xinyihl.functionalstoragelegacy.common.tile.*;
 import com.xinyihl.functionalstoragelegacy.common.tile.compact.CompactingDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.compact.SimpleCompactingDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.controller.ControllerExtensionTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.controller.DrawerControllerTile;
 import net.minecraft.util.ResourceLocation;
-import net.minecraftforge.fml.common.event.FMLInitializationEvent;
-import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.registry.GameRegistry;
 
@@ -29,11 +23,5 @@ public class CommonProxy {
         GameRegistry.registerTileEntity(ArmoryCabinetTile.class, new ResourceLocation(Tags.MOD_ID, "armory_cabinet"));
         GameRegistry.registerTileEntity(DrawerControllerTile.class, new ResourceLocation(Tags.MOD_ID, "storage_controller"));
         GameRegistry.registerTileEntity(ControllerExtensionTile.class, new ResourceLocation(Tags.MOD_ID, "controller_extension"));
-    }
-
-    public void init(FMLInitializationEvent event) {
-    }
-
-    public void postInit(FMLPostInitializationEvent event) {
     }
 }

@@ -24,7 +24,7 @@ public final class ItemStorageKey implements StorageKey {
      * Creates a key from a non-empty stack and defensively copies its NBT.
      *
      * @param stack item template; count is ignored
-     * @throws NullPointerException if {@code stack} is null
+     * @throws NullPointerException     if {@code stack} is null
      * @throws IllegalArgumentException if {@code stack} is empty
      */
     public ItemStorageKey(@Nonnull ItemStack stack) {
@@ -39,24 +39,32 @@ public final class ItemStorageKey implements StorageKey {
         this.hashCode = computeHashCode();
     }
 
-    /** @return the represented item */
+    /**
+     * @return the represented item
+     */
     @Nonnull
     public Item getItem() {
         return item;
     }
 
-    /** @return the represented item metadata */
+    /**
+     * @return the represented item metadata
+     */
     public int getMetadata() {
         return metadata;
     }
 
-    /** @return a defensive copy of the represented stack NBT, or {@code null} */
+    /**
+     * @return a defensive copy of the represented stack NBT, or {@code null}
+     */
     @Nullable
     public NBTTagCompound getTag() {
         return tag == null ? null : tag.copy();
     }
 
-    /** @return a fresh count-one stack carrying this key's metadata and NBT */
+    /**
+     * @return a fresh count-one stack carrying this key's metadata and NBT
+     */
     @Nonnull
     public ItemStack toItemStack() {
         ItemStack stack = new ItemStack(item, 1, metadata);
@@ -75,9 +83,7 @@ public final class ItemStorageKey implements StorageKey {
             return false;
         }
         ItemStorageKey other = (ItemStorageKey) object;
-        return item == other.item
-                && metadata == other.metadata
-                && Objects.equals(tag, other.tag);
+        return item == other.item && metadata == other.metadata && Objects.equals(tag, other.tag);
     }
 
     @Override

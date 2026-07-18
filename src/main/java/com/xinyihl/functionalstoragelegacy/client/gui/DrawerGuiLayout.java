@@ -7,11 +7,12 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.function.Function;
 
-/** Client-only pixel positions for server-side drawer layouts. */
+/**
+ * Client-only pixel positions for server-side drawer layouts.
+ */
 final class DrawerGuiLayout {
 
-    private static final Map<DrawerLayout, Function<Integer, Pair<Integer, Integer>>> POSITIONS =
-            new EnumMap<>(DrawerLayout.class);
+    private static final Map<DrawerLayout, Function<Integer, Pair<Integer, Integer>>> POSITIONS = new EnumMap<>(DrawerLayout.class);
 
     static {
         POSITIONS.put(DrawerLayout.X_1, index -> Pair.of(16, 16));

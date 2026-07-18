@@ -22,8 +22,7 @@ public class DrawerStackCapabilityProvider implements ICapabilityProvider {
         this(handler, null);
     }
 
-    public DrawerStackCapabilityProvider(@Nullable IBigItemHandler itemHandler,
-                                         @Nullable IFluidHandlerItem fluidHandlerItem) {
+    public DrawerStackCapabilityProvider(@Nullable IBigItemHandler itemHandler, @Nullable IFluidHandlerItem fluidHandlerItem) {
         this.itemHandler = itemHandler;
         this.fluidHandlerItem = fluidHandlerItem;
     }
@@ -33,8 +32,7 @@ public class DrawerStackCapabilityProvider implements ICapabilityProvider {
         if (capability == CapabilityItemHandler.ITEM_HANDLER_CAPABILITY) {
             return itemHandler != null;
         }
-        if (capability == CapabilityFluidHandler.FLUID_HANDLER_ITEM_CAPABILITY
-                || capability == CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY) {
+        if (capability == CapabilityFluidHandler.FLUID_HANDLER_ITEM_CAPABILITY || capability == CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY) {
             return fluidHandlerItem != null;
         }
         return false;

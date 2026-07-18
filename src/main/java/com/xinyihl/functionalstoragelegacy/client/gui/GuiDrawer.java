@@ -25,11 +25,9 @@ import java.util.function.Function;
 
 public class GuiDrawer extends GuiContainer {
 
-    private static final ResourceLocation BACKGROUND = new ResourceLocation(
-            Tags.MOD_ID, "textures/gui/background.png");
+    private static final ResourceLocation BACKGROUND = new ResourceLocation(Tags.MOD_ID, "textures/gui/background.png");
 
-    private static final ResourceLocation SLOT = new ResourceLocation(
-            Tags.MOD_ID, "textures/gui/slot.png");
+    private static final ResourceLocation SLOT = new ResourceLocation(Tags.MOD_ID, "textures/gui/slot.png");
 
     private static final int INFO_PANEL_X = 120;
     private static final int INFO_PANEL_Y = 8;
@@ -53,69 +51,35 @@ public class GuiDrawer extends GuiContainer {
             WoodDrawerTile woodDrawerTile = (WoodDrawerTile) tile;
             DrawerLayout layout = woodDrawerTile.getDrawerLayout();
             IBigItemHandler handler = woodDrawerTile.getItemHandler();
-            ResourceLocation frontTexture = new ResourceLocation(Tags.MOD_ID,
-                    "textures/blocks/" + woodDrawerTile.getWoodType().getId() + "_front_" + layout.getSlotCount() + ".png");
-            itemInfoAddon = new DrawerInfoGuiAddon(
-                    INFO_PANEL_X, INFO_PANEL_Y,
-                    frontTexture,
-                    layout.getSlotCount(),
-                    DrawerGuiLayout.slotPositions(layout),
-                    handler::getSnapshot,
-                    handler::getCapacity
-            );
+            ResourceLocation frontTexture = new ResourceLocation(Tags.MOD_ID, "textures/blocks/" + woodDrawerTile.getWoodType().getId() + "_front_" + layout.getSlotCount() + ".png");
+            itemInfoAddon = new DrawerInfoGuiAddon(INFO_PANEL_X, INFO_PANEL_Y, frontTexture, layout.getSlotCount(), DrawerGuiLayout.slotPositions(layout), handler::getSnapshot, handler::getCapacity);
         } else if (tile instanceof CompactingDrawerTile) {
             CompactingDrawerTile compactingTile = (CompactingDrawerTile) tile;
             IBigItemHandler handler = compactingTile.getItemHandler();
-            int slots = handler.getStorageCount();
-            final int slotCount = slots;
-            Function<Integer, Pair<Integer, Integer>> positions = getCompactingPositions(slotCount);
+            Function<Integer, Pair<Integer, Integer>> positions = getCompactingPositions(handler.getStorageCount());
             ResourceLocation frontTexture;
             if (tile instanceof SimpleCompactingDrawerTile) {
                 frontTexture = new ResourceLocation(Tags.MOD_ID, "textures/blocks/simple_compacting_drawer_front.png");
             } else {
                 frontTexture = new ResourceLocation(Tags.MOD_ID, "textures/blocks/compacting_drawer_front.png");
             }
-            itemInfoAddon = new DrawerInfoGuiAddon(
-                    INFO_PANEL_X, INFO_PANEL_Y,
-                    frontTexture,
-                    slotCount,
-                    positions,
-                    handler::getSnapshot,
-                    handler::getCapacity
-            );
+            itemInfoAddon = new DrawerInfoGuiAddon(INFO_PANEL_X, INFO_PANEL_Y, frontTexture, handler.getStorageCount(), positions, handler::getSnapshot, handler::getCapacity);
         } else if (tile instanceof FluidDrawerTile) {
             FluidDrawerTile fluidTile = (FluidDrawerTile) tile;
             DrawerLayout layout = fluidTile.getDrawerLayout();
             IBigFluidHandler handler = fluidTile.getFluidHandler();
             String suffix = layout.getSlotCount() == 1 ? "" : "_" + layout.getSlotCount();
-            ResourceLocation frontTexture = new ResourceLocation(Tags.MOD_ID,
-                    "textures/blocks/fluid_front" + suffix + ".png");
-            fluidInfoAddon = new FluidDrawerInfoGuiAddon(
-                    INFO_PANEL_X, INFO_PANEL_Y,
-                    frontTexture,
-                    layout.getSlotCount(),
-                    DrawerGuiLayout.slotPositions(layout),
-                    () -> handler,
-                    handler::getCapacity
-            );
+            ResourceLocation frontTexture = new ResourceLocation(Tags.MOD_ID, "textures/blocks/fluid_front" + suffix + ".png");
+            fluidInfoAddon = new FluidDrawerInfoGuiAddon(INFO_PANEL_X, INFO_PANEL_Y, frontTexture, layout.getSlotCount(), DrawerGuiLayout.slotPositions(layout), () -> handler, handler::getCapacity);
         } else if (tile instanceof EnderDrawerTile) {
             EnderDrawerTile enderTile = (EnderDrawerTile) tile;
             ResourceLocation frontTexture = new ResourceLocation(Tags.MOD_ID, "textures/blocks/ender_front.png");
-            itemInfoAddon = new DrawerInfoGuiAddon(
-                    INFO_PANEL_X, INFO_PANEL_Y,
-                    frontTexture,
-                    1,
-                    DrawerGuiLayout.slotPositions(DrawerLayout.X_1),
-                    i -> enderTile.getItemHandler() == null
-                            ? BigItemStack.empty()
-                            : enderTile.getItemHandler().getSnapshot(0),
-                    i -> {
-                        if (enderTile.getItemHandler() != null) {
-                            return enderTile.getItemHandler().getCapacity(0);
-                        }
-                        return 0L;
-                    }
-            );
+            itemInfoAddon = new DrawerInfoGuiAddon(INFO_PANEL_X, INFO_PANEL_Y, frontTexture, 1, DrawerGuiLayout.slotPositions(DrawerLayout.X_1), i -> enderTile.getItemHandler() == null ? BigItemStack.empty() : enderTile.getItemHandler().getSnapshot(0), i -> {
+                if (enderTile.getItemHandler() != null) {
+                    return enderTile.getItemHandler().getCapacity(0);
+                }
+                return 0L;
+            });
         }
     }
 
@@ -168,9 +132,7 @@ public class GuiDrawer extends GuiContainer {
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
         drawUpgradeOverlays();
 
-        String title = container.getTile().getDisplayName() != null
-                ? container.getTile().getDisplayName().getUnformattedText()
-                : "Drawer";
+        String title = container.getTile().getDisplayName() != null ? container.getTile().getDisplayName().getUnformattedText() : "Drawer";
         this.fontRenderer.drawString(title, 8, 6, 4210752);
         this.fontRenderer.drawString(I18n.format("container.inventory"), 8, this.ySize - 96 + 2, 4210752);
 
@@ -208,9 +170,7 @@ public class GuiDrawer extends GuiContainer {
             if (storageUpgrade) {
                 ItemStack existing = container.getTile().getStorageUpgrades().getStackInSlot(i);
                 if (ItemUtil.hasHigherUpgradeReplacementPriority(previewUpgradeStack, existing)) {
-                    int color = container.getTile().canReplaceStorageUpgrade(i, previewUpgradeStack)
-                            ? 0x5500AA00
-                            : 0x55AA0000;
+                    int color = container.getTile().canReplaceStorageUpgrade(i, previewUpgradeStack) ? 0x5500AA00 : 0x55AA0000;
                     drawGradientRect(sx, sy, sx + 18, sy + 18, color, color);
                     continue;
                 }
@@ -227,9 +187,7 @@ public class GuiDrawer extends GuiContainer {
             ItemStack existing = container.getTile().getUtilityUpgrades().getStackInSlot(i);
 
             if (utilityUpgrade && !existing.isEmpty()) {
-                int color = container.getTile().canInsertUtilityUpgrade(i, previewUpgradeStack)
-                        ? 0x5500AA00
-                        : 0x55AA0000;
+                int color = container.getTile().canInsertUtilityUpgrade(i, previewUpgradeStack) ? 0x5500AA00 : 0x55AA0000;
                 drawGradientRect(sx, sy, sx + 18, sy + 18, color, color);
             }
         }

@@ -39,13 +39,12 @@ public class CompactingUtil {
             return fallback;
         }
 
-        int maxHigher = clickedSlot;
         int maxLower = maxSlots - clickedSlot - 1;
 
         List<HigherTier> higherTiers = new ArrayList<>();
         ItemStack searching = stack.copy();
         searching.setCount(1);
-        for (int i = 0; i < maxHigher; i++) {
+        for (int i = 0; i < clickedSlot; i++) {
             HigherTier higher = findHigherTier(world, searching);
             if (higher == null) {
                 break;
@@ -187,9 +186,7 @@ public class CompactingUtil {
                 if (lower != null) {
                     for (int i = 0; i < results.size(); i++) {
                         CompactingInventoryHandler.Tier tier = results.get(i);
-                        results.set(i, new CompactingInventoryHandler.Tier(
-                                tier.getTemplate(),
-                                saturatedMultiply(tier.getBaseUnits(), lower.count)));
+                        results.set(i, new CompactingInventoryHandler.Tier(tier.getTemplate(), saturatedMultiply(tier.getBaseUnits(), lower.count)));
                     }
                     results.add(new CompactingInventoryHandler.Tier(lower.result, 1L));
                 }
@@ -260,12 +257,7 @@ public class CompactingUtil {
 
     public static boolean CompressionDrawertrEatment(ControllableDrawerTile tile, ItemStack itemToGenerate, CompactingInventoryHandler compactingHandler) {
         int anchorSlot = compactingHandler.getStorageCount() - 1;
-        List<CompactingInventoryHandler.Tier> results = CompactingUtil.getCompactingResults(
-                tile.getWorld(),
-                itemToGenerate,
-                compactingHandler.getStorageCount(),
-                anchorSlot
-        );
+        List<CompactingInventoryHandler.Tier> results = CompactingUtil.getCompactingResults(tile.getWorld(), itemToGenerate, compactingHandler.getStorageCount(), anchorSlot);
 
         if (!results.isEmpty()) {
             while (results.size() < compactingHandler.getStorageCount()) {
