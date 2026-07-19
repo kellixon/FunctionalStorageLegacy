@@ -1,6 +1,6 @@
 {
   "parent": "item/generated",
   "textures": {
-    "layer0": "functionalstoragelegacy:items/base"
+    "layer0": "functionalstoragelegacy:items/ore_dictionary_upgrade"
   }
 }
