@@ -75,6 +75,13 @@ item.functionalstoragelegacy.linking_tool.name=Linking Tool
 item.functionalstoragelegacy.iron_downgrade.desc=Reduces drawer storage capacity
 item.functionalstoragelegacy.max_storage_upgrade.desc=Sets drawer storage to the maximum supported capacity
 item.functionalstoragelegacy.ore_dictionary_upgrade.desc=Allows equivalent Ore Dictionary items to be inserted and converted to the stored item
+
+# Config
+config.functionalstoragelegacy.extra_compacting_rules=Compacting Rules
+config.functionalstoragelegacy.ore_dictionary_blacklist=Ore Dictionary Blacklist
+config.functionalstoragelegacy.ore_dictionary_whitelist=Ore Dictionary Whitelist
+config.functionalstoragelegacy.register_extra_compacting_rules=Register Extra Compacting Rules
+config.functionalstoragelegacy.keep_contents_on_break=Keep Contents and Upgrades on Break
 item.functionalstoragelegacy.storage_upgrade.multiplier=Storage Multiplier: %s
 item.functionalstoragelegacy.upgrade.direction=Direction:
 item.functionalstoragelegacy.upgrade.direction.use=Sneak + right-click in air to set to your facing direction.
@@ -167,3 +174,4 @@ tooltip.functionalstoragelegacy.total=Total:
 tooltip.functionalstoragelegacy.empty=Empty
 tooltip.functionalstoragelegacy.yes=Yes
 tooltip.functionalstoragelegacy.no=No
+drawer.break.large_drop_warning=Warning: this drawer will drop more than 6,400 items and may cause severe lag. Break it again to confirm.

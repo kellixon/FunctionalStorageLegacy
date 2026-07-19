@@ -35,6 +35,34 @@ public final class Configurations {
 
     public static final class General {
 
+        @Config.Name("extraCompactingRules")
+        @Config.LangKey("config.functionalstoragelegacy.extra_compacting_rules")
+        @Config.Comment({
+                "Additional compacting rules in the form: higher item, lower item, ratio.",
+                "Items must use domain:item or domain:item:meta. Example: minecraft:clay, minecraft:clay_ball, 4"
+        })
+        public String[] extraCompactingRules = {"minecraft:clay, minecraft:clay_ball, 4"};
+
+        @Config.Name("oreDictionaryBlacklist")
+        @Config.LangKey("config.functionalstoragelegacy.ore_dictionary_blacklist")
+        @Config.Comment("Ore Dictionary names that the Ore Dictionary Upgrade must never match")
+        public String[] oreDictionaryBlacklist = {};
+
+        @Config.Name("oreDictionaryWhitelist")
+        @Config.LangKey("config.functionalstoragelegacy.ore_dictionary_whitelist")
+        @Config.Comment("Ore Dictionary names that the Ore Dictionary Upgrade may match. Empty allows every non-blacklisted name")
+        public String[] oreDictionaryWhitelist = {};
+
+        @Config.Name("registerExtraCompactingRules")
+        @Config.LangKey("config.functionalstoragelegacy.register_extra_compacting_rules")
+        @Config.Comment("Allow the configured additional compacting rules")
+        public boolean registerExtraCompactingRules = true;
+
+        @Config.Name("keepContentsOnBreak")
+        @Config.LangKey("config.functionalstoragelegacy.keep_contents_on_break")
+        @Config.Comment("Keep stored contents, filters, lock state, and upgrades in the dropped block when broken")
+        public boolean keepContentsOnBreak = true;
+
         @Config.Name("armoryCabinetSize")
         @Config.Comment("Armory slot amount")
         @Config.RangeInt(min = 1)

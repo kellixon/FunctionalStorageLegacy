@@ -3,12 +3,16 @@ package com.xinyihl.functionalstoragelegacy.util;
 import com.xinyihl.functionalstoragelegacy.common.inventory.CompactingInventoryHandler;
 import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.compact.SimpleCompactingDrawerTile;
+import com.xinyihl.functionalstoragelegacy.misc.Configurations;
 import net.minecraft.inventory.InventoryCrafting;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.CraftingManager;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.util.NonNullList;
+import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
+import net.minecraftforge.fml.common.registry.ForgeRegistries;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.ItemHandlerHelper;
 
@@ -204,12 +208,16 @@ public class CompactingUtil {
     }
 
     private static HigherTier findHigherTier(World world, ItemStack input) {
+        HigherTier configured = findConfiguredHigherTier(input);
+        if (configured != null) return configured;
         HigherTier result = tryCompact(world, input, 3);
         if (result != null) return result;
         return tryCompact(world, input, 2);
     }
 
     private static LowerTier findLowerTier(World world, ItemStack input) {
+        LowerTier configured = findConfiguredLowerTier(input);
+        if (configured != null) return configured;
         FakeContainer container = new FakeContainer(1);
         container.setInventorySlotContents(0, input.copy());
         IRecipe recipe = CraftingManager.findMatchingRecipe(container, world);
@@ -220,6 +228,77 @@ public class CompactingUtil {
             }
         }
         return null;
+    }
+
+    private static HigherTier findConfiguredHigherTier(ItemStack input) {
+        for (ConfiguredRule rule : getConfiguredRules()) {
+            if (ItemUtil.areItemStacksEqual(rule.lower, input)) {
+                return new HigherTier(rule.higher, rule.ratio);
+            }
+        }
+        return null;
+    }
+
+    private static LowerTier findConfiguredLowerTier(ItemStack input) {
+        for (ConfiguredRule rule : getConfiguredRules()) {
+            if (ItemUtil.areItemStacksEqual(rule.higher, input)) {
+                return new LowerTier(rule.lower, rule.ratio);
+            }
+        }
+        return null;
+    }
+
+    private static List<ConfiguredRule> getConfiguredRules() {
+        List<ConfiguredRule> rules = new ArrayList<>();
+        if (!Configurations.GENERAL.registerExtraCompactingRules
+                || Configurations.GENERAL.extraCompactingRules == null) {
+            return rules;
+        }
+        for (String configured : Configurations.GENERAL.extraCompactingRules) {
+            ConfiguredRule rule = parseConfiguredRule(configured);
+            if (rule != null) {
+                rules.add(rule);
+            }
+        }
+        return rules;
+    }
+
+    private static ConfiguredRule parseConfiguredRule(String configured) {
+        if (configured == null) return null;
+        String[] parts = configured.split(",");
+        if (parts.length != 3) return null;
+        ItemStack higher = parseConfiguredStack(parts[0].trim());
+        ItemStack lower = parseConfiguredStack(parts[1].trim());
+        if (higher.isEmpty() || lower.isEmpty() || ItemUtil.areItemStacksEqual(higher, lower)) return null;
+        try {
+            int ratio = Integer.parseInt(parts[2].trim());
+            return ratio >= 2 ? new ConfiguredRule(higher, lower, ratio) : null;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private static ItemStack parseConfiguredStack(String configured) {
+        if (configured.isEmpty()) return ItemStack.EMPTY;
+        String itemName = configured;
+        int metadata = 0;
+        int lastColon = configured.lastIndexOf(':');
+        if (lastColon > 0) {
+            String possibleMetadata = configured.substring(lastColon + 1);
+            try {
+                metadata = Integer.parseInt(possibleMetadata);
+                if (metadata < 0) return ItemStack.EMPTY;
+                itemName = configured.substring(0, lastColon);
+            } catch (NumberFormatException ignored) {
+                // The final segment is the item path, not metadata.
+            }
+        }
+        try {
+            Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemName));
+            return item == null ? ItemStack.EMPTY : new ItemStack(item, 1, metadata);
+        } catch (RuntimeException ignored) {
+            return ItemStack.EMPTY;
+        }
     }
 
     private static HigherTier tryCompact(World world, ItemStack input, int gridSize) {
@@ -299,6 +378,18 @@ public class CompactingUtil {
             this.result = result.copy();
             this.result.setCount(1);
             this.count = count;
+        }
+    }
+
+    private static class ConfiguredRule {
+        final ItemStack higher;
+        final ItemStack lower;
+        final int ratio;
+
+        ConfiguredRule(ItemStack higher, ItemStack lower, int ratio) {
+            this.higher = higher.copy();
+            this.lower = lower.copy();
+            this.ratio = ratio;
         }
     }
 

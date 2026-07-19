@@ -2,6 +2,7 @@ package com.xinyihl.functionalstoragelegacy.util;
 
 import com.xinyihl.functionalstoragelegacy.api.upgrade.IStorageUpgrade;
 import com.xinyihl.functionalstoragelegacy.common.item.upgrade.DrawerUpgradeBehavior;
+import com.xinyihl.functionalstoragelegacy.misc.Configurations;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.oredict.OreDictionary;
 
@@ -39,11 +40,43 @@ public class ItemUtil {
         for (int firstId : firstIds) {
             for (int secondId : secondIds) {
                 if (firstId == secondId) {
+                    String oreName = OreDictionary.getOreName(firstId);
+                    if (!isConfiguredOreNameAllowed(oreName)) {
+                        continue;
+                    }
                     return true;
                 }
             }
         }
 
+        return false;
+    }
+
+    private static boolean isConfiguredOreNameAllowed(String oreName) {
+        if (containsConfiguredName(Configurations.GENERAL.oreDictionaryBlacklist, oreName)) {
+            return false;
+        }
+        String[] whitelist = Configurations.GENERAL.oreDictionaryWhitelist;
+        return !hasConfiguredName(whitelist) || containsConfiguredName(whitelist, oreName);
+    }
+
+    private static boolean containsConfiguredName(String[] configuredNames, String oreName) {
+        if (configuredNames == null) return false;
+        for (String configuredName : configuredNames) {
+            if (configuredName != null && oreName.equals(configuredName.trim())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasConfiguredName(String[] configuredNames) {
+        if (configuredNames == null) return false;
+        for (String configuredName : configuredNames) {
+            if (configuredName != null && !configuredName.trim().isEmpty()) {
+                return true;
+            }
+        }
         return false;
     }
 

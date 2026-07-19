@@ -1,6 +1,11 @@
 package com.xinyihl.functionalstoragelegacy.common.block;
 
+import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
+import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
 import com.xinyihl.functionalstoragelegacy.common.tile.ArmoryCabinetTile;
+import com.xinyihl.functionalstoragelegacy.misc.Configurations;
 import com.xinyihl.functionalstoragelegacy.misc.RegistrationHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
@@ -104,16 +109,29 @@ public class ArmoryCabinetBlock extends Block {
         worldIn.setBlockToAir(pos);
     }
 
+    private static void dropStoredItems(World world, BlockPos pos, IBigItemHandler handler) {
+        for (int slot = 0; slot < handler.getStorageCount(); slot++) {
+            BigItemStack snapshot = handler.getSnapshot(slot);
+            if (!snapshot.hasTemplate() || snapshot.getAmount() <= 0L) continue;
+            TransferResult<BigItemStack, ?> extracted = handler.extract(slot, snapshot.getAmount(), StorageAction.EXECUTE);
+            if (extracted.getProcessedAmount() > 0L && !extracted.getProcessed().isEmpty()) {
+                spawnAsEntity(world, pos, extracted.getProcessed().toItemStack());
+            }
+        }
+    }
+
     @Override
     public void breakBlock(World worldIn, @Nonnull BlockPos pos, @Nonnull IBlockState state) {
         TileEntity te = worldIn.getTileEntity(pos);
         if (te instanceof ArmoryCabinetTile) {
             ArmoryCabinetTile cabinet = (ArmoryCabinetTile) te;
             ItemStack drop = new ItemStack(this);
-            if (!cabinet.isEverythingEmpty()) {
+            if (Configurations.GENERAL.keepContentsOnBreak && !cabinet.isEverythingEmpty()) {
                 NBTTagCompound tileData = cabinet.saveTileToNBT();
                 if (!drop.hasTagCompound()) drop.setTagCompound(new NBTTagCompound());
                 drop.getTagCompound().setTag("TileData", tileData);
+            } else if (!Configurations.GENERAL.keepContentsOnBreak) {
+                dropStoredItems(worldIn, pos, cabinet.getStorage());
             }
             spawnAsEntity(worldIn, pos, drop);
         }

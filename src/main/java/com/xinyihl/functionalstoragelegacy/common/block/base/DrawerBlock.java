@@ -1,10 +1,16 @@
 package com.xinyihl.functionalstoragelegacy.common.block.base;
 
+import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
+import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
+import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
+import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
 import com.xinyihl.functionalstoragelegacy.common.block.DrawerAttachment;
 import com.xinyihl.functionalstoragelegacy.common.block.DrawerFaceLayout;
+import com.xinyihl.functionalstoragelegacy.common.inventory.CompactingInventoryHandler;
 import com.xinyihl.functionalstoragelegacy.common.storage.DrawerLayout;
 import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.controller.DrawerControllerTile;
+import com.xinyihl.functionalstoragelegacy.misc.Configurations;
 import com.xinyihl.functionalstoragelegacy.misc.RegistrationHandler;
 import com.xinyihl.functionalstoragelegacy.util.HitBoxesUtil;
 import net.minecraft.block.Block;
@@ -25,8 +31,11 @@ import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.util.text.TextFormatting;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
+import net.minecraftforge.items.ItemStackHandler;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -40,6 +49,8 @@ import java.util.List;
  * Handles facing, locked state, click interactions, and drop saving.
  */
 public abstract class DrawerBlock extends Block {
+
+    private static final long LARGE_DROP_WARNING_THRESHOLD = 6400L;
 
     public static final PropertyEnum<DrawerAttachment> ATTACHMENT = PropertyEnum.create("attachment", DrawerAttachment.class);
     public static final PropertyDirection HORIZONTAL_FACING = PropertyDirection.create("horizontal_facing", EnumFacing.Plane.HORIZONTAL);
@@ -121,18 +132,31 @@ public abstract class DrawerBlock extends Block {
         }
     }
 
-    @Override
-    public void getDrops(@Nonnull NonNullList<ItemStack> drops, IBlockAccess world, @Nonnull BlockPos pos, @Nonnull IBlockState state, int fortune) {
-        TileEntity te = world.getTileEntity(pos);
-        if (te instanceof ControllableDrawerTile) {
-            drops.add(createStackWithTileData((ControllableDrawerTile) te));
-        }
+    private static long getDroppedItemCount(ControllableDrawerTile tile) {
+        long total = countHandlerItems(tile.getItemHandler());
+        total = saturatedAdd(total, countUpgrades(tile.getStorageUpgrades()));
+        return saturatedAdd(total, countUpgrades(tile.getUtilityUpgrades()));
     }
 
-    @Override
-    public boolean removedByPlayer(@Nonnull IBlockState state, @Nonnull World world, @Nonnull BlockPos pos, @Nonnull EntityPlayer player, boolean willHarvest) {
-        if (willHarvest) return true; // Delay removal for getDrops
-        return super.removedByPlayer(state, world, pos, player, false);
+    private static long countHandlerItems(@Nullable IBigItemHandler handler) {
+        if (handler == null) return 0L;
+        if (handler instanceof CompactingInventoryHandler) {
+            CompactingInventoryHandler compacting = (CompactingInventoryHandler) handler;
+            long remaining = compacting.getStoredBaseAmount();
+            long total = 0L;
+            for (CompactingInventoryHandler.Tier tier : compacting.getTiers()) {
+                if (!tier.hasTemplate()) continue;
+                long amount = remaining / tier.getBaseUnits();
+                total = saturatedAdd(total, amount);
+                remaining %= tier.getBaseUnits();
+            }
+            return total;
+        }
+        long total = 0L;
+        for (int slot = 0; slot < handler.getStorageCount(); slot++) {
+            total = saturatedAdd(total, handler.getSnapshot(slot).getAmount());
+        }
+        return total;
     }
 
     @Override
@@ -141,11 +165,80 @@ public abstract class DrawerBlock extends Block {
         worldIn.setBlockToAir(pos);
     }
 
+    private static long countUpgrades(ItemStackHandler upgrades) {
+        long total = 0L;
+        for (int slot = 0; slot < upgrades.getSlots(); slot++) {
+            total = saturatedAdd(total, upgrades.getStackInSlot(slot).getCount());
+        }
+        return total;
+    }
+
+    private static long saturatedAdd(long left, long right) {
+        return left >= Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
+    }
+
+    private static void dropUpgrades(World world, BlockPos pos, ItemStackHandler upgrades) {
+        for (int slot = 0; slot < upgrades.getSlots(); slot++) {
+            ItemStack stack = upgrades.getStackInSlot(slot);
+            if (!stack.isEmpty()) {
+                spawnAsEntity(world, pos, stack.copy());
+                upgrades.setStackInSlot(slot, ItemStack.EMPTY);
+            }
+        }
+    }
+
+    private static void dropStoredItems(World world, BlockPos pos, @Nullable IBigItemHandler handler) {
+        if (handler == null) return;
+        for (int slot = 0; slot < handler.getStorageCount(); slot++) {
+            while (true) {
+                BigItemStack snapshot = handler.getSnapshot(slot);
+                if (snapshot.getAmount() <= 0L || !snapshot.hasTemplate()) break;
+                int amount = Math.max(1, snapshot.getTemplate().getMaxStackSize());
+                TransferResult<BigItemStack, ?> extracted = handler.extract(slot, amount, StorageAction.EXECUTE);
+                if (extracted.getProcessedAmount() <= 0L || extracted.getProcessed().isEmpty()) break;
+                spawnAsEntity(world, pos, extracted.getProcessed().toItemStack());
+            }
+        }
+    }
+
+    @Override
+    public void getDrops(@Nonnull NonNullList<ItemStack> drops, IBlockAccess world, @Nonnull BlockPos pos, @Nonnull IBlockState state, int fortune) {
+        TileEntity te = world.getTileEntity(pos);
+        if (te instanceof ControllableDrawerTile) {
+            drops.add(Configurations.GENERAL.keepContentsOnBreak
+                    ? createStackWithTileData((ControllableDrawerTile) te)
+                    : new ItemStack(this));
+        }
+    }
+
+    @Override
+    public boolean removedByPlayer(@Nonnull IBlockState state, @Nonnull World world, @Nonnull BlockPos pos, @Nonnull EntityPlayer player, boolean willHarvest) {
+        if (!world.isRemote && !Configurations.GENERAL.keepContentsOnBreak) {
+            TileEntity te = world.getTileEntity(pos);
+            if (te instanceof ControllableDrawerTile && getDroppedItemCount((ControllableDrawerTile) te) > LARGE_DROP_WARNING_THRESHOLD) {
+                ControllableDrawerTile drawer = (ControllableDrawerTile) te;
+                if (!drawer.consumeLargeDropBreakConfirmation()) {
+                    drawer.markLargeDropBreakConfirmed();
+                    player.sendMessage(new TextComponentTranslation("drawer.break.large_drop_warning")
+                            .setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.RED)));
+                    return false;
+                }
+            }
+        }
+        if (willHarvest) return true; // Delay removal for getDrops
+        return super.removedByPlayer(state, world, pos, player, false);
+    }
+
     @Override
     public void breakBlock(World worldIn, @Nonnull BlockPos pos, @Nonnull IBlockState state) {
         TileEntity te = worldIn.getTileEntity(pos);
         if (te instanceof ControllableDrawerTile) {
             ControllableDrawerTile drawerTile = (ControllableDrawerTile) te;
+            if (!worldIn.isRemote && !Configurations.GENERAL.keepContentsOnBreak) {
+                dropUpgrades(worldIn, pos, drawerTile.getStorageUpgrades());
+                dropUpgrades(worldIn, pos, drawerTile.getUtilityUpgrades());
+                dropStoredItems(worldIn, pos, drawerTile.getItemHandler());
+            }
             if (drawerTile.getControllerPos() != null) {
                 TileEntity controllerTE = worldIn.getTileEntity(drawerTile.getControllerPos());
                 if (controllerTE instanceof DrawerControllerTile) {

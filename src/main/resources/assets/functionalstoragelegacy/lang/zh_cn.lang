@@ -67,6 +67,13 @@ item.functionalstoragelegacy.upgrade.water_generation.amount=生成速率：
 item.functionalstoragelegacy.iron_downgrade.desc=减少抽屉存储容量
 item.functionalstoragelegacy.max_storage_upgrade.desc=将抽屉存储容量直接提升到支持的上限
 item.functionalstoragelegacy.ore_dictionary_upgrade.desc=允许插入相同矿物词典的物品，并自动转换为抽屉中已存储的物品
+
+# Config
+config.functionalstoragelegacy.extra_compacting_rules=压缩规则
+config.functionalstoragelegacy.ore_dictionary_blacklist=矿物词典黑名单
+config.functionalstoragelegacy.ore_dictionary_whitelist=矿物词典白名单
+config.functionalstoragelegacy.register_extra_compacting_rules=注册额外的压缩规则
+config.functionalstoragelegacy.keep_contents_on_break=破坏方块时保存内容物和升级
 item.functionalstoragelegacy.storage_upgrade.multiplier=存储倍率：%s
 item.functionalstoragelegacy.upgrade.direction=方向：
 item.functionalstoragelegacy.upgrade.direction.use=潜行 + 右键空气设置为玩家面朝方向。
@@ -156,3 +163,4 @@ tooltip.functionalstoragelegacy.total=总量：
 tooltip.functionalstoragelegacy.empty=空
 tooltip.functionalstoragelegacy.yes=是
 tooltip.functionalstoragelegacy.no=否
+drawer.break.large_drop_warning=警告：该抽屉将掉落超过 6400 个物品，可能导致游戏严重卡顿。再次破坏以确认。

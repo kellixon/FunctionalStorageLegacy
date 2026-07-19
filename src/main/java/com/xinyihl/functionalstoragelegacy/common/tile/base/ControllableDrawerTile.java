@@ -56,6 +56,7 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
     private Runnable storageConfigurationReset = () -> {
     };
     private boolean pendingUpdatePacket;
+    private boolean largeDropBreakConfirmed;
     private boolean storageReadInProgress;
     private boolean storageReadHadSubscription;
     // AE2 integration - lazy-initialized accessor (stored as Object to avoid class loading when AE2 absent)
@@ -486,6 +487,16 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
             if (!utilityUpgrades.getStackInSlot(i).isEmpty()) return false;
         }
         return true;
+    }
+
+    public void markLargeDropBreakConfirmed() {
+        largeDropBreakConfirmed = true;
+    }
+
+    public boolean consumeLargeDropBreakConfirmation() {
+        boolean confirmed = largeDropBreakConfirmed;
+        largeDropBreakConfirmed = false;
+        return confirmed;
     }
 
     public int getRedstoneSignal(EnumFacing side) {
