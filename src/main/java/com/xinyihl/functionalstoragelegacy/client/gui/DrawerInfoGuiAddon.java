@@ -38,6 +38,10 @@ public class DrawerInfoGuiAddon {
         this.slotMaxAmount = slotMaxAmount;
     }
 
+    private static String formatAmount(long amount, boolean exact) {
+        return exact ? Long.toString(amount) : NumberUtils.formatCompact(amount);
+    }
+
     public void drawBackground(GuiScreen screen, int guiX, int guiY) {
         Minecraft mc = Minecraft.getMinecraft();
         int size = 48;
@@ -60,10 +64,10 @@ public class DrawerInfoGuiAddon {
             mc.getRenderItem().renderItemAndEffectIntoGUI(itemStack, x, y);
             RenderHelper.disableStandardItemLighting();
 
-            String amount = NumberUtils.formatCompact(snapshot.getAmount()) + "/" + NumberUtils.formatCompact(slotMaxAmount.apply(slot));
+            String amount = NumberUtils.formatCompact(snapshot.getAmount());
             GlStateManager.pushMatrix();
             GlStateManager.translate(0, 0, 200);
-            int textX = (int) (x + 17 - mc.fontRenderer.getStringWidth(amount) / 2F);
+            int textX = x + 17 - mc.fontRenderer.getStringWidth(amount);
             mc.fontRenderer.drawStringWithShadow(amount, textX, y + 12, 0xFFFFFF);
             GlStateManager.popMatrix();
         }
@@ -93,7 +97,8 @@ public class DrawerInfoGuiAddon {
                 tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.item") + "§f" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.empty"));
             } else {
                 tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.item") + "§f" + snapshot.getTemplate().getDisplayName());
-                String amount = NumberUtils.formatCompact(snapshot.getAmount()) + "/" + NumberUtils.formatCompact(slotMaxAmount.apply(slot));
+                boolean exact = GuiScreen.isShiftKeyDown();
+                String amount = formatAmount(snapshot.getAmount(), exact) + "/" + formatAmount(slotMaxAmount.apply(slot), exact);
                 tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.amount") + "§f" + amount);
             }
             tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.slot") + "§f" + slot);

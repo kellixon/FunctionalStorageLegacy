@@ -125,7 +125,8 @@ public class EnderDrawerTile extends ControllableDrawerTile {
                 requestUpdatePacket();
             }
         }
-        return true;
+
+        return false;
     }
 
     @Override

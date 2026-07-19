@@ -251,7 +251,7 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
         }
 
         // Open GUI if no slot hit
-        if (slot == -1) {
+        if (slot == -1 && player.isSneaking()) {
             player.openGui(FunctionalStorageLegacy.INSTANCE, 0, world, pos.getX(), pos.getY(), pos.getZ());
             return true;
         }

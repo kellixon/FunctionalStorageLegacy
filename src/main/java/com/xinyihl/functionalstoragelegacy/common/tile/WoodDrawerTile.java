@@ -147,7 +147,7 @@ public class WoodDrawerTile extends ControllableDrawerTile {
             INTERACTION_LOGGER.put(player.getUniqueID(), System.currentTimeMillis());
         }
 
-        return true;
+        return false;
     }
 
     @Override

@@ -8,6 +8,7 @@ import com.xinyihl.functionalstoragelegacy.common.container.ContainerDrawer;
 import com.xinyihl.functionalstoragelegacy.common.storage.DrawerLayout;
 import com.xinyihl.functionalstoragelegacy.common.tile.EnderDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.FluidDrawerTile;
+import com.xinyihl.functionalstoragelegacy.common.tile.FramedDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.WoodDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.compact.CompactingDrawerTile;
@@ -47,7 +48,13 @@ public class GuiDrawer extends GuiContainer {
     private void initInfoAddon() {
         ControllableDrawerTile tile = container.getTile();
 
-        if (tile instanceof WoodDrawerTile) {
+        if (tile instanceof FramedDrawerTile) {
+            WoodDrawerTile woodDrawerTile = (WoodDrawerTile) tile;
+            DrawerLayout layout = woodDrawerTile.getDrawerLayout();
+            IBigItemHandler handler = woodDrawerTile.getItemHandler();
+            ResourceLocation frontTexture = new ResourceLocation(Tags.MOD_ID, "textures/blocks/" + "framed_front_" + layout.getSlotCount() + ".png");
+            itemInfoAddon = new DrawerInfoGuiAddon(INFO_PANEL_X, INFO_PANEL_Y, frontTexture, layout.getSlotCount(), DrawerGuiLayout.slotPositions(layout), handler::getSnapshot, handler::getCapacity);
+        } else if (tile instanceof WoodDrawerTile) {
             WoodDrawerTile woodDrawerTile = (WoodDrawerTile) tile;
             DrawerLayout layout = woodDrawerTile.getDrawerLayout();
             IBigItemHandler handler = woodDrawerTile.getItemHandler();

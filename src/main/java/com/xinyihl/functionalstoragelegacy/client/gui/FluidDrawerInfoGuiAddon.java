@@ -87,6 +87,10 @@ public class FluidDrawerInfoGuiAddon {
         return new int[]{0, 0, 0, 0};
     }
 
+    private static String formatAmount(long amount, boolean exact) {
+        return (exact ? Long.toString(amount) : NumberUtils.formatCompact(amount)) + "B";
+    }
+
     /**
      * Draw the background panel with fluid rendering and amount text.
      */
@@ -115,52 +119,15 @@ public class FluidDrawerInfoGuiAddon {
             if (snapshot.hasTemplate()) {
                 int x = guiX + slotPosition.apply(i).getLeft() + posX;
                 int y = guiY + slotPosition.apply(i).getRight() + posY;
-                String amount = NumberUtils.formatCompactFluid(snapshot.getAmount()) + "/" + NumberUtils.formatCompactFluid(slotMaxAmount.apply(i));
+                String amount = NumberUtils.formatCompactFluid(snapshot.getAmount());
                 float scale = 1f;
                 GlStateManager.pushMatrix();
                 GlStateManager.translate(0, 0, 200);
                 GlStateManager.scale(scale, scale, scale);
-                int textX = (int) ((x + 17 - mc.fontRenderer.getStringWidth(amount) / 2F) * (1 / scale));
+                int textX = (int) ((x + 17 - mc.fontRenderer.getStringWidth(amount)) * (1 / scale));
                 int textY = (int) ((y + 12) * (1 / scale));
                 mc.fontRenderer.drawStringWithShadow(amount, textX, textY, 0xFFFFFF);
                 GlStateManager.popMatrix();
-            }
-        }
-    }
-
-    /**
-     * Draw hover highlight and tooltip on mouse-over.
-     */
-    public void drawForeground(GuiScreen screen, int guiX, int guiY, int mouseX, int mouseY) {
-        Minecraft mc = Minecraft.getMinecraft();
-        for (int i = 0; i < slotAmount; i++) {
-            int[] rect = getSizeForHoverSlots(i, slotAmount);
-            int x = rect[0] + posX + guiX;
-            int y = rect[1] + posY + guiY;
-            if (mouseX > x && mouseX < x + rect[2] && mouseY > y && mouseY < y + rect[3]) {
-                int fx = posX + rect[0];
-                int fy = posY + rect[1];
-                GlStateManager.disableLighting();
-                GlStateManager.disableDepth();
-                GlStateManager.colorMask(true, true, true, false);
-                Gui.drawRect(fx, fy, fx + rect[2], fy + rect[3], 0x80FFFFFF);
-                GlStateManager.colorMask(true, true, true, true);
-                GlStateManager.enableLighting();
-                GlStateManager.enableDepth();
-
-                List<String> tooltip = new ArrayList<>();
-                BigFluidStack snapshot = safeSnapshot(i);
-                FluidStack over = snapshot.getTemplate();
-                if (over == null) {
-                    tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.fluid") + "§f" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.empty"));
-                } else {
-                    tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.fluid") + "§f" + over.getLocalizedName());
-                    String amountStr = NumberUtils.formatCompactFluid(snapshot.getAmount()) + "/" + NumberUtils.formatCompactFluid(slotMaxAmount.apply(i));
-                    tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.amount") + "§f" + amountStr);
-                }
-                tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.slot") + "§f" + i);
-
-                screen.drawHoveringText(tooltip, mouseX - guiX, mouseY - guiY);
             }
         }
     }
@@ -196,6 +163,44 @@ public class FluidDrawerInfoGuiAddon {
 
         GlStateManager.disableBlend();
         GlStateManager.color(1, 1, 1, 1);
+    }
+
+    /**
+     * Draw hover highlight and tooltip on mouse-over.
+     */
+    public void drawForeground(GuiScreen screen, int guiX, int guiY, int mouseX, int mouseY) {
+        Minecraft mc = Minecraft.getMinecraft();
+        for (int i = 0; i < slotAmount; i++) {
+            int[] rect = getSizeForHoverSlots(i, slotAmount);
+            int x = rect[0] + posX + guiX;
+            int y = rect[1] + posY + guiY;
+            if (mouseX > x && mouseX < x + rect[2] && mouseY > y && mouseY < y + rect[3]) {
+                int fx = posX + rect[0];
+                int fy = posY + rect[1];
+                GlStateManager.disableLighting();
+                GlStateManager.disableDepth();
+                GlStateManager.colorMask(true, true, true, false);
+                Gui.drawRect(fx, fy, fx + rect[2], fy + rect[3], 0x80FFFFFF);
+                GlStateManager.colorMask(true, true, true, true);
+                GlStateManager.enableLighting();
+                GlStateManager.enableDepth();
+
+                List<String> tooltip = new ArrayList<>();
+                BigFluidStack snapshot = safeSnapshot(i);
+                FluidStack over = snapshot.getTemplate();
+                if (over == null) {
+                    tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.fluid") + "§f" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.empty"));
+                } else {
+                    tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.fluid") + "§f" + over.getLocalizedName());
+                    boolean exact = GuiScreen.isShiftKeyDown();
+                    String amountStr = formatAmount(snapshot.getAmount(), exact) + "/" + formatAmount(slotMaxAmount.apply(i), exact);
+                    tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.amount") + "§f" + amountStr);
+                }
+                tooltip.add("§6" + net.minecraft.client.resources.I18n.format("gui.functionalstoragelegacy.slot") + "§f" + i);
+
+                screen.drawHoveringText(tooltip, mouseX - guiX, mouseY - guiY);
+            }
+        }
     }
 
     private BigFluidStack safeSnapshot(int tank) {
