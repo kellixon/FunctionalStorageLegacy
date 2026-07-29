@@ -70,6 +70,16 @@ public final class ControllerItemHandler implements IBigItemHandler {
         return index.getCapacity(slot);
     }
 
+    @Override
+    public boolean isEmptyStorageAvailable(int slot) {
+        ControllerStorageIndex.IndexedStorage<BigItemStack, ItemStorageKey> storage = index.getIndexedStorage(slot);
+        if (storage == null || storage.getSnapshot().hasTemplate()) {
+            return false;
+        }
+        IBigItemHandler child = itemHandler(storage);
+        return !child.isLocked() && child.getCapacity(storage.getLocalIndex()) > 0L;
+    }
+
     @Nonnull
     @Override
     public TransferResult<BigItemStack, ItemStorageKey> insert(int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action) {
@@ -85,6 +95,16 @@ public final class ControllerItemHandler implements IBigItemHandler {
     @Nonnull
     @Override
     public TransferResult<BigItemStack, ItemStorageKey> insertRouted(@Nonnull BigItemStack request, @Nonnull StorageAction action) {
+        return insertRouted(request, action, true);
+    }
+
+    @Nonnull
+    public TransferResult<BigItemStack, ItemStorageKey> insertMatchingRouted(@Nonnull BigItemStack request, @Nonnull StorageAction action) {
+        return insertRouted(request, action, false);
+    }
+
+    @Nonnull
+    private TransferResult<BigItemStack, ItemStorageKey> insertRouted(@Nonnull BigItemStack request, @Nonnull StorageAction action, boolean includeEmpty) {
         Objects.requireNonNull(action, "action");
         long requested = amountOf(request);
         if (requested == 0L) {
@@ -106,10 +126,12 @@ public final class ControllerItemHandler implements IBigItemHandler {
             }
         }
 
-        for (ControllerStorageIndex.IndexedStorage<BigItemStack, ItemStorageKey> candidate : snapshot.getEmpty()) {
-            IBigItemHandler child = itemHandler(candidate);
-            if (!child.isLocked() && policy.isEmptySlotEligible(child, candidate.getLocalIndex(), request)) {
-                candidates.add(new Candidate(candidate, 2));
+        if (includeEmpty) {
+            for (ControllerStorageIndex.IndexedStorage<BigItemStack, ItemStorageKey> candidate : snapshot.getEmpty()) {
+                IBigItemHandler child = itemHandler(candidate);
+                if (!child.isLocked() && policy.isEmptySlotEligible(child, candidate.getLocalIndex(), request)) {
+                    candidates.add(new Candidate(candidate, 2));
+                }
             }
         }
         candidates.sort(Comparator.comparingInt((Candidate candidate) -> candidate.priority).thenComparingInt(candidate -> candidate.storage.getGlobalIndex()));

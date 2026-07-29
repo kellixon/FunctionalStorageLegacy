@@ -1,6 +1,6 @@
 package com.xinyihl.functionalstoragelegacy.common.item;
 
-import com.xinyihl.functionalstoragelegacy.common.inventory.EnderInventoryHandler;
+import com.xinyihl.functionalstoragelegacy.common.inventory.EnderItemHandler;
 import com.xinyihl.functionalstoragelegacy.common.tile.EnderDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.controller.DrawerControllerTile;
@@ -120,7 +120,7 @@ public class LinkingToolItem extends Item {
         if (te instanceof EnderDrawerTile) {
             String storedFreq = getEnderFrequency(stack);
             if (storedFreq != null) {
-                EnderInventoryHandler inventory = EnderSavedData.getInstance(worldIn).getFrequency(((EnderDrawerTile) te).getFrequency());
+                EnderItemHandler inventory = EnderSavedData.getInstance(worldIn).getFrequency(((EnderDrawerTile) te).getFrequency());
                 if (inventory.getStackInSlot(0).isEmpty() || (player.isSneaking() && hasEnderSafety(stack))) {
                     ((EnderDrawerTile) te).setFrequency(storedFreq);
                     player.sendStatusMessage(new TextComponentTranslation("linkingtool.ender.changed").setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.AQUA)), true);

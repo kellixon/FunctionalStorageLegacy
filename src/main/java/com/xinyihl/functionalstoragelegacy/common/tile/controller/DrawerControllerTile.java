@@ -229,7 +229,7 @@ public class DrawerControllerTile extends ControllableDrawerTile {
                         continue;
                     }
                     BigItemStack request = new BigItemStack(inventoryStack, inventoryStack.getCount());
-                    TransferResult<BigItemStack, ItemStorageKey> inserted = inventoryHandler.insertRouted(request, StorageAction.EXECUTE);
+                    TransferResult<BigItemStack, ItemStorageKey> inserted = inventoryHandler.insertMatchingRouted(request, StorageAction.EXECUTE);
                     inventoryStack.setCount((int) inserted.getRemainingAmount());
                 }
             }

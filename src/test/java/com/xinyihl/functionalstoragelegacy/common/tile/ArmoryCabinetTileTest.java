@@ -14,9 +14,7 @@ import org.junit.Test;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class ArmoryCabinetTileTest {
 
@@ -42,7 +40,8 @@ public class ArmoryCabinetTileTest {
 
         ArmoryCabinetTile restored = new ArmoryCabinetTile();
         restored.loadTileFromNBT(serialized);
-        assertFalse(restored.getStorage().getStackInSlot(0).isEmpty());
+        assertTrue(restored.getStorage().getStackInSlot(0).isEmpty());
+        assertFalse(restored.getStorage().getStackInSlot(1).isEmpty());
     }
 
     @Test

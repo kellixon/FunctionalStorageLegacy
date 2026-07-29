@@ -1,7 +1,7 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory;
 
 import com.xinyihl.functionalstoragelegacy.api.storage.*;
-import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigInventoryHandler;
+import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigItemHandler;
 import net.minecraft.init.Bootstrap;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.*;
 
-public class BigInventoryHandlerTest {
+public class BigItemHandlerTest {
 
     private static final AtomicInteger NEXT_ITEM_ID = new AtomicInteger(30000);
 
@@ -422,7 +422,7 @@ public class BigInventoryHandlerTest {
         }
     }
 
-    private static final class TestHandler extends BigInventoryHandler {
+    private static final class TestHandler extends BigItemHandler {
         private final double multiplier;
         private int changes;
         private boolean locked;

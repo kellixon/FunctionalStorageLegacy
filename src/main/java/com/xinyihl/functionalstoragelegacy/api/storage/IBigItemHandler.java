@@ -4,6 +4,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraftforge.items.IItemHandler;
 
 import javax.annotation.Nonnull;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -15,66 +16,72 @@ import java.util.Objects;
 public interface IBigItemHandler extends IItemHandler, IStorageHandler<BigItemStack, ItemStorageKey> {
 
     /**
-     * Adapts the generic index count to Forge.
+     * Exposes one virtual slot per stored item key and, when available, one
+     * leading empty insertion slot. Physical storage positions stay internal.
      */
     @Override
     default int getSlots() {
-        return Math.max(0, getStorageCount());
+        return BigItemHandlerForgeView.storages(this).size() + (BigItemHandlerForgeView.hasEmptyStorage(this) ? 1 : 0);
     }
 
     /**
-     * Adapts a long snapshot to a fresh Forge stack.
+     * Returns the virtual empty slot or one aggregated item-key view. Empty
+     * physical slots and zero-amount filters are never exposed.
      */
     @Nonnull
     @Override
     default ItemStack getStackInSlot(int slot) {
-        if (slot < 0 || slot >= getSlots()) {
+        boolean hasEmpty = BigItemHandlerForgeView.hasEmptyStorage(this);
+        if (hasEmpty && slot == 0) {
             return ItemStack.EMPTY;
         }
-        BigItemStack snapshot = getSnapshot(slot);
-        return snapshot.toItemStack();
+        BigItemHandlerForgeView.Storage storage = BigItemHandlerForgeView.storageAt(slot, hasEmpty, BigItemHandlerForgeView.storages(this));
+        return storage == null ? ItemStack.EMPTY : storage.snapshot.toItemStack();
     }
 
     /**
-     * Bridges Forge insertion to the generic indexed transaction.
+     * Bridges Forge insertion directly to routed storage. The supplied slot
+     * is only a Forge compatibility argument and never selects a physical
+     * drawer.
      */
     @Nonnull
     @Override
     default ItemStack insertItem(int slot, @Nonnull ItemStack stack, boolean simulate) {
-        if (slot < 0 || slot >= getSlots() || stack.isEmpty() || stack.getCount() <= 0) {
+        if (stack.isEmpty() || stack.getCount() <= 0) {
             return stack.isEmpty() ? ItemStack.EMPTY : stack.copy();
         }
         BigItemStack request = new BigItemStack(stack, stack.getCount());
-        TransferResult<BigItemStack, ItemStorageKey> result = insert(slot, request, StorageAction.fromSimulation(simulate));
-        long processed = Math.min(request.getAmount(), Math.max(0L, result.getProcessedAmount()));
-        long remaining = request.getAmount() - processed;
+        TransferResult<BigItemStack, ItemStorageKey> result = insertRouted(request, StorageAction.fromSimulation(simulate));
+        long remaining = result.getRemainingAmount();
         if (remaining == 0L) {
             return ItemStack.EMPTY;
         }
         ItemStack remainder = stack.copy();
-        remainder.setCount((int) remaining);
+        remainder.setCount((int) Math.min(remaining, stack.getCount()));
         return remainder;
     }
 
     /**
-     * Bridges Forge extraction to the generic indexed transaction.
+     * Bridges Forge extraction directly to the routed key represented by the
+     * virtual slot. The physical drawer selected by the route is internal.
      */
     @Nonnull
     @Override
     default ItemStack extractItem(int slot, int amount, boolean simulate) {
-        if (slot < 0 || slot >= getSlots() || amount <= 0) {
+        if (amount <= 0) {
             return ItemStack.EMPTY;
         }
-        BigItemStack stored = getSnapshot(slot);
-        if (stored.isEmpty()) {
+        boolean hasEmpty = BigItemHandlerForgeView.hasEmptyStorage(this);
+        BigItemHandlerForgeView.Storage storage = BigItemHandlerForgeView.storageAt(slot, hasEmpty, BigItemHandlerForgeView.storages(this));
+        if (storage == null) {
             return ItemStack.EMPTY;
         }
-        ItemStack template = stored.getTemplate();
+        ItemStack template = storage.snapshot.getTemplate();
         long requested = Math.min((long) amount, Math.max(0, template.getMaxStackSize()));
         if (requested <= 0L) {
             return ItemStack.EMPTY;
         }
-        TransferResult<BigItemStack, ItemStorageKey> result = extract(slot, requested, StorageAction.fromSimulation(simulate));
+        TransferResult<BigItemStack, ItemStorageKey> result = extractRouted(new BigItemStack(template, requested), StorageAction.fromSimulation(simulate));
         if (result.getProcessed().isEmpty()) {
             return ItemStack.EMPTY;
         }
@@ -90,11 +97,16 @@ public interface IBigItemHandler extends IItemHandler, IStorageHandler<BigItemSt
      */
     @Override
     default int getSlotLimit(int slot) {
-        if (slot < 0 || slot >= getSlots()) {
+        boolean hasEmpty = BigItemHandlerForgeView.hasEmptyStorage(this);
+        List<BigItemHandlerForgeView.Storage> storages = BigItemHandlerForgeView.storages(this);
+        if (hasEmpty && slot == 0) {
+            return BigItemHandlerForgeView.toForgeLimit(BigItemHandlerForgeView.emptyStorageCapacity(this));
+        }
+        BigItemHandlerForgeView.Storage storage = BigItemHandlerForgeView.storageAt(slot, hasEmpty, storages);
+        if (storage == null) {
             return 0;
         }
-        long capacity = Math.max(0L, getCapacity(slot));
-        return capacity >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) capacity;
+        return BigItemHandlerForgeView.toForgeLimit(storage.capacity);
     }
 
     /**
@@ -102,11 +114,24 @@ public interface IBigItemHandler extends IItemHandler, IStorageHandler<BigItemSt
      */
     @Override
     default boolean isItemValid(int slot, @Nonnull ItemStack stack) {
-        if (slot < 0 || slot >= getSlots() || stack.isEmpty()) {
+        if (stack.isEmpty() || !BigItemHandlerForgeView.isValidSlot(this, slot)) {
             return false;
         }
-        TransferResult<BigItemStack, ItemStorageKey> result = insert(slot, new BigItemStack(stack, 1L), StorageAction.SIMULATE);
+        TransferResult<BigItemStack, ItemStorageKey> result = insertRouted(new BigItemStack(stack, 1L), StorageAction.SIMULATE);
         return result.getProcessedAmount() > 0L;
+    }
+
+    /**
+     * Reports whether one internal index can represent the virtual empty
+     * insertion slot. Aggregate handlers may override this to inspect the
+     * owning child instead of their own aggregate lock state.
+     */
+    default boolean isEmptyStorageAvailable(int index) {
+        if (index < 0 || index >= Math.max(0, getStorageCount())) {
+            return false;
+        }
+        BigItemStack snapshot = getSnapshot(index);
+        return !snapshot.hasTemplate() && getCapacity(index) > 0L && !isLocked();
     }
 
     /**
@@ -177,3 +202,4 @@ public interface IBigItemHandler extends IItemHandler, IStorageHandler<BigItemSt
         return new TransferResult<>(requested, request.withAmount(processedTotal), action);
     }
 }
+

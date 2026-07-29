@@ -1,13 +1,11 @@
 package com.xinyihl.functionalstoragelegacy.common.tile;
 
-import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
-import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
+import com.xinyihl.functionalstoragelegacy.api.storage.*;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.StorageFeature;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeAttribute;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeState;
 import com.xinyihl.functionalstoragelegacy.common.block.DrawerWoodType;
-import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigInventoryHandler;
+import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigItemHandler;
 import com.xinyihl.functionalstoragelegacy.common.storage.DrawerLayout;
 import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
 import net.minecraft.entity.player.EntityPlayer;
@@ -32,7 +30,7 @@ public class WoodDrawerTile extends ControllableDrawerTile {
 
     private static final HashMap<UUID, Long> INTERACTION_LOGGER = new HashMap<>();
 
-    private BigInventoryHandler handler;
+    private BigItemHandler handler;
     private DrawerLayout drawerLayout;
     private DrawerWoodType woodType;
     private int removeTicks = 0;
@@ -64,8 +62,8 @@ public class WoodDrawerTile extends ControllableDrawerTile {
         return (long) Math.floor(capacity);
     }
 
-    private BigInventoryHandler createHandler() {
-        return new BigInventoryHandler(drawerLayout.getSlotCount()) {
+    private BigItemHandler createHandler() {
+        return new BigItemHandler(drawerLayout.getSlotCount()) {
             @Override
             public double getMultiplier() {
                 return WoodDrawerTile.this.getStorageMultiplier(WoodDrawerTile.this.drawerLayout.getBaseCapacity());
@@ -123,21 +121,21 @@ public class WoodDrawerTile extends ControllableDrawerTile {
 
             // Try to insert held item
             if (!heldStack.isEmpty()) {
-                ItemStack result = handler.insertItem(slot, heldStack, true);
+                ItemStack result = insertIntoPhysicalSlot(slot, heldStack, true);
                 if (result.getCount() != heldStack.getCount()) {
-                    player.setHeldItem(hand, handler.insertItem(slot, heldStack, false));
+                    player.setHeldItem(hand, insertIntoPhysicalSlot(slot, heldStack, false));
                     return true;
                 }
             }
 
             // Double-click fast insert from inventory
-            if (System.currentTimeMillis() - INTERACTION_LOGGER.getOrDefault(player.getUniqueID(), System.currentTimeMillis()) < 300 && (isLocked() || !handler.getStackInSlot(slot).isEmpty())) {
+            if (System.currentTimeMillis() - INTERACTION_LOGGER.getOrDefault(player.getUniqueID(), System.currentTimeMillis()) < 300 && (isLocked() || handler.getSnapshot(slot).hasTemplate())) {
                 for (int i = 0; i < player.inventory.getSizeInventory(); i++) {
                     ItemStack invStack = player.inventory.getStackInSlot(i);
                     if (!invStack.isEmpty()) {
-                        ItemStack testResult = handler.insertItem(slot, invStack, true);
+                        ItemStack testResult = insertIntoPhysicalSlot(slot, invStack, true);
                         if (testResult.getCount() != invStack.getCount()) {
-                            ItemStack leftover = handler.insertItem(slot, invStack.copy(), false);
+                            ItemStack leftover = insertIntoPhysicalSlot(slot, invStack.copy(), false);
                             player.inventory.setInventorySlotContents(i, leftover);
                         }
                     }
@@ -154,12 +152,38 @@ public class WoodDrawerTile extends ControllableDrawerTile {
     public void onClicked(EntityPlayer player, int slot) {
         if (!world.isRemote && slot != -1 && removeTicks == 0) {
             removeTicks = 3;
-            int amount = player.isSneaking() ? handler.getStackInSlot(slot).getMaxStackSize() : 1;
-            ItemStack extracted = handler.extractItem(slot, amount, false);
+            BigItemStack snapshot = handler.getSnapshot(slot);
+            int amount = player.isSneaking() && snapshot.hasTemplate() ? snapshot.getTemplate().getMaxStackSize() : 1;
+            ItemStack extracted = extractFromPhysicalSlot(slot, amount, false);
             if (!extracted.isEmpty()) {
                 ItemHandlerHelper.giveItemToPlayer(player, extracted);
             }
         }
+    }
+
+    private ItemStack insertIntoPhysicalSlot(int slot, ItemStack stack, boolean simulate) {
+        if (stack.isEmpty()) {
+            return ItemStack.EMPTY;
+        }
+        BigItemStack request = new BigItemStack(stack, stack.getCount());
+        TransferResult<BigItemStack, ItemStorageKey> result = handler.insert(slot, request, StorageAction.fromSimulation(simulate));
+        long remaining = result.getRemainingAmount();
+        if (remaining <= 0L) {
+            return ItemStack.EMPTY;
+        }
+        ItemStack remainder = stack.copy();
+        remainder.setCount((int) Math.min(remaining, stack.getCount()));
+        return remainder;
+    }
+
+    private ItemStack extractFromPhysicalSlot(int slot, int amount, boolean simulate) {
+        BigItemStack snapshot = handler.getSnapshot(slot);
+        if (!snapshot.hasTemplate() || amount <= 0) {
+            return ItemStack.EMPTY;
+        }
+        int requested = Math.min(amount, snapshot.getTemplate().getMaxStackSize());
+        TransferResult<BigItemStack, ItemStorageKey> result = handler.extract(slot, requested, StorageAction.fromSimulation(simulate));
+        return result.getProcessed().isEmpty() ? ItemStack.EMPTY : result.getProcessed().toItemStack();
     }
 
     @Override

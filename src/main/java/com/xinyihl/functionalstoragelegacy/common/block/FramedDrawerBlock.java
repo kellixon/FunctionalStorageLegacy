@@ -75,8 +75,7 @@ public class FramedDrawerBlock extends DrawerBlock {
         }
     }
 
-    public BlockRenderLayer getRenderLayer()
-    {
+    public BlockRenderLayer getRenderLayer() {
         return BlockRenderLayer.CUTOUT;
     }
 

@@ -47,6 +47,17 @@ public class ArmoryCabinetBlock extends Block {
         this.setDefaultState(blockState.getBaseState().withProperty(FACING, EnumFacing.NORTH));
     }
 
+    private static void dropStoredItems(World world, BlockPos pos, IBigItemHandler handler) {
+        for (int slot = 0; slot < handler.getStorageCount(); slot++) {
+            BigItemStack snapshot = handler.getSnapshot(slot);
+            if (!snapshot.hasTemplate() || snapshot.getAmount() <= 0L) continue;
+            TransferResult<BigItemStack, ?> extracted = handler.extract(slot, snapshot.getAmount(), StorageAction.EXECUTE);
+            if (extracted.getProcessedAmount() > 0L && !extracted.getProcessed().isEmpty()) {
+                spawnAsEntity(world, pos, extracted.getProcessed().toItemStack());
+            }
+        }
+    }
+
     @Nonnull
     @Override
     protected BlockStateContainer createBlockState() {
@@ -107,17 +118,6 @@ public class ArmoryCabinetBlock extends Block {
     public void harvestBlock(@Nonnull World worldIn, @Nonnull EntityPlayer player, @Nonnull BlockPos pos, @Nonnull IBlockState state, @Nullable TileEntity te, @Nonnull ItemStack stack) {
         super.harvestBlock(worldIn, player, pos, state, te, stack);
         worldIn.setBlockToAir(pos);
-    }
-
-    private static void dropStoredItems(World world, BlockPos pos, IBigItemHandler handler) {
-        for (int slot = 0; slot < handler.getStorageCount(); slot++) {
-            BigItemStack snapshot = handler.getSnapshot(slot);
-            if (!snapshot.hasTemplate() || snapshot.getAmount() <= 0L) continue;
-            TransferResult<BigItemStack, ?> extracted = handler.extract(slot, snapshot.getAmount(), StorageAction.EXECUTE);
-            if (extracted.getProcessedAmount() > 0L && !extracted.getProcessed().isEmpty()) {
-                spawnAsEntity(world, pos, extracted.getProcessed().toItemStack());
-            }
-        }
     }
 
     @Override

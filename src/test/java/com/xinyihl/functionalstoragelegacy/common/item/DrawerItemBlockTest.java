@@ -3,12 +3,11 @@ package com.xinyihl.functionalstoragelegacy.common.item;
 import com.xinyihl.functionalstoragelegacy.TestCapabilities;
 import com.xinyihl.functionalstoragelegacy.api.storage.BigFluidStack;
 import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
-import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
 import com.xinyihl.functionalstoragelegacy.common.block.DrawerWoodType;
 import com.xinyihl.functionalstoragelegacy.common.block.WoodDrawerBlock;
 import com.xinyihl.functionalstoragelegacy.common.inventory.CompactingInventoryHandler;
-import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigInventoryHandler;
+import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigItemHandler;
 import com.xinyihl.functionalstoragelegacy.common.inventory.capability.CompactingStackItemHandler;
 import com.xinyihl.functionalstoragelegacy.common.inventory.capability.DrawerStackCapabilityProvider;
 import com.xinyihl.functionalstoragelegacy.common.inventory.capability.DrawerStackItemHandler;
@@ -20,23 +19,19 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.ResourceLocation;
-import net.minecraftforge.fml.common.registry.ForgeRegistries;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.FluidStack;
+import net.minecraftforge.fml.common.registry.ForgeRegistries;
 import net.minecraftforge.items.CapabilityItemHandler;
 import net.minecraftforge.registries.ForgeRegistry;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class DrawerItemBlockTest {
 
@@ -82,7 +77,7 @@ public class DrawerItemBlockTest {
         Item compactItem = registeredItem("compact_stack_capability");
         long compactAmount = (long) Integer.MAX_VALUE + 37L;
         TestCompactingHandler compactSource = new TestCompactingHandler();
-        compactSource.configureTiers(Arrays.asList(
+        compactSource.configureTiers(Collections.singletonList(
                 new CompactingInventoryHandler.Tier(new ItemStack(compactItem), 1L)));
         compactSource.insert(
                 0,
@@ -119,7 +114,7 @@ public class DrawerItemBlockTest {
         NBTTagCompound writtenTileData = writableDrawer.getTagCompound()
                 .getCompoundTag("TileData");
         assertTrue(writtenTileData.hasKey("StorageV2"));
-        assertTrue(!writtenTileData.hasKey("Inventory"));
+        assertFalse(writtenTileData.hasKey("Inventory"));
     }
 
     @Test
@@ -139,7 +134,7 @@ public class DrawerItemBlockTest {
 
         Item compactItem = registeredItem("nested_compacting_storage");
         TestCompactingHandler compactSource = new TestCompactingHandler();
-        compactSource.configureTiers(Arrays.asList(
+        compactSource.configureTiers(Collections.singletonList(
                 new CompactingInventoryHandler.Tier(new ItemStack(compactItem), 1L)));
         compactSource.insert(
                 0,
@@ -199,7 +194,7 @@ public class DrawerItemBlockTest {
         ItemStack compactDrawer = drawerStackWithTileData(new NBTTagCompound());
         CompactingStackItemHandler compactSeeder = new CompactingStackItemHandler(
                 compactDrawer, 1);
-        compactSeeder.configureTiers(Arrays.asList(
+        compactSeeder.configureTiers(Collections.singletonList(
                 new CompactingInventoryHandler.Tier(new ItemStack(storedItem), 1L)));
         assertEquals(5L, compactSeeder.insert(
                 0,
@@ -298,7 +293,7 @@ public class DrawerItemBlockTest {
         }
     }
 
-    private static final class TestBigHandler extends BigInventoryHandler {
+    private static final class TestBigHandler extends BigItemHandler {
         private TestBigHandler() {
             super(1);
         }

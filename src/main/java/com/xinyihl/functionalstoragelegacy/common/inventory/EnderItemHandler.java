@@ -1,7 +1,7 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory;
 
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
-import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigInventoryHandler;
+import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigItemHandler;
 import net.minecraft.nbt.NBTTagCompound;
 
 import java.util.Objects;
@@ -9,7 +9,7 @@ import java.util.Objects;
 /**
  * Ender inventory handler - extends BigInventoryHandler with a frequency UUID for cross-dimensional sharing.
  */
-public abstract class EnderInventoryHandler extends BigInventoryHandler {
+public abstract class EnderItemHandler extends BigItemHandler {
 
     private String frequency = "";
     private boolean locked = false;
@@ -17,7 +17,7 @@ public abstract class EnderInventoryHandler extends BigInventoryHandler {
     private boolean isCreative = false;
     private double multiplier = 64D * 4D;
 
-    public EnderInventoryHandler() {
+    public EnderItemHandler() {
         super(1); // Ender drawer has one shared slot.
     }
 

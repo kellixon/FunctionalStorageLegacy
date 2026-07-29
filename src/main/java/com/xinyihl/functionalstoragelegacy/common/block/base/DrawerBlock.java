@@ -50,12 +50,11 @@ import java.util.List;
  */
 public abstract class DrawerBlock extends Block {
 
-    private static final long LARGE_DROP_WARNING_THRESHOLD = 6400L;
-
     public static final PropertyEnum<DrawerAttachment> ATTACHMENT = PropertyEnum.create("attachment", DrawerAttachment.class);
     public static final PropertyDirection HORIZONTAL_FACING = PropertyDirection.create("horizontal_facing", EnumFacing.Plane.HORIZONTAL);
     public static final EnumMap<DrawerFaceLayout, EnumMap<DrawerAttachment, EnumMap<EnumFacing, List<AxisAlignedBB>>>> CACHED_HIT_BOXES = new EnumMap<>(DrawerFaceLayout.class);
     public static final EnumFacing[] HORIZONTAL_VALUES = new EnumFacing[]{EnumFacing.NORTH, EnumFacing.EAST, EnumFacing.SOUTH, EnumFacing.WEST};
+    private static final long LARGE_DROP_WARNING_THRESHOLD = 6400L;
 
     public DrawerBlock(Material material) {
         super(material);
@@ -86,6 +85,69 @@ public abstract class DrawerBlock extends Block {
             return EnumFacing.DOWN;
         }
         return DrawerBlock.getHorizontalFacing(state);
+    }
+
+    private static long getDroppedItemCount(ControllableDrawerTile tile) {
+        long total = countHandlerItems(tile.getItemHandler());
+        total = saturatedAdd(total, countUpgrades(tile.getStorageUpgrades()));
+        return saturatedAdd(total, countUpgrades(tile.getUtilityUpgrades()));
+    }
+
+    private static long countHandlerItems(@Nullable IBigItemHandler handler) {
+        if (handler == null) return 0L;
+        if (handler instanceof CompactingInventoryHandler) {
+            CompactingInventoryHandler compacting = (CompactingInventoryHandler) handler;
+            long remaining = compacting.getStoredBaseAmount();
+            long total = 0L;
+            for (CompactingInventoryHandler.Tier tier : compacting.getTiers()) {
+                if (!tier.hasTemplate()) continue;
+                long amount = remaining / tier.getBaseUnits();
+                total = saturatedAdd(total, amount);
+                remaining %= tier.getBaseUnits();
+            }
+            return total;
+        }
+        long total = 0L;
+        for (int slot = 0; slot < handler.getStorageCount(); slot++) {
+            total = saturatedAdd(total, handler.getSnapshot(slot).getAmount());
+        }
+        return total;
+    }
+
+    private static long countUpgrades(ItemStackHandler upgrades) {
+        long total = 0L;
+        for (int slot = 0; slot < upgrades.getSlots(); slot++) {
+            total = saturatedAdd(total, upgrades.getStackInSlot(slot).getCount());
+        }
+        return total;
+    }
+
+    private static long saturatedAdd(long left, long right) {
+        return left >= Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
+    }
+
+    private static void dropUpgrades(World world, BlockPos pos, ItemStackHandler upgrades) {
+        for (int slot = 0; slot < upgrades.getSlots(); slot++) {
+            ItemStack stack = upgrades.getStackInSlot(slot);
+            if (!stack.isEmpty()) {
+                spawnAsEntity(world, pos, stack.copy());
+                upgrades.setStackInSlot(slot, ItemStack.EMPTY);
+            }
+        }
+    }
+
+    private static void dropStoredItems(World world, BlockPos pos, @Nullable IBigItemHandler handler) {
+        if (handler == null) return;
+        for (int slot = 0; slot < handler.getStorageCount(); slot++) {
+            while (true) {
+                BigItemStack snapshot = handler.getSnapshot(slot);
+                if (snapshot.getAmount() <= 0L || !snapshot.hasTemplate()) break;
+                int amount = Math.max(1, snapshot.getTemplate().getMaxStackSize());
+                TransferResult<BigItemStack, ?> extracted = handler.extract(slot, amount, StorageAction.EXECUTE);
+                if (extracted.getProcessedAmount() <= 0L || extracted.getProcessed().isEmpty()) break;
+                spawnAsEntity(world, pos, extracted.getProcessed().toItemStack());
+            }
+        }
     }
 
     /**
@@ -132,73 +194,10 @@ public abstract class DrawerBlock extends Block {
         }
     }
 
-    private static long getDroppedItemCount(ControllableDrawerTile tile) {
-        long total = countHandlerItems(tile.getItemHandler());
-        total = saturatedAdd(total, countUpgrades(tile.getStorageUpgrades()));
-        return saturatedAdd(total, countUpgrades(tile.getUtilityUpgrades()));
-    }
-
-    private static long countHandlerItems(@Nullable IBigItemHandler handler) {
-        if (handler == null) return 0L;
-        if (handler instanceof CompactingInventoryHandler) {
-            CompactingInventoryHandler compacting = (CompactingInventoryHandler) handler;
-            long remaining = compacting.getStoredBaseAmount();
-            long total = 0L;
-            for (CompactingInventoryHandler.Tier tier : compacting.getTiers()) {
-                if (!tier.hasTemplate()) continue;
-                long amount = remaining / tier.getBaseUnits();
-                total = saturatedAdd(total, amount);
-                remaining %= tier.getBaseUnits();
-            }
-            return total;
-        }
-        long total = 0L;
-        for (int slot = 0; slot < handler.getStorageCount(); slot++) {
-            total = saturatedAdd(total, handler.getSnapshot(slot).getAmount());
-        }
-        return total;
-    }
-
     @Override
     public void harvestBlock(@Nonnull World worldIn, @Nonnull EntityPlayer player, @Nonnull BlockPos pos, @Nonnull IBlockState state, @Nullable TileEntity te, @Nonnull ItemStack stack) {
         super.harvestBlock(worldIn, player, pos, state, te, stack);
         worldIn.setBlockToAir(pos);
-    }
-
-    private static long countUpgrades(ItemStackHandler upgrades) {
-        long total = 0L;
-        for (int slot = 0; slot < upgrades.getSlots(); slot++) {
-            total = saturatedAdd(total, upgrades.getStackInSlot(slot).getCount());
-        }
-        return total;
-    }
-
-    private static long saturatedAdd(long left, long right) {
-        return left >= Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
-    }
-
-    private static void dropUpgrades(World world, BlockPos pos, ItemStackHandler upgrades) {
-        for (int slot = 0; slot < upgrades.getSlots(); slot++) {
-            ItemStack stack = upgrades.getStackInSlot(slot);
-            if (!stack.isEmpty()) {
-                spawnAsEntity(world, pos, stack.copy());
-                upgrades.setStackInSlot(slot, ItemStack.EMPTY);
-            }
-        }
-    }
-
-    private static void dropStoredItems(World world, BlockPos pos, @Nullable IBigItemHandler handler) {
-        if (handler == null) return;
-        for (int slot = 0; slot < handler.getStorageCount(); slot++) {
-            while (true) {
-                BigItemStack snapshot = handler.getSnapshot(slot);
-                if (snapshot.getAmount() <= 0L || !snapshot.hasTemplate()) break;
-                int amount = Math.max(1, snapshot.getTemplate().getMaxStackSize());
-                TransferResult<BigItemStack, ?> extracted = handler.extract(slot, amount, StorageAction.EXECUTE);
-                if (extracted.getProcessedAmount() <= 0L || extracted.getProcessed().isEmpty()) break;
-                spawnAsEntity(world, pos, extracted.getProcessed().toItemStack());
-            }
-        }
     }
 
     @Override

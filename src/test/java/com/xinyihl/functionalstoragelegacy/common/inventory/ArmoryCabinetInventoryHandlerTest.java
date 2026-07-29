@@ -1,11 +1,6 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory;
 
-import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
-import com.xinyihl.functionalstoragelegacy.api.storage.ItemStorageKey;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
-import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
+import com.xinyihl.functionalstoragelegacy.api.storage.*;
 import net.minecraft.init.Bootstrap;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -20,9 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class ArmoryCabinetInventoryHandlerTest {
 
@@ -81,7 +74,7 @@ public class ArmoryCabinetInventoryHandlerTest {
     }
 
     @Test
-    public void insertionIsStrictlySlottedAndReadsAreDefensiveCopies() {
+    public void insertionRoutesThroughVirtualKeySlotsAndReadsAreDefensiveCopies() {
         TestHandler handler = new TestHandler(2);
         Item firstItem = new Item().setMaxStackSize(1);
         Item secondItem = new Item().setMaxStackSize(1);
@@ -90,20 +83,22 @@ public class ArmoryCabinetInventoryHandlerTest {
         first.getTagCompound().setString("owner", "stored");
 
         assertTrue(handler.insertItem(0, first, false).isEmpty());
-        ItemStack returned = handler.getStackInSlot(0);
+        assertTrue(handler.getStackInSlot(0).isEmpty());
+        ItemStack returned = handler.getStackInSlot(1);
         returned.getTagCompound().setString("owner", "mutated");
         returned.setCount(0);
-        assertEquals("stored", handler.getStackInSlot(0)
+        assertEquals("stored", handler.getStackInSlot(1)
                 .getTagCompound().getString("owner"));
 
         ItemStack rejected = handler.insertItem(0, new ItemStack(secondItem), false);
-        assertFalse(rejected.isEmpty());
-        assertTrue(handler.getStackInSlot(1).isEmpty());
-        assertTrue(handler.insertItem(1, new ItemStack(secondItem), true).isEmpty());
-        assertTrue(handler.getStackInSlot(1).isEmpty());
+        assertTrue(rejected.isEmpty());
+        assertEquals(2, handler.getSlots());
+        assertFalse(handler.getStackInSlot(0).isEmpty());
+        assertFalse(handler.getStackInSlot(1).isEmpty());
+        assertFalse(handler.insertItem(1, new ItemStack(secondItem), true).isEmpty());
         assertFalse(handler.insertItem(-1, new ItemStack(secondItem), false).isEmpty());
         assertEquals(0, handler.getSlotLimit(-1));
-        assertEquals(1, handler.changes);
+        assertEquals(2, handler.changes);
     }
 
     @Test

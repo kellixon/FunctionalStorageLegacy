@@ -2,7 +2,7 @@ package com.xinyihl.functionalstoragelegacy.common.world;
 
 import com.xinyihl.functionalstoragelegacy.Tags;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
-import com.xinyihl.functionalstoragelegacy.common.inventory.EnderInventoryHandler;
+import com.xinyihl.functionalstoragelegacy.common.inventory.EnderItemHandler;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
 import net.minecraft.world.storage.WorldSavedData;
@@ -18,7 +18,7 @@ import java.util.Map;
  */
 public class EnderSavedData extends WorldSavedData {
 
-    private final Map<String, EnderInventoryHandler> frequencyMap = new HashMap<>();
+    private final Map<String, EnderItemHandler> frequencyMap = new HashMap<>();
     private final Map<String, StorageSubscription> dirtySubscriptions = new HashMap<>();
 
     public EnderSavedData(String name) {
@@ -39,10 +39,10 @@ public class EnderSavedData extends WorldSavedData {
         return data;
     }
 
-    public EnderInventoryHandler getFrequency(String frequency) {
+    public EnderItemHandler getFrequency(String frequency) {
         final String key = frequency == null ? "" : frequency;
         return frequencyMap.computeIfAbsent(key, f -> {
-            EnderInventoryHandler handler = new EnderInventoryHandler() {
+            EnderItemHandler handler = new EnderItemHandler() {
             };
             // Initial construction is deliberately silent to external listeners.
             handler.setFrequency(f);
@@ -64,7 +64,7 @@ public class EnderSavedData extends WorldSavedData {
         for (int i = 0; i < count; i++) {
             String key = nbt.getString("Freq_" + i);
             NBTTagCompound data = nbt.getCompoundTag("FreqData_" + i);
-            EnderInventoryHandler handler = new EnderInventoryHandler() {
+            EnderItemHandler handler = new EnderItemHandler() {
             };
             handler.deserializeNBTFull(data);
             handler.setFrequency(key);
@@ -77,7 +77,7 @@ public class EnderSavedData extends WorldSavedData {
     @Override
     public NBTTagCompound writeToNBT(@Nonnull NBTTagCompound nbt) {
         int i = 0;
-        for (Map.Entry<String, EnderInventoryHandler> entry : frequencyMap.entrySet()) {
+        for (Map.Entry<String, EnderItemHandler> entry : frequencyMap.entrySet()) {
             nbt.setString("Freq_" + i, entry.getKey());
             nbt.setTag("FreqData_" + i, entry.getValue().serializeNBTFull());
             i++;

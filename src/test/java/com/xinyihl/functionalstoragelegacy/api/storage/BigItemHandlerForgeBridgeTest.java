@@ -1,8 +1,8 @@
 package com.xinyihl.functionalstoragelegacy.api.storage;
 
+import net.minecraft.init.Bootstrap;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.init.Bootstrap;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -11,10 +11,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class BigItemHandlerForgeBridgeTest {
 
@@ -59,6 +56,41 @@ public class BigItemHandlerForgeBridgeTest {
         assertEquals(Integer.MAX_VALUE, handler.getSlotLimit(0));
         assertTrue(handler.getStackInSlot(-1).isEmpty());
         assertEquals(0, handler.getSlotLimit(1));
+    }
+
+    @Test
+    public void forgeSlotsExposeAggregatedKeysAndOnlyAddAnEmptySlotWhenAvailable() {
+        Item first = new Item();
+        Item second = new Item();
+        MinimalItemHandler handler = new MinimalItemHandler(10L, 20L, 30L);
+        handler.setSlot(0, new BigItemStack(new ItemStack(first), 3L));
+        handler.setSlot(1, new BigItemStack(new ItemStack(first), 4L));
+        handler.setSlot(2, new BigItemStack(new ItemStack(second), 2L));
+
+        assertEquals(2, handler.getSlots());
+        assertEquals(7, handler.getStackInSlot(0).getCount());
+        assertEquals(2, handler.getStackInSlot(1).getCount());
+        assertEquals(30, handler.getSlotLimit(0));
+        assertEquals(30, handler.getSlotLimit(1));
+
+        ItemStack extracted = handler.extractItem(0, 5, false);
+        assertEquals(5, extracted.getCount());
+        assertEquals(0L, handler.getSnapshot(0).getAmount());
+        assertEquals(2L, handler.getSnapshot(1).getAmount());
+
+        ItemStack remainder = handler.insertItem(-1, new ItemStack(first, 5), false);
+        assertTrue(remainder.isEmpty());
+        assertEquals(5L, handler.getSnapshot(0).getAmount());
+
+        MinimalItemHandler withEmpty = new MinimalItemHandler(10L, 20L, 30L);
+        withEmpty.setSlot(0, new BigItemStack(new ItemStack(first), 3L));
+        withEmpty.setSlot(1, new BigItemStack(new ItemStack(second), 2L));
+
+        assertEquals(3, withEmpty.getSlots());
+        assertTrue(withEmpty.getStackInSlot(0).isEmpty());
+        assertEquals(3, withEmpty.getStackInSlot(1).getCount());
+        assertEquals(2, withEmpty.getStackInSlot(2).getCount());
+        assertEquals(30, withEmpty.getSlotLimit(0));
     }
 
     @Test

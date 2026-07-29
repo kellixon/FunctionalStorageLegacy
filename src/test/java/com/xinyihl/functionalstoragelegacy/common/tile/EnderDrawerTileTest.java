@@ -4,7 +4,7 @@ import com.xinyihl.functionalstoragelegacy.TestCapabilities;
 import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
 import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
-import com.xinyihl.functionalstoragelegacy.common.inventory.EnderInventoryHandler;
+import com.xinyihl.functionalstoragelegacy.common.inventory.EnderItemHandler;
 import com.xinyihl.functionalstoragelegacy.common.inventory.controller.ControllerItemHandler;
 import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.controller.DrawerControllerTile;
@@ -19,10 +19,7 @@ import org.junit.Test;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class EnderDrawerTileTest {
 
@@ -35,9 +32,9 @@ public class EnderDrawerTileTest {
     @Test
     public void replacingStorageInvalidatesAccessorOnlyForNewIdentity() {
         CountingTile tile = new CountingTile();
-        EnderInventoryHandler first = new EnderInventoryHandler() {
+        EnderItemHandler first = new EnderItemHandler() {
         };
-        EnderInventoryHandler second = new EnderInventoryHandler() {
+        EnderItemHandler second = new EnderItemHandler() {
         };
         IBigItemHandler facade = tile.getItemHandler();
         assertSame(facade, tile.getCapability(
@@ -74,9 +71,9 @@ public class EnderDrawerTileTest {
         DrawerControllerTile controllerTile = new DrawerControllerTile();
         RefreshingTile firstTile = new RefreshingTile(controllerTile);
         RefreshingTile secondTile = new RefreshingTile(controllerTile);
-        EnderInventoryHandler shared = new EnderInventoryHandler() {
+        EnderItemHandler shared = new EnderItemHandler() {
         };
-        EnderInventoryHandler other = new EnderInventoryHandler() {
+        EnderItemHandler other = new EnderItemHandler() {
         };
         firstTile.replaceStorage(shared);
         secondTile.replaceStorage(shared);
@@ -103,7 +100,7 @@ public class EnderDrawerTileTest {
 
     @Test
     public void syncedInventoryRetainsLockedEmptyTypeAndSharedFlags() {
-        EnderInventoryHandler serverHandler = new EnderInventoryHandler() {
+        EnderItemHandler serverHandler = new EnderItemHandler() {
         };
         serverHandler.insert(
                 0,
@@ -137,11 +134,12 @@ public class EnderDrawerTileTest {
         EnderDrawerTile tile = new EnderDrawerTile();
         CountingCloseable replacementAccessor = new CountingCloseable();
         installAccessor(tile, replacementAccessor);
-        EnderInventoryHandler target = new EnderInventoryHandler() { };
+        EnderItemHandler target = new EnderItemHandler() {
+        };
 
         assertTrue(tile.replaceStorage(target));
         assertEquals(1, replacementAccessor.closes);
-        assertTrue(!tile.replaceStorage(target));
+        assertFalse(tile.replaceStorage(target));
         tile.invalidateAE2Accessor();
         assertEquals(1, replacementAccessor.closes);
 

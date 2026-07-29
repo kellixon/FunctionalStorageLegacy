@@ -1,10 +1,6 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory.controller;
 
-import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
-import com.xinyihl.functionalstoragelegacy.api.storage.IBigItemHandler;
-import com.xinyihl.functionalstoragelegacy.api.storage.ItemStorageKey;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
-import com.xinyihl.functionalstoragelegacy.api.storage.TransferResult;
+import com.xinyihl.functionalstoragelegacy.api.storage.*;
 import net.minecraft.init.Bootstrap;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -14,6 +10,7 @@ import org.junit.Test;
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -56,7 +53,7 @@ public class ControllerItemHandlerTest {
     public void invalidAndEmptyOperationsNeverReachAChild() {
         SpyHandler child = new SpyHandler("child", new ArrayList<String>(), 1, 8L);
         ControllerItemHandler controller = new ControllerItemHandler();
-        controller.setHandlers(Arrays.asList(child));
+        controller.setHandlers(Collections.singletonList(child));
         BigItemStack request = new BigItemStack(new ItemStack(new Item()), 3L);
 
         assertEquals(0L, controller.insert(
@@ -98,6 +95,44 @@ public class ControllerItemHandlerTest {
     }
 
     @Test
+    public void matchingOnlyInsertionNeverUsesEmptyStorage() {
+        Item existingItem = new Item();
+        Item unmatchedItem = new Item();
+        List<String> calls = new ArrayList<>();
+        SpyHandler empty = new SpyHandler("empty", calls, 1, 8L);
+        SpyHandler matching = new SpyHandler("matching", calls, 1, 4L);
+        matching.setSlot(0, new BigItemStack(new ItemStack(existingItem), 2L));
+        ControllerItemHandler controller = new ControllerItemHandler();
+        controller.setHandlers(Arrays.asList(empty, matching));
+
+        TransferResult<BigItemStack, ItemStorageKey> matched = controller.insertMatchingRouted(
+                new BigItemStack(new ItemStack(existingItem), 3L), StorageAction.EXECUTE);
+        TransferResult<BigItemStack, ItemStorageKey> unmatched = controller.insertMatchingRouted(
+                new BigItemStack(new ItemStack(unmatchedItem), 3L), StorageAction.EXECUTE);
+
+        assertEquals(2L, matched.getProcessedAmount());
+        assertEquals(0L, unmatched.getProcessedAmount());
+        assertEquals(Collections.singletonList("matching"), calls);
+        assertEquals(4L, matching.getSnapshot(0).getAmount());
+        assertTrue(empty.getSnapshot(0).isEmpty());
+    }
+
+    @Test
+    public void forgeEmptySlotExcludesLockedUnconfiguredChildren() {
+        SpyHandler locked = new SpyHandler("locked", new ArrayList<String>(), 1, 8L);
+        locked.locked = true;
+        ControllerItemHandler controller = new ControllerItemHandler();
+        controller.setHandlers(Collections.singletonList(locked));
+
+        assertEquals(0, controller.getSlots());
+
+        SpyHandler unlocked = new SpyHandler("unlocked", new ArrayList<String>(), 1, 8L);
+        controller.setHandlers(Collections.singletonList(unlocked));
+        assertEquals(1, controller.getSlots());
+        assertTrue(controller.getStackInSlot(0).isEmpty());
+    }
+
+    @Test
     public void routedSimulationAndExtractionHaveNoCrossSlotMutation() {
         Item item = new Item();
         List<String> calls = new ArrayList<>();
@@ -133,7 +168,7 @@ public class ControllerItemHandlerTest {
         source.clear();
         assertEquals(2, controller.getStorageCount());
 
-        controller.setHandlers(Arrays.asList(replacement));
+        controller.setHandlers(Collections.singletonList(replacement));
         assertEquals(1, controller.getStorageCount());
         assertEquals(0L, controller.getCapacity(1));
         assertTrue(controller.getSnapshot(1).isEmpty());

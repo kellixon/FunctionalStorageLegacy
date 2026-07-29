@@ -2,7 +2,7 @@ package com.xinyihl.functionalstoragelegacy.common.tile;
 
 import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
 import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
-import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigInventoryHandler;
+import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigItemHandler;
 import com.xinyihl.functionalstoragelegacy.common.item.upgrade.StorageUpgradeItem;
 import com.xinyihl.functionalstoragelegacy.common.storage.DrawerLayout;
 import com.xinyihl.functionalstoragelegacy.common.storage.FramedDrawerStyle;
@@ -15,8 +15,7 @@ import net.minecraftforge.common.util.Constants;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class FramedDrawerTileTest {
 
@@ -28,7 +27,7 @@ public class FramedDrawerTileTest {
     @Test
     public void styleAndLongStorageRoundTripTogether() {
         long amount = (long) Integer.MAX_VALUE + 8_765L;
-        BigInventoryHandler seededStorage = new BigInventoryHandler(1) {
+        BigItemHandler seededStorage = new BigItemHandler(1) {
             @Override
             public double getMultiplier() {
                 return Double.POSITIVE_INFINITY;
@@ -80,7 +79,7 @@ public class FramedDrawerTileTest {
         assertTrue(tile.getStyle().isConfigured());
         assertTrue(ItemStack.areItemStacksEqual(
                 tile.getStyle().getExterior(), tile.getStyle().getDivider()));
-        assertTrue(!tile.isEverythingEmpty());
+        assertFalse(tile.isEverythingEmpty());
     }
 
     @Test

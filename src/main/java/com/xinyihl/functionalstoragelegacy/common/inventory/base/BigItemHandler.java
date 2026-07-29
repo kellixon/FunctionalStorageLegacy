@@ -19,7 +19,7 @@ import java.util.function.Consumer;
  * Mutable item stacks never escape this class; every state transition replaces
  * an immutable internal slot value and public reads return detached snapshots.
  */
-public abstract class BigInventoryHandler implements IBigItemHandler {
+public abstract class BigItemHandler implements IBigItemHandler {
 
     private static final String STORAGE_V2 = "StorageV2";
     private static final String ITEMS = "Items";
@@ -30,7 +30,7 @@ public abstract class BigInventoryHandler implements IBigItemHandler {
     private final SlotState[] states;
     private final StorageChangeDispatcher<BigItemStack, ItemStorageKey> changeDispatcher = new StorageChangeDispatcher<>();
 
-    protected BigInventoryHandler(int slots) {
+    protected BigItemHandler(int slots) {
         this.states = new SlotState[Math.max(0, slots)];
         Arrays.fill(states, SlotState.EMPTY);
     }

@@ -3,14 +3,14 @@ package com.xinyihl.functionalstoragelegacy.common.inventory.capability;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.StorageFeature;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeAttribute;
 import com.xinyihl.functionalstoragelegacy.api.upgrade.UpgradeState;
-import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigInventoryHandler;
+import com.xinyihl.functionalstoragelegacy.common.inventory.base.BigItemHandler;
 import com.xinyihl.functionalstoragelegacy.common.storage.DrawerLayout;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 
 import javax.annotation.Nonnull;
 
-public class DrawerStackItemHandler extends BigInventoryHandler {
+public class DrawerStackItemHandler extends BigItemHandler {
 
     private final ItemStack drawerStack;
     private final DrawerLayout drawerLayout;

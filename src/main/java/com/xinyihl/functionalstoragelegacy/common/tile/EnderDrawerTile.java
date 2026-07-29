@@ -1,7 +1,7 @@
 package com.xinyihl.functionalstoragelegacy.common.tile;
 
 import com.xinyihl.functionalstoragelegacy.api.storage.*;
-import com.xinyihl.functionalstoragelegacy.common.inventory.EnderInventoryHandler;
+import com.xinyihl.functionalstoragelegacy.common.inventory.EnderItemHandler;
 import com.xinyihl.functionalstoragelegacy.common.tile.base.ControllableDrawerTile;
 import com.xinyihl.functionalstoragelegacy.common.tile.controller.DrawerControllerTile;
 import com.xinyihl.functionalstoragelegacy.common.world.EnderSavedData;
@@ -32,7 +32,7 @@ public class EnderDrawerTile extends ControllableDrawerTile {
     private static final HashMap<UUID, Long> INTERACTION_LOGGER = new HashMap<>();
     private final ForwardingItemHandler itemHandlerFacade = new ForwardingItemHandler();
     private String frequency;
-    private EnderInventoryHandler storage;
+    private EnderItemHandler storage;
     private int removeTicks;
 
     public EnderDrawerTile() {
@@ -145,7 +145,7 @@ public class EnderDrawerTile extends ControllableDrawerTile {
 
     @Override
     public boolean isLocked() {
-        EnderInventoryHandler target = storage;
+        EnderItemHandler target = storage;
         return target == null ? super.isLocked() : target.isLocked();
     }
 
@@ -159,7 +159,7 @@ public class EnderDrawerTile extends ControllableDrawerTile {
         }
         this.isLocked = locked;
         this.needsUpgradeCache = true;
-        EnderInventoryHandler target = storage;
+        EnderItemHandler target = storage;
         if (target == null && world != null && !world.isRemote) {
             target = EnderSavedData.getInstance(world).getFrequency(frequency);
             replaceStorage(target);
@@ -252,7 +252,7 @@ public class EnderDrawerTile extends ControllableDrawerTile {
         if (!nbt.hasKey("EnderInventory")) {
             return;
         }
-        EnderInventoryHandler replacement = new EnderInventoryHandler() {
+        EnderItemHandler replacement = new EnderItemHandler() {
         };
         replacement.deserializeNBTFull(nbt.getCompoundTag("EnderInventory"));
         String syncedFrequency = replacement.getFrequency();
@@ -324,7 +324,7 @@ public class EnderDrawerTile extends ControllableDrawerTile {
      * Replaces the shared target in the required order: close old target
      * listener, bind target, subscribe, facade RESET, accessor invalidation.
      */
-    boolean replaceStorage(@Nullable EnderInventoryHandler replacement) {
+    boolean replaceStorage(@Nullable EnderItemHandler replacement) {
         if (storage == replacement) {
             return false;
         }
@@ -360,20 +360,20 @@ public class EnderDrawerTile extends ControllableDrawerTile {
 
         @Override
         public int getStorageCount() {
-            EnderInventoryHandler target = storage;
+            EnderItemHandler target = storage;
             return target == null ? 1 : target.getStorageCount();
         }
 
         @Nonnull
         @Override
         public BigItemStack getSnapshot(int slot) {
-            EnderInventoryHandler target = storage;
+            EnderItemHandler target = storage;
             return target == null ? BigItemStack.empty() : target.getSnapshot(slot);
         }
 
         @Override
         public long getCapacity(int slot) {
-            EnderInventoryHandler target = storage;
+            EnderItemHandler target = storage;
             return target == null ? 0L : target.getCapacity(slot);
         }
 
@@ -381,7 +381,7 @@ public class EnderDrawerTile extends ControllableDrawerTile {
         @Override
         public TransferResult<BigItemStack, ItemStorageKey> insert(int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action) {
             Objects.requireNonNull(action, "action");
-            EnderInventoryHandler target = storage;
+            EnderItemHandler target = storage;
             if (target != null) {
                 return target.insert(slot, request, action);
             }
@@ -393,7 +393,7 @@ public class EnderDrawerTile extends ControllableDrawerTile {
         @Override
         public TransferResult<BigItemStack, ItemStorageKey> extract(int slot, long amount, @Nonnull StorageAction action) {
             Objects.requireNonNull(action, "action");
-            EnderInventoryHandler target = storage;
+            EnderItemHandler target = storage;
             if (target != null) {
                 return target.extract(slot, amount, action);
             }
@@ -402,32 +402,32 @@ public class EnderDrawerTile extends ControllableDrawerTile {
 
         @Override
         public boolean isLocked() {
-            EnderInventoryHandler target = storage;
+            EnderItemHandler target = storage;
             return target != null && target.isLocked();
         }
 
         @Override
         public boolean voidsOverflow() {
-            EnderInventoryHandler target = storage;
+            EnderItemHandler target = storage;
             return target != null && target.voidsOverflow();
         }
 
         @Override
         public boolean isCreative() {
-            EnderInventoryHandler target = storage;
+            EnderItemHandler target = storage;
             return target != null && target.isCreative();
         }
 
         @Override
         public double getMultiplier() {
-            EnderInventoryHandler target = storage;
+            EnderItemHandler target = storage;
             return target == null ? 1D : target.getMultiplier();
         }
 
         @Nonnull
         @Override
         public Object getStorageIdentity() {
-            EnderInventoryHandler target = storage;
+            EnderItemHandler target = storage;
             return target == null ? this : target;
         }
 
@@ -442,7 +442,7 @@ public class EnderDrawerTile extends ControllableDrawerTile {
             return dispatcher.subscribe(listener);
         }
 
-        private void bindTarget(@Nullable EnderInventoryHandler target) {
+        private void bindTarget(@Nullable EnderItemHandler target) {
             closeTarget();
             if (target != null) {
                 targetSubscription = target.subscribe(dispatcher::dispatch);
@@ -450,7 +450,7 @@ public class EnderDrawerTile extends ControllableDrawerTile {
         }
 
         private void rebindTarget() {
-            EnderInventoryHandler target = storage;
+            EnderItemHandler target = storage;
             if (target != null && (targetSubscription == null || targetSubscription.isClosed())) {
                 targetSubscription = target.subscribe(dispatcher::dispatch);
             }

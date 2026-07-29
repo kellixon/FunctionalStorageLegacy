@@ -1,10 +1,6 @@
 package com.xinyihl.functionalstoragelegacy.common.inventory;
 
-import com.xinyihl.functionalstoragelegacy.api.storage.BigItemStack;
-import com.xinyihl.functionalstoragelegacy.api.storage.ItemStorageKey;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageAction;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageChange;
-import com.xinyihl.functionalstoragelegacy.api.storage.StorageSubscription;
+import com.xinyihl.functionalstoragelegacy.api.storage.*;
 import net.minecraft.init.Bootstrap;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -18,9 +14,7 @@ import org.junit.Test;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class EnderInventoryHandlerTest {
 
@@ -33,7 +27,7 @@ public class EnderInventoryHandlerTest {
 
     @Test
     public void runtimeUnlockClearsRetainedFilterAndAcceptsAnotherType() {
-        EnderInventoryHandler handler = new EnderInventoryHandler() {
+        EnderItemHandler handler = new EnderItemHandler() {
         };
         AtomicInteger eventCount = new AtomicInteger();
         AtomicReference<StorageChange<BigItemStack, ItemStorageKey>> lastChange =
@@ -74,7 +68,7 @@ public class EnderInventoryHandlerTest {
     @Test
     public void lockedEmptyFilterSurvivesFullNbtRoundTrip() {
         Item stored = registeredItem("ender_locked_filter");
-        EnderInventoryHandler source = new EnderInventoryHandler() {
+        EnderItemHandler source = new EnderItemHandler() {
         };
         source.insert(
                 0,
@@ -88,7 +82,7 @@ public class EnderInventoryHandlerTest {
         assertEquals(0L, serialized.getCompoundTag("StorageV2")
                 .getTagList("Items", 10).getCompoundTagAt(0).getLong("Amount"));
 
-        EnderInventoryHandler restored = new EnderInventoryHandler() {
+        EnderItemHandler restored = new EnderItemHandler() {
         };
         restored.deserializeNBTFull(serialized);
 
