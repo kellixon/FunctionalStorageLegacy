@@ -167,6 +167,7 @@ public class RegistrationHandler {
         MAX_STORAGE_UPGRADE = new StorageUpgradeItem(StorageUpgradeItem.StorageTier.MAX);
         MAX_STORAGE_UPGRADE.setRegistryName("max_storage_upgrade");
         MAX_STORAGE_UPGRADE.setTranslationKey(Tags.MOD_ID + ".max_storage_upgrade");
+        MAX_STORAGE_UPGRADE.incompatibleWith(MAX_STORAGE_UPGRADE);
 
         CREATIVE_VENDING_UPGRADE = new UpgradeItem(DrawerUpgradeBehavior.SlotType.STORAGE, StorageFeature.CREATIVE) {
         };
