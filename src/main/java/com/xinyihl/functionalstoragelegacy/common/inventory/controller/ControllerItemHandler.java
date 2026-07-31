@@ -80,6 +80,12 @@ public final class ControllerItemHandler implements IBigItemHandler {
         return !child.isLocked() && child.getCapacity(storage.getLocalIndex()) > 0L;
     }
 
+    @Override
+    public boolean voidsOverflow(int slot) {
+        ControllerStorageIndex.IndexedStorage<BigItemStack, ItemStorageKey> storage = index.getIndexedStorage(slot);
+        return storage != null && itemHandler(storage).voidsOverflow(storage.getLocalIndex());
+    }
+
     @Nonnull
     @Override
     public TransferResult<BigItemStack, ItemStorageKey> insert(int slot, @Nonnull BigItemStack request, @Nonnull StorageAction action) {

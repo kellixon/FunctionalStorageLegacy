@@ -129,6 +129,19 @@ public class BigItemHandlerForgeBridgeTest {
     }
 
     @Test
+    public void voidOverflowKeepsAFullVirtualSlotInsertable() {
+        Item item = new Item();
+        MinimalItemHandler handler = new MinimalItemHandler(4L);
+        handler.setSlot(0, new BigItemStack(new ItemStack(item), 4L));
+        handler.voidOverflow = true;
+
+        assertEquals(Integer.MAX_VALUE, handler.getSlotLimit(0));
+        assertTrue(handler.isItemValid(0, new ItemStack(item)));
+        assertTrue(handler.insertItem(0, new ItemStack(item, 64), false).isEmpty());
+        assertEquals(4L, handler.getSnapshot(0).getAmount());
+    }
+
+    @Test
     public void routedInsertionPrefersMatchingAndRetainedTemplatesBeforeEmptySlots() {
         Item item = new Item();
         MinimalItemHandler handler = new MinimalItemHandler(5L, 10L, 3L);
@@ -191,6 +204,7 @@ public class BigItemHandlerForgeBridgeTest {
         private int changeCount;
         private StorageAction lastInsertAction;
         private StorageAction lastExtractAction;
+        private boolean voidOverflow;
 
         private MinimalItemHandler(long... capacities) {
             this.capacities = capacities.clone();
@@ -237,9 +251,15 @@ public class BigItemHandlerForgeBridgeTest {
                         ? current.withAmount(newAmount) : request.withAmount(newAmount);
                 changeCount++;
             }
-            BigItemStack processed = accepted == 0L
-                    ? BigItemStack.empty() : request.withAmount(accepted);
+            long processedAmount = voidOverflow ? requested : accepted;
+            BigItemStack processed = processedAmount == 0L
+                    ? BigItemStack.empty() : request.withAmount(processedAmount);
             return new TransferResult<>(requested, processed, action);
+        }
+
+        @Override
+        public boolean voidsOverflow() {
+            return voidOverflow;
         }
 
         @Nonnull

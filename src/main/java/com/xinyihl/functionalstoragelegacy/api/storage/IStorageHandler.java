@@ -55,6 +55,13 @@ public interface IStorageHandler<S extends StorageSnapshot<S, K>, K extends Stor
     }
 
     /**
+     * @return whether the indexed storage consumes compatible overflow
+     */
+    default boolean voidsOverflow(int index) {
+        return voidsOverflow();
+    }
+
+    /**
      * @return whether extraction can report resources without consuming storage
      */
     default boolean isCreative() {

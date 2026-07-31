@@ -20,9 +20,9 @@ final class BigItemHandlerForgeView {
             ItemStorageKey key = snapshot.getKey();
             Storage previous = byKey.get(key);
             if (previous == null) {
-                byKey.put(key, new Storage(snapshot, handler.getCapacity(index)));
+                byKey.put(key, new Storage(snapshot, handler.getCapacity(index), handler.voidsOverflow(index)));
             } else {
-                byKey.put(key, new Storage(previous.snapshot.withAmount(saturatedAdd(previous.snapshot.getAmount(), snapshot.getAmount())), saturatedAdd(previous.capacity, handler.getCapacity(index))));
+                byKey.put(key, new Storage(previous.snapshot.withAmount(saturatedAdd(previous.snapshot.getAmount(), snapshot.getAmount())), saturatedAdd(previous.capacity, handler.getCapacity(index)), previous.voidsOverflow || handler.voidsOverflow(index)));
             }
         }
         return new ArrayList<>(byKey.values());
@@ -72,10 +72,12 @@ final class BigItemHandlerForgeView {
     static final class Storage {
         final BigItemStack snapshot;
         final long capacity;
+        final boolean voidsOverflow;
 
-        private Storage(@Nonnull BigItemStack snapshot, long capacity) {
+        private Storage(@Nonnull BigItemStack snapshot, long capacity, boolean voidsOverflow) {
             this.snapshot = snapshot;
             this.capacity = Math.max(0L, capacity);
+            this.voidsOverflow = voidsOverflow;
         }
     }
 }

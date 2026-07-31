@@ -106,7 +106,7 @@ public interface IBigItemHandler extends IItemHandler, IStorageHandler<BigItemSt
         if (storage == null) {
             return 0;
         }
-        return BigItemHandlerForgeView.toForgeLimit(storage.capacity);
+        return storage.voidsOverflow ? Integer.MAX_VALUE : BigItemHandlerForgeView.toForgeLimit(storage.capacity);
     }
 
     /**
