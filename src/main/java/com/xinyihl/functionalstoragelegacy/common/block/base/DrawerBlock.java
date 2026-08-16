@@ -274,7 +274,15 @@ public abstract class DrawerBlock extends Block {
     }
 
     @Override
+    public int getStrongPower(IBlockState state, IBlockAccess worldIn, BlockPos pos, EnumFacing side) {
+        return (side == EnumFacing.UP) ? getWeakPower(state, worldIn, pos, side) : 0;
+    }
+
+    @Override
     public int getWeakPower(@Nonnull IBlockState state, IBlockAccess blockAccess, @Nonnull BlockPos pos, @Nonnull EnumFacing side) {
+        if (!canProvidePower(state)) {
+            return 0;
+        }
         TileEntity te = blockAccess.getTileEntity(pos);
         if (te instanceof ControllableDrawerTile) {
             return ((ControllableDrawerTile) te).getRedstoneSignal(side);

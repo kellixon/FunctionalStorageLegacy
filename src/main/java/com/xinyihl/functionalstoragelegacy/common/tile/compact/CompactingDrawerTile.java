@@ -296,7 +296,7 @@ public class CompactingDrawerTile extends ControllableDrawerTile {
         long totalCapacity = handler.getTotalBaseCapacity();
         long totalStored = handler.getStoredBaseAmount();
         if (totalCapacity == 0) return 0;
-        return (int) ((totalStored / (double) totalCapacity) * 15);
+        return calculateRedstoneSignalForRatio((double) totalStored / (double) totalCapacity);
     }
 
     @Override

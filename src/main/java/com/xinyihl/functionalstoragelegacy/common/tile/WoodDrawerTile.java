@@ -47,10 +47,6 @@ public class WoodDrawerTile extends ControllableDrawerTile {
         bindStorageHandler(this.handler, () -> this.handler.onChange(StorageChange.reset()));
     }
 
-    private static long saturatedAdd(long left, long right) {
-        return left >= Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
-    }
-
     private static long capacityFor(double multiplier, ItemStack template) {
         if (Double.isNaN(multiplier) || multiplier <= 0D) {
             return 0L;
@@ -268,14 +264,26 @@ public class WoodDrawerTile extends ControllableDrawerTile {
 
     @Override
     protected int calculateRedstoneSignal() {
-        long totalCapacity = 0;
-        long totalStored = 0;
+        int active = 0;
+        double fillRatio = 0D;
+
         for (int i = 0; i < handler.getStorageCount(); i++) {
-            totalCapacity = saturatedAdd(totalCapacity, handler.getCapacity(i));
-            totalStored = saturatedAdd(totalStored, handler.getSnapshot(i).getAmount());
+            active++;
+            long capacity = handler.getCapacity(i);
+            if (capacity <= 0L)
+                continue;
+
+            BigItemStack snapshot = handler.getSnapshot(i);
+            double slotRatio = snapshot.getAmount() >= capacity
+                    ? 1D
+                    : (double) snapshot.getAmount() / (double) capacity;
+            fillRatio += slotRatio;
         }
-        if (totalCapacity == 0) return 0;
-        return (int) ((totalStored / (double) totalCapacity) * 15);
+
+        if (active == 0)
+            return 0;
+
+        return calculateRedstoneSignalForRatio(fillRatio / active);
     }
 
     @Override

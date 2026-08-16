@@ -219,7 +219,7 @@ public class FluidDrawerTile extends ControllableDrawerTile {
             totalStored += fluidHandler.getSnapshot(tank).getAmount();
         }
         if (totalCapacity <= 0D) return 0;
-        return (int) Math.min(15D, (totalStored / totalCapacity) * 15D);
+        return calculateRedstoneSignalForRatio(totalStored / totalCapacity);
     }
 
     @Override

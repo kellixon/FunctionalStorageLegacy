@@ -513,6 +513,14 @@ public abstract class ControllableDrawerTile extends TileEntity implements ITick
         return 0;
     }
 
+    protected static int calculateRedstoneSignalForRatio(double fillRatio) {
+        if (fillRatio <= 0D)
+            return 0;
+        if (fillRatio >= 1D)
+            return 15;
+        return (int) Math.ceil(fillRatio * 14);
+    }
+
     public void sendUpdatePacket() {
         if (world != null && !world.isRemote) {
             IBlockState state = world.getBlockState(pos);
