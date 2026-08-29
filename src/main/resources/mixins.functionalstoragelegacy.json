@@ -1,0 +1,12 @@
+{
+  "package": "com.xinyihl.functionalstoragelegacy.mixin",
+  "required": false,
+  "target": "@env(DEFAULT)",
+  "minVersion": "0.8.5",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [
+    "ae2.DualityInterfaceMixin"
+  ],
+  "server": [],
+  "client": []
+}
