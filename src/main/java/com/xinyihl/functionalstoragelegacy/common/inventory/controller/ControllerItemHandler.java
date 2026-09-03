@@ -73,11 +73,12 @@ public final class ControllerItemHandler implements IBigItemHandler {
     @Override
     public boolean isEmptyStorageAvailable(int slot) {
         ControllerStorageIndex.IndexedStorage<BigItemStack, ItemStorageKey> storage = index.getIndexedStorage(slot);
-        if (storage == null || storage.getSnapshot().hasTemplate()) {
+        if (storage == null || !storage.getSnapshot().isEmpty()) {
             return false;
         }
         IBigItemHandler child = itemHandler(storage);
-        return !child.isLocked() && child.getCapacity(storage.getLocalIndex()) > 0L;
+        BigItemStack snapshot = storage.getSnapshot();
+        return child.getCapacity(storage.getLocalIndex()) > 0L && (snapshot.hasTemplate() || !child.isLocked());
     }
 
     @Override

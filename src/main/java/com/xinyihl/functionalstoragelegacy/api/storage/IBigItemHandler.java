@@ -26,7 +26,9 @@ public interface IBigItemHandler extends IItemHandler, IStorageHandler<BigItemSt
 
     /**
      * Returns the virtual empty slot or one aggregated item-key view. Empty
-     * physical slots and zero-amount filters are never exposed.
+     * physical slots are not shown as typed content; a zero-amount retained
+     * filter is exposed as the leading empty slot so automation can insert the
+     * matching type into a locked/configured empty drawer.
      */
     @Nonnull
     @Override
@@ -131,7 +133,7 @@ public interface IBigItemHandler extends IItemHandler, IStorageHandler<BigItemSt
             return false;
         }
         BigItemStack snapshot = getSnapshot(index);
-        return !snapshot.hasTemplate() && getCapacity(index) > 0L && !isLocked();
+        return snapshot.isEmpty() && getCapacity(index) > 0L && (snapshot.hasTemplate() || !isLocked());
     }
 
     /**

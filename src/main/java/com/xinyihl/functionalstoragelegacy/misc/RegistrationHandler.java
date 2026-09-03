@@ -29,6 +29,8 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.util.text.TextFormatting;
 import net.minecraft.world.World;
 import net.minecraftforge.event.RegistryEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
@@ -305,24 +307,35 @@ public class RegistrationHandler {
     @SubscribeEvent
     public static void onLeftClickBlock(PlayerInteractEvent.LeftClickBlock event) {
         EntityPlayer player = event.getEntityPlayer();
-        if (!player.isCreative()) return;
-
         World world = event.getWorld();
+
+        if (!player.isCreative() || world.isRemote) return;
+
         BlockPos pos = event.getPos();
         IBlockState state = world.getBlockState(pos);
         Block block = state.getBlock();
 
-        if (!(block instanceof DrawerBlock)) return;
-
-        DrawerBlock drawerBlock = (DrawerBlock) block;
-        int slot = drawerBlock.getHitSlot(state, world, pos, player);
-
-        if (slot != -1) {
-            event.setCanceled(true);
-            if (!world.isRemote) {
+        if (block instanceof DrawerBlock) {
+            DrawerBlock drawerBlock = (DrawerBlock) block;
+            int slot = drawerBlock.getHitSlot(state, world, pos, player);
+            if (slot != -1) {
                 TileEntity te = world.getTileEntity(pos);
                 if (te instanceof ControllableDrawerTile) {
+                    event.setCanceled(true);
                     ((ControllableDrawerTile) te).onClicked(player, slot);
+                    return;
+                }
+            }
+        }
+
+        if (block instanceof EnderDrawerBlock) {
+            TileEntity te = world.getTileEntity(pos);
+            if (te instanceof EnderDrawerTile) {
+                ItemStack stack = player.getHeldItemMainhand();
+                if (stack.getItem() == RegistrationHandler.LINKING_TOOL) {
+                    event.setCanceled(true);
+                    LinkingToolItem.setEnderFrequency(stack, ((EnderDrawerTile) te).getFrequency());
+                    player.sendStatusMessage(new TextComponentTranslation("linkingtool.ender.stored").setStyle(new net.minecraft.util.text.Style().setColor(TextFormatting.AQUA)), true);
                 }
             }
         }
