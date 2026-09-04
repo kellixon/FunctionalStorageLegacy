@@ -1,0 +1,216 @@
+# Creative Tab
+itemGroup.functionalstoragelegacy=Functional Storage
+
+# Wood Drawers
+tile.functionalstoragelegacy.oak_1.name=Ящик из дуба (1 слот)
+tile.functionalstoragelegacy.oak_2.name=Ящик из дуба (2 слота)
+tile.functionalstoragelegacy.oak_4.name=Ящик из дуба (4 слота)
+tile.functionalstoragelegacy.spruce_1.name=Ящик из ели (1 слот)
+tile.functionalstoragelegacy.spruce_2.name=Ящик из ели (2 слота)
+tile.functionalstoragelegacy.spruce_4.name=Ящик из ели (4 слота)
+tile.functionalstoragelegacy.birch_1.name=Ящик из березы (1 слот)
+tile.functionalstoragelegacy.birch_2.name=Ящик из березы (2 слота)
+tile.functionalstoragelegacy.birch_4.name=Ящик из березы (4 слота)
+tile.functionalstoragelegacy.jungle_1.name=Ящик из тропического дерева (1 слот)
+tile.functionalstoragelegacy.jungle_2.name=Ящик из тропического дерева (2 слота)
+tile.functionalstoragelegacy.jungle_4.name=Ящик из тропического дерева (4 слота)
+tile.functionalstoragelegacy.acacia_1.name=Ящик из акации (1 слот)
+tile.functionalstoragelegacy.acacia_2.name=Ящик из акации (2 слота)
+tile.functionalstoragelegacy.acacia_4.name=Ящик из акации (4 слота)
+tile.functionalstoragelegacy.dark_oak_1.name=Ящик из тёмного дуба (1 слот)
+tile.functionalstoragelegacy.dark_oak_2.name=Ящик из тёмного дуба (2 слота)
+tile.functionalstoragelegacy.dark_oak_4.name=Ящик из тёмного дуба (4 слота)
+tile.functionalstoragelegacy.framed_1.name=Обрамлённый ящик (1 слот)
+tile.functionalstoragelegacy.framed_2.name=Обрамлённый ящик (2 слота)
+tile.functionalstoragelegacy.framed_4.name=Обрамлённый ящик (4 слота)
+frameddrawer.use=Стиль в сетке 2x2: внешняя часть, фасад, ящик, необязательный разделитель
+
+# Special Blocks
+tile.functionalstoragelegacy.compacting_drawer.name=Уплотняющий ящик
+tile.functionalstoragelegacy.simple_compacting_drawer.name=Простой уплотняющий ящик
+tile.functionalstoragelegacy.fluid_1.name=Жидкостный ящик (1 бак)
+tile.functionalstoragelegacy.fluid_2.name=Жидкостный ящик (2 бака)
+tile.functionalstoragelegacy.fluid_4.name=Жидкостный ящик (4 бака)
+tile.functionalstoragelegacy.ender_drawer.name=Ящик Края
+tile.functionalstoragelegacy.armory_cabinet.name=Оружейный шкаф
+tile.functionalstoragelegacy.storage_controller.name=Контроллер хранилища
+tile.functionalstoragelegacy.controller_extension.name=Расширение контроллера
+
+# Storage Upgrades
+item.functionalstoragelegacy.iron_downgrade.name=Железное понижение
+item.functionalstoragelegacy.copper_upgrade.name=Медное улучшение
+item.functionalstoragelegacy.gold_upgrade.name=Золотое улучшение
+item.functionalstoragelegacy.diamond_upgrade.name=Алмазное улучшение
+item.functionalstoragelegacy.netherite_upgrade.name=Незеритовое улучшение
+item.functionalstoragelegacy.max_storage_upgrade.name=Творческое улучшение хранилища
+item.functionalstoragelegacy.creative_vending_upgrade.name=Творческое улучшение бесконечности
+item.functionalstoragelegacy.stone_generation_upgrade_t1.name=Улучшение генерации камня T1
+item.functionalstoragelegacy.stone_generation_upgrade_t2.name=Улучшение генерации камня T2
+item.functionalstoragelegacy.stone_generation_upgrade_t3.name=Улучшение генерации камня T3
+item.functionalstoragelegacy.stone_generation_upgrade_t4.name=Улучшение генерации камня T4
+item.functionalstoragelegacy.universal_item_generation_T1.name=Улучшение генерации предметов T1
+item.functionalstoragelegacy.universal_item_generation_T2.name=Улучшение генерации предметов T2
+item.functionalstoragelegacy.universal_item_generation_T3.name=Улучшение генерации предметов T3
+item.functionalstoragelegacy.universal_item_generation_T4.name=Улучшение генерации предметов T4
+item.functionalstoragelegacy.water_generation_upgrade_t1.name=Улучшение генерации воды T1
+item.functionalstoragelegacy.water_generation_upgrade_t2.name=Улучшение генерации воды T2
+item.functionalstoragelegacy.water_generation_upgrade_t3.name=Улучшение генерации воды T3
+item.functionalstoragelegacy.water_generation_upgrade_t4.name=Улучшение генерации воды T4
+
+# Utility Upgrades
+item.functionalstoragelegacy.void_upgrade.name=Улучшение: "Пустота"
+item.functionalstoragelegacy.redstone_upgrade.name=Улучшение: "Редстоун"
+item.functionalstoragelegacy.pulling_upgrade.name=Улучшение: "Вытягивание"
+item.functionalstoragelegacy.pushing_upgrade.name=Улучшение: "Выталкивание"
+item.functionalstoragelegacy.collector_upgrade.name=Улучшение: "Коллектор"
+item.functionalstoragelegacy.ore_dictionary_upgrade.name=Улучшение: "Словарь руды"
+item.functionalstoragelegacy.wireless_pulling_upgrade.name=Улучшение: "Беспроводное вытягивание"
+item.functionalstoragelegacy.wireless_pushing_upgrade.name=Улучшение: "Беспроводное выталкивание"
+
+# Tools
+item.functionalstoragelegacy.configuration_tool.name=Инструмент настройки
+item.functionalstoragelegacy.linking_tool.name=Инструмент связывания
+
+# Tooltips
+item.functionalstoragelegacy.iron_downgrade.desc=Уменьшает вместимость ящика
+item.functionalstoragelegacy.max_storage_upgrade.desc=Устанавливает вместимость ящика на максимально поддерживаемый уровень
+item.functionalstoragelegacy.ore_dictionary_upgrade.desc=Позволяет вставлять эквивалентные предметы из словаря руд и преобразовывать их в хранимый предмет
+
+# Config
+config.functionalstoragelegacy=Функциональное хранилище
+config.functionalstoragelegacy.general=Общие
+config.functionalstoragelegacy.compatibility=Совместимость
+config.functionalstoragelegacy.storage=Хранилище
+config.functionalstoragelegacy.generation=Генерация
+config.functionalstoragelegacy.client=Клиент
+config.functionalstoragelegacy.extra_compacting_rules=Правила уплотнения
+config.functionalstoragelegacy.ore_dictionary_blacklist=Чёрный список словаря руд
+config.functionalstoragelegacy.ore_dictionary_whitelist=Белый список словаря руд
+config.functionalstoragelegacy.register_extra_compacting_rules=Регистрировать дополнительные правила уплотнения
+config.functionalstoragelegacy.keep_contents_on_break=Сохранять содержимое и улучшения при разрушении
+config.functionalstoragelegacy.armory_cabinet_size=Размер оружейного шкафа
+config.functionalstoragelegacy.drawer_controller_linking_range=Дальность привязки ящика к контроллеру
+config.functionalstoragelegacy.upgrade_tick=Интервал тиков улучшений
+config.functionalstoragelegacy.upgrade_pull_items=Количество предметов для улучшения вытягивания
+config.functionalstoragelegacy.upgrade_pull_fluid=Количество жидкости для улучшения вытягивания
+config.functionalstoragelegacy.upgrade_push_items=Количество предметов для улучшения выталкивания
+config.functionalstoragelegacy.upgrade_push_fluid=Количество жидкости для улучшения выталкивания
+config.functionalstoragelegacy.upgrade_collector_items=Количество предметов для улучшения коллектора
+config.functionalstoragelegacy.upgrade_collector_fluid=Количество жидкости для улучшения коллектора
+config.functionalstoragelegacy.enable_top_compatibility=Включить совместимость с The One Probe
+config.functionalstoragelegacy.enable_ae2_compatibility=Включить совместимость с AE2
+config.functionalstoragelegacy.copper_multiplier=Множитель медного улучшения
+config.functionalstoragelegacy.gold_multiplier=Множитель золотого улучшения
+config.functionalstoragelegacy.diamond_multiplier=Множитель алмазного улучшения
+config.functionalstoragelegacy.netherite_multiplier=Множитель незеритового улучшения
+config.functionalstoragelegacy.fluid_divisor=Делитель объёма хранилища жидкостей
+config.functionalstoragelegacy.range_divisor=Делитель дальности
+config.functionalstoragelegacy.stone_generation_t1=Скорость генерации камня (улучшение T1)
+config.functionalstoragelegacy.stone_generation_t2=Скорость генерации камня (улучшение T2)
+config.functionalstoragelegacy.stone_generation_t3=Скорость генерации камня (улучшение T3)
+config.functionalstoragelegacy.stone_generation_t4=Скорость генерации камня (улучшение T4)
+config.functionalstoragelegacy.universal_generator_t1=Скорость универсального генератора (T1)
+config.functionalstoragelegacy.universal_generator_t2=Скорость универсального генератора (T2)
+config.functionalstoragelegacy.universal_generator_t3=Скорость универсального генератора (T3)
+config.functionalstoragelegacy.universal_generator_t4=Скорость универсального генератора (T4)
+config.functionalstoragelegacy.universal_items_generation_tick=Интервал тиков генерации предметов универсальным генератором
+config.functionalstoragelegacy.universal_items_generation=Предмет генерации универсального генератора
+config.functionalstoragelegacy.universal_items_generation_registered=Универсальный генератор предметов зарегистрирован
+config.functionalstoragelegacy.water_generation_t1=Скорость генерации воды (улучшение T1)
+config.functionalstoragelegacy.water_generation_t2=Скорость генерации воды (улучшение T2)
+config.functionalstoragelegacy.water_generation_t3=Скорость генерации воды (улучшение T3)
+config.functionalstoragelegacy.water_generation_t4=Скорость генерации воды (улучшение T4)
+config.functionalstoragelegacy.drawer_render_range=Дальность отрисовки содержимого ящиков
+item.functionalstoragelegacy.storage_upgrade.multiplier=Множитель хранилища: %s
+item.functionalstoragelegacy.upgrade.direction=Направление:
+item.functionalstoragelegacy.upgrade.direction.use=Присесть + ПКМ по воздуху, чтобы установить направление по вашему взгляду.
+item.functionalstoragelegacy.upgrade.direction.swapped=Направление изменено на %s
+item.functionalstoragelegacy.upgrade.direction.down=Вниз
+item.functionalstoragelegacy.upgrade.direction.up=Вверх
+item.functionalstoragelegacy.upgrade.direction.north=Север
+item.functionalstoragelegacy.upgrade.direction.south=Юг
+item.functionalstoragelegacy.upgrade.direction.west=Запад
+item.functionalstoragelegacy.upgrade.direction.east=Восток
+item.functionalstoragelegacy.upgrade.wireless.target=Цель: %s: %s
+item.functionalstoragelegacy.upgrade.wireless.target_pos=Позиция: %s, %s, %s
+item.functionalstoragelegacy.upgrade.wireless.use=Присесть + ПКМ по грани блока, чтобы привязать цель.
+item.functionalstoragelegacy.upgrade.wireless.clear=Присесть + ПКМ по воздуху, чтобы очистить цель.
+item.functionalstoragelegacy.upgrade.wireless.no_target=Беспроводная цель не привязана.
+item.functionalstoragelegacy.upgrade.wireless.bound=Привязано %s: %s (%s, %s, %s)
+item.functionalstoragelegacy.upgrade.wireless.cleared=Беспроводная цель очищена.
+item.functionalstoragelegacy.generation_upgrade.rate=Скорость генерации:
+item.functionalstoragelegacy.universal_generation_upgrade.rate=Скорость генерации:
+item.functionalstoragelegacy.universal_generation_upgrade.target=Цель:
+item.functionalstoragelegacy.universal_generation_upgrade.no_target=Не настроена допустимая цель (проверьте конфиг)
+item.functionalstoragelegacy.upgrade.water_generation.amount=Скорость генерации:
+
+# Linking Tool Messages
+linkingtool.controller.configured=Позиция контроллера сохранена!
+linkingtool.single_drawer.linked=Ящик привязан к контроллеру!
+linkingtool.single_drawer.removed=Ящик отвязан от контроллера!
+linkingtool.multiple_drawer.linked=Ящики в области привязаны!
+linkingtool.multiple_drawer.removed=Ящики в области отвязаны!
+linkingtool.linkingmode.swapped=Режим привязки: %s
+linkingtool.linkingmode.single=Одиночный
+linkingtool.linkingmode.multiple=Множественный
+linkingtool.linkingaction.swapped=Режим действия: %s
+linkingtool.linkingaction.add=Добавить
+linkingtool.linkingaction.remove=Удалить
+linkingtool.linkingmode=Режим:
+linkingtool.linkingaction=Действие:
+linkingtool.controller=Контроллер:
+linkingtool.use=ПКМ по контроллеру, затем по ящикам для привязки
+linkingtool.drawer.clear=Частота Края очищена!
+linkingtool.ender.stored=Частота Края сохранена!
+linkingtool.ender.changed=Частота Края применена!
+linkingtool.ender.warning=В ящике есть предметы! Shift + ПКМ для подтверждения.
+linkingtool.ender.frequency=Сохранённая частота Края
+linkingtool.ender.clear=Shift + ПКМ для очистки частоты
+
+# Configuration Tool
+configurationtool.configmode=Режим настройки: 
+configurationtool.configmode.swapped=Режим настройки переключён на:
+configurationtool.configmode.locking=Блокировка
+configurationtool.configmode.toggle_numbers=Переключить числа
+configurationtool.configmode.toggle_render=Переключить отрисовку
+configurationtool.configmode.toggle_upgrades=Переключить улучшения
+configurationtool.configmode.indicator=Индикатор
+configurationtool.configmode.indicator.mode_0=Выкл
+configurationtool.configmode.indicator.mode_1=Вкл (когда полное)
+configurationtool.configmode.indicator.mode_2=Вкл (когда пустое)
+configurationtool.configmode.indicator.mode_3=Вкл (всегда)
+configurationtool.use=ПКМ по ящику для применения. Присесть + ПКМ по воздуху для смены режима. Присесть + ПКМ по ящику, чтобы заблокировать его.
+
+# GUI
+gui.functionalstorage.open_gui=Открыть интерфейс
+gui.functionalstoragelegacy.item=Предмет: 
+gui.functionalstoragelegacy.fluid=Жидкость: 
+gui.functionalstoragelegacy.amount=Количество: 
+gui.functionalstoragelegacy.slot=Слот: 
+gui.functionalstoragelegacy.empty=Пусто
+
+# Drawer Item Tooltip
+drawer.tooltip.stored=Хранится:
+drawer.tooltip.locked=Заблокировано:
+drawer.tooltip.creative=Креатив:
+drawer.tooltip.void=Пустота:
+drawer.tooltip.storage_upgrades=Улучшения хранилища:
+drawer.tooltip.utility_upgrades=Утилитарные улучшения:
+drawer.tooltip.fluids=Жидкости: %s бак(и), %s мВ
+drawer.tooltip.empty=Нет сохранённых данных ящика
+drawer.tooltip.yes=Да
+drawer.tooltip.no=Нет
+
+# TOP
+tooltip.functionalstoragelegacy.title=Функциональное хранилище
+tooltip.functionalstoragelegacy.stored=Хранится:
+tooltip.functionalstoragelegacy.locked=Заблокировано:
+tooltip.functionalstoragelegacy.creative=Креатив:
+tooltip.functionalstoragelegacy.void=Пустота:
+tooltip.functionalstoragelegacy.upgrades=Улучшения:
+tooltip.functionalstoragelegacy.tank=Бак
+tooltip.functionalstoragelegacy.total=Всего:
+tooltip.functionalstoragelegacy.empty=Пусто
+tooltip.functionalstoragelegacy.yes=Да
+tooltip.functionalstoragelegacy.no=Нет
+drawer.break.large_drop_warning=Предупреждение: этот ящик выпадет более чем с 6 400 предметами и может вызвать сильную задержку. Разрушьте его ещё раз для подтверждения.
